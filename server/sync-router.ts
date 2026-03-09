@@ -1,0 +1,560 @@
+/**
+ * Routes API de synchronisation
+ * Permet la synchronisation bidirectionnelle entre le client et le serveur
+ */
+
+import { z } from "zod";
+import { router, protectedProcedure } from "./_core/trpc";
+import {
+  getUserCategories,
+  getCategoriesSince,
+  upsertCategory,
+  deleteCategory,
+  getUserAlbums,
+  getAlbumsSince,
+  upsertAlbum,
+  deleteAlbum,
+  getUserPhotosMetadata,
+  getPhotosMetadataSince,
+  getAlbumPhotosMetadata,
+  upsertPhotoMetadata,
+  syncPhotosMetadataBatch,
+  deletePhotoMetadata,
+  getUserSettings,
+  upsertUserSettings,
+  getSyncLogSince,
+  logSyncAction,
+} from "./sync-db";
+import { uploadThumbnail, uploadThumbnailsBatch } from "./thumbnails";
+
+// Schémas de validation
+const categorySchema = z.object({
+  localId: z.string(),
+  name: z.string(),
+  contentType: z.enum(["photos", "documents"]).optional(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  sortOrder: z.number().optional(),
+  isSystem: z.boolean().optional(),
+});
+
+const albumSchema = z.object({
+  localId: z.string(),
+  categoryLocalId: z.string().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  contentType: z.enum(["photos", "documents"]).optional(),
+  coverPhotoLocalId: z.string().optional(),
+  sortOrder: z.number().optional(),
+  photoCount: z.number().optional(),
+  isSystem: z.boolean().optional(),
+  isPrivate: z.boolean().optional(),
+});
+
+const photoMetadataSchema = z.object({
+  localId: z.string(),
+  albumLocalId: z.string().optional(),
+  fileName: z.string().optional(),
+  mediaType: z.enum(["photo", "video", "document"]).optional(),
+  mimeType: z.string().optional(),
+  fileSize: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  fileHash: z.string().optional(),
+  position: z.number().optional(),
+  rotation: z.number().optional(),
+  cropData: z.string().optional(),
+  scale: z.number().optional(),
+  title: z.string().optional(),
+  caption: z.string().optional(),
+  tags: z.string().optional(),
+  rating: z.number().optional(),
+  isFavorite: z.boolean().optional(),
+  dateTaken: z.string().optional(),
+  gpsLatitude: z.number().optional(),
+  gpsLongitude: z.number().optional(),
+  cameraModel: z.string().optional(),
+});
+
+const userSettingsSchema = z.object({
+  displayMode: z.string().optional(),
+  thumbnailSize: z.number().optional(),
+  themeColor: z.string().optional(),
+  backgroundTexture: z.string().optional(),
+  language: z.string().optional(),
+  defaultPhotoSort: z.string().optional(),
+  defaultSortOrder: z.string().optional(),
+  autoCreateThumbnails: z.boolean().optional(),
+  detectDuplicates: z.boolean().optional(),
+  readExifData: z.boolean().optional(),
+  additionalSettings: z.string().optional(),
+});
+
+export const syncRouter = router({
+  // ==================== CATÉGORIES ====================
+  
+  categories: router({
+    /**
+     * Récupère toutes les catégories de l'utilisateur
+     */
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const categories = await getUserCategories(ctx.user.id);
+      return { categories, timestamp: Date.now() };
+    }),
+
+    /**
+     * Récupère les catégories modifiées depuis un timestamp
+     */
+    getSince: protectedProcedure
+      .input(z.object({ since: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const categories = await getCategoriesSince(ctx.user.id, input.since);
+        return { categories, timestamp: Date.now() };
+      }),
+
+    /**
+     * Crée ou met à jour une catégorie
+     */
+    upsert: protectedProcedure
+      .input(categorySchema)
+      .mutation(async ({ ctx, input }) => {
+        const category = await upsertCategory({
+          ...input,
+          userId: ctx.user.id,
+        });
+        
+        if (category) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "category",
+            entityLocalId: input.localId,
+            action: "update",
+            newData: JSON.stringify(input),
+          });
+        }
+        
+        return { success: !!category, category };
+      }),
+
+    /**
+     * Synchronise plusieurs catégories en batch
+     */
+    syncBatch: protectedProcedure
+      .input(z.object({ categories: z.array(categorySchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const results = await Promise.all(
+          input.categories.map(cat => upsertCategory({ ...cat, userId: ctx.user.id }))
+        );
+        
+        const success = results.filter(r => r !== null).length;
+        const failed = results.filter(r => r === null).length;
+        
+        return { success, failed, timestamp: Date.now() };
+      }),
+
+    /**
+     * Supprime une catégorie
+     */
+    delete: protectedProcedure
+      .input(z.object({ localId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await deleteCategory(ctx.user.id, input.localId);
+        
+        if (success) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "category",
+            entityLocalId: input.localId,
+            action: "delete",
+          });
+        }
+        
+        return { success };
+      }),
+  }),
+
+  // ==================== ALBUMS ====================
+  
+  albums: router({
+    /**
+     * Récupère tous les albums de l'utilisateur
+     */
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const albums = await getUserAlbums(ctx.user.id);
+      return { albums, timestamp: Date.now() };
+    }),
+
+    /**
+     * Récupère les albums modifiés depuis un timestamp
+     */
+    getSince: protectedProcedure
+      .input(z.object({ since: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const albums = await getAlbumsSince(ctx.user.id, input.since);
+        return { albums, timestamp: Date.now() };
+      }),
+
+    /**
+     * Crée ou met à jour un album
+     */
+    upsert: protectedProcedure
+      .input(albumSchema)
+      .mutation(async ({ ctx, input }) => {
+        const album = await upsertAlbum({
+          ...input,
+          userId: ctx.user.id,
+        });
+        
+        if (album) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "album",
+            entityLocalId: input.localId,
+            action: "update",
+            newData: JSON.stringify(input),
+          });
+        }
+        
+        return { success: !!album, album };
+      }),
+
+    /**
+     * Synchronise plusieurs albums en batch
+     */
+    syncBatch: protectedProcedure
+      .input(z.object({ albums: z.array(albumSchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const results = await Promise.all(
+          input.albums.map(album => upsertAlbum({ ...album, userId: ctx.user.id }))
+        );
+        
+        const success = results.filter(r => r !== null).length;
+        const failed = results.filter(r => r === null).length;
+        
+        return { success, failed, timestamp: Date.now() };
+      }),
+
+    /**
+     * Supprime un album
+     */
+    delete: protectedProcedure
+      .input(z.object({ localId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await deleteAlbum(ctx.user.id, input.localId);
+        
+        if (success) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "album",
+            entityLocalId: input.localId,
+            action: "delete",
+          });
+        }
+        
+        return { success };
+      }),
+  }),
+
+  // ==================== PHOTOS METADATA ====================
+  
+  photos: router({
+    /**
+     * Récupère toutes les métadonnées photos de l'utilisateur
+     */
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const photos = await getUserPhotosMetadata(ctx.user.id);
+      return { photos, timestamp: Date.now() };
+    }),
+
+    /**
+     * Récupère les métadonnées modifiées depuis un timestamp
+     */
+    getSince: protectedProcedure
+      .input(z.object({ since: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const photos = await getPhotosMetadataSince(ctx.user.id, input.since);
+        return { photos, timestamp: Date.now() };
+      }),
+
+    /**
+     * Récupère les métadonnées d'un album spécifique
+     */
+    getByAlbum: protectedProcedure
+      .input(z.object({ albumLocalId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const photos = await getAlbumPhotosMetadata(ctx.user.id, input.albumLocalId);
+        return { photos, timestamp: Date.now() };
+      }),
+
+    /**
+     * Crée ou met à jour une métadonnée photo
+     */
+    upsert: protectedProcedure
+      .input(photoMetadataSchema)
+      .mutation(async ({ ctx, input }) => {
+        const photo = await upsertPhotoMetadata({
+          ...input,
+          userId: ctx.user.id,
+          dateTaken: input.dateTaken ? new Date(input.dateTaken) : undefined,
+        });
+        
+        if (photo) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "photo",
+            entityLocalId: input.localId,
+            action: "update",
+            newData: JSON.stringify(input),
+          });
+        }
+        
+        return { success: !!photo, photo };
+      }),
+
+    /**
+     * Synchronise plusieurs métadonnées photos en batch
+     */
+    syncBatch: protectedProcedure
+      .input(z.object({ photos: z.array(photoMetadataSchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const photos = input.photos.map(p => ({
+          ...p,
+          userId: ctx.user.id,
+          dateTaken: p.dateTaken ? new Date(p.dateTaken) : undefined,
+        }));
+        
+        const result = await syncPhotosMetadataBatch(ctx.user.id, photos);
+        
+        return { ...result, timestamp: Date.now() };
+      }),
+
+    /**
+     * Supprime une métadonnée photo (soft delete)
+     */
+    delete: protectedProcedure
+      .input(z.object({ localId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await deletePhotoMetadata(ctx.user.id, input.localId);
+        
+        if (success) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "photo",
+            entityLocalId: input.localId,
+            action: "delete",
+          });
+        }
+        
+        return { success };
+      }),
+  }),
+
+  // ==================== MINIATURES ====================
+  
+  thumbnails: router({
+    /**
+     * Upload une miniature
+     */
+    upload: protectedProcedure
+      .input(z.object({
+        photoLocalId: z.string(),
+        data: z.string(), // Base64 encoded image
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await uploadThumbnail(
+          ctx.user.id,
+          input.photoLocalId,
+          input.data
+        );
+        
+        if (result) {
+          // Mettre à jour la métadonnée photo avec l'URL de la miniature
+          await upsertPhotoMetadata({
+            userId: ctx.user.id,
+            localId: input.photoLocalId,
+            thumbnailUrl: result.url,
+            thumbnailKey: result.key,
+          });
+        }
+        
+        return { success: !!result, url: result?.url, key: result?.key };
+      }),
+
+    /**
+     * Upload plusieurs miniatures en batch
+     */
+    uploadBatch: protectedProcedure
+      .input(z.object({
+        thumbnails: z.array(z.object({
+          photoLocalId: z.string(),
+          data: z.string(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const thumbnails = input.thumbnails.map(t => ({
+          photoLocalId: t.photoLocalId,
+          data: t.data,
+        }));
+        
+        const results = await uploadThumbnailsBatch(ctx.user.id, thumbnails);
+        
+        // Mettre à jour les métadonnées photos avec les URLs
+        for (const result of results) {
+          if (result.url) {
+            await upsertPhotoMetadata({
+              userId: ctx.user.id,
+              localId: result.photoLocalId,
+              thumbnailUrl: result.url,
+              thumbnailKey: result.key || undefined,
+            });
+          }
+        }
+        
+        const success = results.filter(r => r.url !== null).length;
+        const failed = results.filter(r => r.url === null).length;
+        
+        return { success, failed, results };
+      }),
+  }),
+
+  // ==================== PARAMÈTRES ====================
+  
+  settings: router({
+    /**
+     * Récupère les paramètres de l'utilisateur
+     */
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const settings = await getUserSettings(ctx.user.id);
+      return { settings, timestamp: Date.now() };
+    }),
+
+    /**
+     * Met à jour les paramètres de l'utilisateur
+     */
+    update: protectedProcedure
+      .input(userSettingsSchema)
+      .mutation(async ({ ctx, input }) => {
+        const settings = await upsertUserSettings({
+          ...input,
+          userId: ctx.user.id,
+        });
+        
+        if (settings) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "settings",
+            entityLocalId: "user_settings",
+            action: "update",
+            newData: JSON.stringify(input),
+          });
+        }
+        
+        return { success: !!settings, settings };
+      }),
+  }),
+
+  // ==================== SYNCHRONISATION COMPLÈTE ====================
+  
+  /**
+   * Récupère toutes les données pour une synchronisation initiale
+   */
+  getFullSync: protectedProcedure.query(async ({ ctx }) => {
+    const [categories, albums, photos, settings] = await Promise.all([
+      getUserCategories(ctx.user.id),
+      getUserAlbums(ctx.user.id),
+      getUserPhotosMetadata(ctx.user.id),
+      getUserSettings(ctx.user.id),
+    ]);
+
+    return {
+      categories,
+      albums,
+      photos,
+      settings,
+      timestamp: Date.now(),
+    };
+  }),
+
+  /**
+   * Récupère les modifications depuis un timestamp (sync incrémentale)
+   */
+  getChangesSince: protectedProcedure
+    .input(z.object({ since: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const [categories, albums, photos, syncLog] = await Promise.all([
+        getCategoriesSince(ctx.user.id, input.since),
+        getAlbumsSince(ctx.user.id, input.since),
+        getPhotosMetadataSince(ctx.user.id, input.since),
+        getSyncLogSince(ctx.user.id, input.since),
+      ]);
+
+      return {
+        categories,
+        albums,
+        photos,
+        syncLog,
+        timestamp: Date.now(),
+      };
+    }),
+
+  /**
+   * Synchronise toutes les données en une seule requête
+   */
+  pushFullSync: protectedProcedure
+    .input(z.object({
+      categories: z.array(categorySchema).optional(),
+      albums: z.array(albumSchema).optional(),
+      photos: z.array(photoMetadataSchema).optional(),
+      settings: userSettingsSchema.optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const results = {
+        categories: { success: 0, failed: 0 },
+        albums: { success: 0, failed: 0 },
+        photos: { success: 0, failed: 0 },
+        settings: false,
+      };
+
+      // Synchroniser les catégories
+      if (input.categories) {
+        for (const cat of input.categories) {
+          const result = await upsertCategory({ ...cat, userId: ctx.user.id });
+          if (result) results.categories.success++;
+          else results.categories.failed++;
+        }
+      }
+
+      // Synchroniser les albums
+      if (input.albums) {
+        for (const album of input.albums) {
+          const result = await upsertAlbum({ ...album, userId: ctx.user.id });
+          if (result) results.albums.success++;
+          else results.albums.failed++;
+        }
+      }
+
+      // Synchroniser les photos
+      if (input.photos) {
+        const photos = input.photos.map(p => ({
+          ...p,
+          userId: ctx.user.id,
+          dateTaken: p.dateTaken ? new Date(p.dateTaken) : undefined,
+        }));
+        const photoResult = await syncPhotosMetadataBatch(ctx.user.id, photos);
+        results.photos = photoResult;
+      }
+
+      // Synchroniser les paramètres
+      if (input.settings) {
+        const settingsResult = await upsertUserSettings({
+          ...input.settings,
+          userId: ctx.user.id,
+        });
+        results.settings = !!settingsResult;
+      }
+
+      return { results, timestamp: Date.now() };
+    }),
+});
+
+export type SyncRouter = typeof syncRouter;

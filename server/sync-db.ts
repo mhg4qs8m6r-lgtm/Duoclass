@@ -1,0 +1,534 @@
+/**
+ * Fonctions de base de données pour la synchronisation
+ * Gère les opérations CRUD sur les catégories, albums et métadonnées photos
+ */
+
+import { eq, and, gt, sql } from "drizzle-orm";
+import { getDb } from "./db";
+import { 
+  categories, 
+  albums, 
+  photoMetadata, 
+  userSettings, 
+  syncLog,
+  InsertCategory,
+  InsertAlbum,
+  InsertPhotoMetadata,
+  InsertUserSettings,
+  Category,
+  Album,
+  PhotoMetadata,
+  UserSettings
+} from "../drizzle/schema";
+
+// ==================== CATÉGORIES ====================
+
+/**
+ * Récupère toutes les catégories d'un utilisateur
+ */
+export async function getUserCategories(userId: number): Promise<Category[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.userId, userId))
+      .orderBy(categories.sortOrder);
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get categories:", error);
+    return [];
+  }
+}
+
+/**
+ * Récupère les catégories modifiées depuis un timestamp
+ */
+export async function getCategoriesSince(userId: number, since: number): Promise<Category[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(categories)
+      .where(and(
+        eq(categories.userId, userId),
+        gt(categories.syncTimestamp, since)
+      ));
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get categories since:", error);
+    return [];
+  }
+}
+
+/**
+ * Crée ou met à jour une catégorie
+ */
+export async function upsertCategory(data: InsertCategory): Promise<Category | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+
+    // Vérifier si la catégorie existe déjà
+    const existing = await db
+      .select()
+      .from(categories)
+      .where(and(
+        eq(categories.userId, data.userId),
+        eq(categories.localId, data.localId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Mise à jour
+      await db
+        .update(categories)
+        .set(values)
+        .where(eq(categories.id, existing[0].id));
+      
+      return { ...existing[0], ...values };
+    } else {
+      // Création
+      const result = await db.insert(categories).values(values);
+      const insertId = Number(result[0].insertId);
+      
+      const created = await db
+        .select()
+        .from(categories)
+        .where(eq(categories.id, insertId))
+        .limit(1);
+      
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert category:", error);
+    return null;
+  }
+}
+
+/**
+ * Supprime une catégorie
+ */
+export async function deleteCategory(userId: number, localId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    await db
+      .delete(categories)
+      .where(and(
+        eq(categories.userId, userId),
+        eq(categories.localId, localId)
+      ));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete category:", error);
+    return false;
+  }
+}
+
+// ==================== ALBUMS ====================
+
+/**
+ * Récupère tous les albums d'un utilisateur
+ */
+export async function getUserAlbums(userId: number): Promise<Album[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(albums)
+      .where(eq(albums.userId, userId))
+      .orderBy(albums.sortOrder);
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get albums:", error);
+    return [];
+  }
+}
+
+/**
+ * Récupère les albums modifiés depuis un timestamp
+ */
+export async function getAlbumsSince(userId: number, since: number): Promise<Album[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(albums)
+      .where(and(
+        eq(albums.userId, userId),
+        gt(albums.syncTimestamp, since)
+      ));
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get albums since:", error);
+    return [];
+  }
+}
+
+/**
+ * Crée ou met à jour un album
+ */
+export async function upsertAlbum(data: InsertAlbum): Promise<Album | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+
+    // Vérifier si l'album existe déjà
+    const existing = await db
+      .select()
+      .from(albums)
+      .where(and(
+        eq(albums.userId, data.userId),
+        eq(albums.localId, data.localId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Mise à jour
+      await db
+        .update(albums)
+        .set(values)
+        .where(eq(albums.id, existing[0].id));
+      
+      return { ...existing[0], ...values };
+    } else {
+      // Création
+      const result = await db.insert(albums).values(values);
+      const insertId = Number(result[0].insertId);
+      
+      const created = await db
+        .select()
+        .from(albums)
+        .where(eq(albums.id, insertId))
+        .limit(1);
+      
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert album:", error);
+    return null;
+  }
+}
+
+/**
+ * Supprime un album
+ */
+export async function deleteAlbum(userId: number, localId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    await db
+      .delete(albums)
+      .where(and(
+        eq(albums.userId, userId),
+        eq(albums.localId, localId)
+      ));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete album:", error);
+    return false;
+  }
+}
+
+// ==================== PHOTOS METADATA ====================
+
+/**
+ * Récupère toutes les métadonnées photos d'un utilisateur
+ */
+export async function getUserPhotosMetadata(userId: number): Promise<PhotoMetadata[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(photoMetadata)
+      .where(and(
+        eq(photoMetadata.userId, userId),
+        eq(photoMetadata.isDeleted, false)
+      ));
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get photos metadata:", error);
+    return [];
+  }
+}
+
+/**
+ * Récupère les métadonnées photos modifiées depuis un timestamp
+ */
+export async function getPhotosMetadataSince(userId: number, since: number): Promise<PhotoMetadata[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(photoMetadata)
+      .where(and(
+        eq(photoMetadata.userId, userId),
+        gt(photoMetadata.syncTimestamp, since)
+      ));
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get photos metadata since:", error);
+    return [];
+  }
+}
+
+/**
+ * Récupère les métadonnées photos d'un album
+ */
+export async function getAlbumPhotosMetadata(userId: number, albumLocalId: string): Promise<PhotoMetadata[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(photoMetadata)
+      .where(and(
+        eq(photoMetadata.userId, userId),
+        eq(photoMetadata.albumLocalId, albumLocalId),
+        eq(photoMetadata.isDeleted, false)
+      ))
+      .orderBy(photoMetadata.position);
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get album photos metadata:", error);
+    return [];
+  }
+}
+
+/**
+ * Crée ou met à jour une métadonnée photo
+ */
+export async function upsertPhotoMetadata(data: InsertPhotoMetadata): Promise<PhotoMetadata | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+
+    // Vérifier si la métadonnée existe déjà
+    const existing = await db
+      .select()
+      .from(photoMetadata)
+      .where(and(
+        eq(photoMetadata.userId, data.userId),
+        eq(photoMetadata.localId, data.localId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Mise à jour
+      await db
+        .update(photoMetadata)
+        .set(values)
+        .where(eq(photoMetadata.id, existing[0].id));
+      
+      return { ...existing[0], ...values } as PhotoMetadata;
+    } else {
+      // Création
+      const result = await db.insert(photoMetadata).values(values);
+      const insertId = Number(result[0].insertId);
+      
+      const created = await db
+        .select()
+        .from(photoMetadata)
+        .where(eq(photoMetadata.id, insertId))
+        .limit(1);
+      
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert photo metadata:", error);
+    return null;
+  }
+}
+
+/**
+ * Synchronise un lot de métadonnées photos
+ */
+export async function syncPhotosMetadataBatch(
+  userId: number,
+  photos: InsertPhotoMetadata[]
+): Promise<{ success: number; failed: number }> {
+  let success = 0;
+  let failed = 0;
+
+  for (const photo of photos) {
+    const result = await upsertPhotoMetadata({ ...photo, userId });
+    if (result) {
+      success++;
+    } else {
+      failed++;
+    }
+  }
+
+  return { success, failed };
+}
+
+/**
+ * Supprime (soft delete) une métadonnée photo
+ */
+export async function deletePhotoMetadata(userId: number, localId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    const now = Date.now();
+    await db
+      .update(photoMetadata)
+      .set({ 
+        isDeleted: true, 
+        deletedAt: new Date(),
+        syncTimestamp: now 
+      })
+      .where(and(
+        eq(photoMetadata.userId, userId),
+        eq(photoMetadata.localId, localId)
+      ));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete photo metadata:", error);
+    return false;
+  }
+}
+
+// ==================== PARAMÈTRES UTILISATEUR ====================
+
+/**
+ * Récupère les paramètres d'un utilisateur
+ */
+export async function getUserSettings(userId: number): Promise<UserSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const result = await db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.userId, userId))
+      .limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Sync] Failed to get user settings:", error);
+    return null;
+  }
+}
+
+/**
+ * Crée ou met à jour les paramètres utilisateur
+ */
+export async function upsertUserSettings(data: InsertUserSettings): Promise<UserSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+
+    // Vérifier si les paramètres existent déjà
+    const existing = await db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.userId, data.userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Mise à jour
+      await db
+        .update(userSettings)
+        .set(values)
+        .where(eq(userSettings.id, existing[0].id));
+      
+      return { ...existing[0], ...values } as UserSettings;
+    } else {
+      // Création
+      const result = await db.insert(userSettings).values(values);
+      const insertId = Number(result[0].insertId);
+      
+      const created = await db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.id, insertId))
+        .limit(1);
+      
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert user settings:", error);
+    return null;
+  }
+}
+
+// ==================== JOURNAL DE SYNCHRONISATION ====================
+
+/**
+ * Enregistre une action de synchronisation
+ */
+export async function logSyncAction(data: {
+  userId: number;
+  entityType: "category" | "album" | "photo" | "settings";
+  entityLocalId: string;
+  action: "create" | "update" | "delete";
+  previousData?: string;
+  newData?: string;
+  deviceFingerprint?: string;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    await db.insert(syncLog).values({
+      ...data,
+      timestamp: Date.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to log sync action:", error);
+    return false;
+  }
+}
+
+/**
+ * Récupère l'historique de synchronisation depuis un timestamp
+ */
+export async function getSyncLogSince(userId: number, since: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const result = await db
+      .select()
+      .from(syncLog)
+      .where(and(
+        eq(syncLog.userId, userId),
+        gt(syncLog.timestamp, since)
+      ))
+      .orderBy(syncLog.timestamp);
+    return result;
+  } catch (error) {
+    console.error("[Sync] Failed to get sync log:", error);
+    return [];
+  }
+}
