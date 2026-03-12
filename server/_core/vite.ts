@@ -51,12 +51,15 @@ export function serveStatic(app: Express) {
   // En production, esbuild compile server/_core/index.ts → dist/index.js.
   // import.meta.dirname vaut donc dist/ et le build Vite est dans dist/public/.
   // En développement (tests locaux), on remonte depuis server/_core/ vers dist/public/.
-  const distPath = path.resolve(import.meta.dirname, "../../dist/public");if (!fs.existsSync(distPath)) { 
-    console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
-    );
-  }
+ const distPath = path.resolve(import.meta.dirname, "../public"); 
+if (!fs.existsSync(distPath)) {
+  console.error(
+    `Could not find the build directory: ${distPath}, make sure to build the client first`
+  );
+}
 
+console.log("import.meta.dirname =", import.meta.dirname);
+console.log("distPath =", distPath);
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
