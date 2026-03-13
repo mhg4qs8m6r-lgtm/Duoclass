@@ -13,7 +13,8 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  
+  passwordHash: varchar("passwordHash", { length: 255 }),
+```  
   // Période d'essai
   trialStartDate: bigint("trialStartDate", { mode: "number" }),
   trialEndDate: bigint("trialEndDate", { mode: "number" }),
