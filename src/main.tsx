@@ -28,7 +28,7 @@ const redirectToLoginIfUnauthorized = (error: unknown, queryKey?: readonly unkno
   if (!isAuthMeQuery) return;
 
   window.location.href = "/login";
-queryClient.getQueryCache().subscribe(event => {
+ queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     const queryKey = event.query.queryKey;
