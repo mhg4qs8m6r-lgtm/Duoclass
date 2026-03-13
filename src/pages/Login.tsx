@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "wouter";
+ import { useState } from "react";
+import { useLocation } from "wouter";
 
 export default function Login() {
   const [email, setEmail] = useState("");
