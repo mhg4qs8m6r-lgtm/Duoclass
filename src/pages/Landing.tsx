@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getLoginUrl } from "@/const";
+
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
