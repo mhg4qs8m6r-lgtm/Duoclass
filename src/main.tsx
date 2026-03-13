@@ -5,7 +5,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
+ 
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -27,9 +27,7 @@ const redirectToLoginIfUnauthorized = (error: unknown, queryKey?: readonly unkno
     queryKey.some(k => Array.isArray(k) && k.includes('me') && k.includes('auth'));
   if (!isAuthMeQuery) return;
 
-  window.location.href = getLoginUrl();
-};
-
+  window.location.href = "/login";
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
