@@ -30,15 +30,12 @@ export default function Landing() {
   }, [isAuthenticated, loading, setLocation]);
 
   // Connexion OAuth Manus (pour les utilisateurs déjà inscrits)
-  const handleLogin = () => {
-    window.location.href = getLoginUrl();
-  };
+  
 
   // Démarrage de l'essai gratuit : accès direct à l'application sans compte requis
-  const handleStartFree = () => {
-    setLocation("/albums");
-  };
-
+  const handleLogin = () => {
+  setLocation("/login");
+};
   const features = [
     {
       icon: Camera,
