@@ -6,8 +6,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [, navigate] = useNavigate();
-
+  const [, navigate] = useLocation();
+ 
   const handleSubmit = async () => {
     setLoading(true);
     setError("");
