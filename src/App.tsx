@@ -26,7 +26,6 @@ import MentionsLegales from "@/pages/MentionsLegales";
 import PolitiqueConfidentialite from "@/pages/PolitiqueConfidentialite";
 import Retractation from "@/pages/Retractation";
 import Login from "@/pages/Login";
-```
 import { initCategories, db, AlbumMeta } from "./db";
 import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
 
