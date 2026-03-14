@@ -2,8 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { InsertUser, users } from "../../drizzle/schema";
-import { ENV } from './_core/env';
-
+ import { ENV } from './env';
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
