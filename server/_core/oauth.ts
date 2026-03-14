@@ -2,8 +2,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
-import * as bcrypt from "bcryptjs";
-
+import bcrypt from "bcryptjs";
 export function registerOAuthRoutes(app: Express) {
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     const { email, password } = req.body;
