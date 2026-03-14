@@ -36,7 +36,12 @@ export default function Landing() {
   const handleLogin = () => {
   setLocation("/login");
 };
+  const handleStartFree = () => {
+  setLocation("/login");
+    
+}; 
   const features = [
+    
     {
       icon: Camera,
       title: language === "fr" ? "Gestion de Photos" : "Photo Management",
