@@ -5,29 +5,28 @@ import { Card } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { 
-  Camera, 
-  FileText, 
-  Shield, 
-  Palette, 
-  Cloud, 
+import {
+  Camera,
+  FileText,
+  Shield,
+  Palette,
+  Cloud,
   Smartphone,
   Check,
   Star,
   ArrowRight
 } from "lucide-react";
+import Albums from "./Albums";
 
 export default function Landing() {
   const { user, loading, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   const [, setLocation] = useLocation();
 
-  // Si l'utilisateur est déjà connecté, rediriger vers l'application
-  useEffect(() => {
-    if (isAuthenticated && !loading) {
-      setLocation("/albums");
-    }
-  }, [isAuthenticated, loading, setLocation]);
+  // Si l'utilisateur est déjà connecté, afficher directement les albums
+  if (isAuthenticated && !loading) {
+    return <Albums />;
+  }
 
   // Connexion OAuth Manus (pour les utilisateurs déjà inscrits)
   
