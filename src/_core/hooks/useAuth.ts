@@ -15,6 +15,7 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    staleTime: 30_000, // 30s — avoid constant refetches on mount
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -40,11 +41,13 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, [logoutMutation, utils]);
 
+  // isLoading = true only on initial load (no cached data yet)
+  // isFetching = true during any fetch (initial or background refetch)
   const state = useMemo(() => {
     return {
       user: meQuery.data ?? null,
-      // loading = true tant que la requête est en cours (initial OU refetch)
-      loading: meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending,
+      // loading = only true when there's no cached data yet (initial load)
+      loading: meQuery.isLoading || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
       isAuthenticated: Boolean(meQuery.data),
     };
@@ -52,14 +55,13 @@ export function useAuth(options?: UseAuthOptions) {
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,
-    meQuery.isFetching,
     logoutMutation.error,
     logoutMutation.isPending,
   ]);
 
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
-    // Ne pas rediriger tant qu'une requête est en cours
+    // Don't redirect while any fetch is in progress (initial OR background)
     if (meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
