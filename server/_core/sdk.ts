@@ -14,8 +14,16 @@ export type SessionPayload = {
 };
 
 class AuthService {
+  private secretKey: Uint8Array | null = null;
+
   private getSessionSecret() {
-    return new TextEncoder().encode(ENV.cookieSecret);
+    if (!this.secretKey) {
+      if (!ENV.cookieSecret) {
+        console.error("[Auth] FATAL: JWT_SECRET is not set! Authentication will not work.");
+      }
+      this.secretKey = new TextEncoder().encode(ENV.cookieSecret);
+    }
+    return this.secretKey;
   }
 
   private parseCookies(cookieHeader: string | undefined) {
@@ -31,7 +39,7 @@ class AuthService {
     const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
 
-    return new SignJWT({
+    const token = await new SignJWT({
       userId: user.id,
       email: user.email,
       name: user.name || "",
@@ -39,12 +47,26 @@ class AuthService {
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(this.getSessionSecret());
+
+    console.log("[Auth] Token created for user:", user.id, "length:", token.length);
+    return token;
   }
 
   async verifySession(
     cookieValue: string | undefined | null
   ): Promise<SessionPayload | null> {
     if (!cookieValue) return null;
+
+    // A valid JWT has exactly 3 dot-separated parts
+    const parts = cookieValue.split(".");
+    if (parts.length !== 3) {
+      console.warn(
+        "[Auth] Cookie is not a valid JWT format (expected 3 parts, got",
+        parts.length + "). Value starts with:",
+        cookieValue.substring(0, 20) + "..."
+      );
+      return null;
+    }
 
     try {
       const { payload } = await jwtVerify(cookieValue, this.getSessionSecret(), {
@@ -54,7 +76,10 @@ class AuthService {
       const { userId, email, name } = payload as Record<string, unknown>;
 
       if (typeof userId !== "number" || typeof email !== "string") {
-        console.warn("[Auth] Session payload missing required fields");
+        console.warn("[Auth] Session payload missing required fields. Got:", {
+          userId: typeof userId,
+          email: typeof email,
+        });
         return null;
       }
 
@@ -64,7 +89,7 @@ class AuthService {
         name: (name as string) || "",
       };
     } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      console.warn("[Auth] JWT verification failed:", String(error));
       return null;
     }
   }
@@ -72,6 +97,11 @@ class AuthService {
   async authenticateRequest(req: Request): Promise<User> {
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
+
+    if (!sessionCookie) {
+      throw ForbiddenError("No session cookie");
+    }
+
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {

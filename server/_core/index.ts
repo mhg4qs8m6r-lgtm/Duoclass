@@ -28,12 +28,24 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Validate required env vars
+  if (!process.env.JWT_SECRET) {
+    console.error("FATAL: JWT_SECRET environment variable is not set. Auth will not work.");
+  }
+  if (!process.env.DATABASE_URL) {
+    console.error("FATAL: DATABASE_URL environment variable is not set.");
+  }
+
   const app = express();
   const server = createServer(app);
+
+  // Trust proxy for correct protocol detection on Render
+  app.set("trust proxy", 1);
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
+  // Auth routes
   registerOAuthRoutes(app);
   // tRPC API
   app.use(
