@@ -516,7 +516,7 @@ export default function Albums() {
 
   return (
     <MainLayout title={t('albums.title')} onToolbarAction={handleToolbarAction}>
-      <div className="w-full h-full flex flex-col">
+      <div className="w-full flex-1 min-h-0 flex flex-col">
         {/* Header */}
         <div className="border-b border-gray-200/50 p-4">
           <div className="flex justify-between items-center">

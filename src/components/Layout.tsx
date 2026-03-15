@@ -293,7 +293,7 @@ export default function Layout(props: LayoutProps) {
       {/* Main App Window - Resizable */}
       <div 
         data-main-window
-        className="w-[1400px] h-[800px] min-w-[1024px] min-h-[600px] rounded-xl shadow-2xl overflow-hidden flex flex-col relative resize overflow-auto"
+        className="w-[1400px] h-[800px] min-w-[1024px] min-h-[600px] rounded-xl shadow-2xl overflow-auto flex flex-col relative resize"
         style={{ 
           backgroundColor: 'white',
           borderWidth: '4px',
@@ -610,7 +610,7 @@ export default function Layout(props: LayoutProps) {
         </div>
 
         {/* Main Content Container */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-h-0">
           
           {/* Resize Handle (Visual Only) */}
           <div className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50 pointer-events-none">
@@ -666,7 +666,7 @@ export default function Layout(props: LayoutProps) {
           {/* Content Area */}
           <main 
             data-content-area
-            className="flex-1 flex flex-col relative overflow-auto"
+            className="flex-1 flex flex-col relative overflow-auto min-h-0"
             style={{ 
               color: customTextColor || undefined,
               backgroundColor: customWorkareaColor || 'transparent'
