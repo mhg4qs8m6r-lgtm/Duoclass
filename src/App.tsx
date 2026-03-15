@@ -26,6 +26,7 @@ import MentionsLegales from "@/pages/MentionsLegales";
 import PolitiqueConfidentialite from "@/pages/PolitiqueConfidentialite";
 import Retractation from "@/pages/Retractation";
 import Login from "@/pages/Login";
+import Register from "@/pages/Register";
 import { initCategories, db, AlbumMeta } from "./db";
 import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
 
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/retractation" component={Retractation} />
       <Route path="/404" component={NotFound} />
       <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -26,11 +26,11 @@ function createGuestContext(): TrpcContext {
 function createAuthContext(overrides?: Partial<AuthenticatedUser>): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
-    openId: "test-user-open-id",
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    loginMethod: "email",
     role: "user",
+    passwordHash: "$2a$12$fake",
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),

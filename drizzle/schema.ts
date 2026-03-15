@@ -2,15 +2,14 @@ import { integer, pgEnum, pgTable, text, timestamp, varchar, bigint, boolean, re
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  openId: varchar("openId", { length: 64 }),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
+  email: varchar("email", { length: 320 }).notNull().unique(),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: varchar("role", { length: 32 }).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  passwordHash: varchar("passwordHash", { length: 255 }),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
   trialStartDate: bigint("trialStartDate", { mode: "number" }),
   trialEndDate: bigint("trialEndDate", { mode: "number" }),
   photoCount: integer("photoCount").default(0).notNull(),

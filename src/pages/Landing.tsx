@@ -28,10 +28,6 @@ export default function Landing() {
     return <Albums />;
   }
 
-  // Connexion OAuth Manus (pour les utilisateurs déjà inscrits)
-  
-
-  // Démarrage de l'essai gratuit : accès direct à l'application sans compte requis
   const handleLogin = () => {
   setLocation("/login");
 };
