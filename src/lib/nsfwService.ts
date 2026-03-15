@@ -9,9 +9,9 @@
  * utilisation du contrôle parental.
  */
 
-// URL du bundle nsfwjs hébergé sur CDN (inclut TF.js, autonome)
+// URL du bundle nsfwjs depuis CDN officiel
 const NSFWJS_CDN_URL =
-  "https://files.manuscdn.com/user_upload_by_module/session_file/310519663160465265/toqGvleyOLczIpJW.js";
+  "https://cdn.jsdelivr.net/npm/nsfwjs@4.1.0/dist/nsfwjs.min.js";
 
 // Types pour les résultats d'analyse
 export interface NSFWResult {
