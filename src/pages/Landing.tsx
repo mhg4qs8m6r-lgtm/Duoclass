@@ -16,25 +16,25 @@ import {
   Star,
   ArrowRight
 } from "lucide-react";
-import Albums from "./Albums";
 
 export default function Landing() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   const [, setLocation] = useLocation();
 
-  // Si l'utilisateur est déjà connecté, afficher directement les albums
-  if (isAuthenticated && !loading) {
-    return <Albums />;
-  }
+  // Rediriger vers /albums si déjà connecté
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      setLocation("/albums");
+    }
+  }, [isAuthenticated, loading, setLocation]);
 
   const handleLogin = () => {
-  setLocation("/login");
-};
+    setLocation("/login");
+  };
   const handleStartFree = () => {
-  setLocation("/login");
-    
-}; 
+    setLocation("/register");
+  }; 
   const features = [
     
     {
