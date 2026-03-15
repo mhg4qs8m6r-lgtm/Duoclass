@@ -21,7 +21,8 @@ export default function Login() {
       if (!res.ok) {
         setError(data.error || "Erreur de connexion");
       } else {
-        navigate("/albums");
+        // Full reload pour vider le cache React Query (auth.me était null)
+        window.location.href = "/albums";
       }
     } catch {
       setError("Erreur réseau, veuillez réessayer");

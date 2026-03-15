@@ -34,7 +34,8 @@ export default function Register() {
       if (!res.ok) {
         setError(data.error || "Erreur lors de l'inscription");
       } else {
-        navigate("/albums");
+        // Full reload pour vider le cache React Query
+        window.location.href = "/albums";
       }
     } catch {
       setError("Erreur réseau, veuillez réessayer");

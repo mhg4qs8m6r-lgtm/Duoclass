@@ -21,7 +21,7 @@ import {
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, addToCreationsBasket, CreationsBasketItem } from "@/db";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSelector from "@/components/LanguageSelector";
 import TrialBanner from "@/components/TrialBanner";
@@ -99,7 +99,7 @@ export default function Layout(props: LayoutProps) {
     currentAlbumId
   } = props;
   const [location] = useLocation();
-  const { isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { t, language } = useLanguage();
   // État local du zoom si non contrôlé par le parent
   const [localZoom, setLocalZoom] = useState([0]);
@@ -344,18 +344,27 @@ export default function Layout(props: LayoutProps) {
 
           {/* Right Section: Admin + Help + Avatar + Language */}
           <div className="flex items-center gap-3 w-[350px] justify-end">
-            {/* Indicateur Admin + Bouton Déconnexion (Visible seulement si connecté) */}
+            {/* Indicateur utilisateur + Bouton Déconnexion */}
             {isAuthenticated && (
-              <div className="flex items-center gap-2 mr-1 bg-green-50 px-4 py-2 rounded-full border border-green-200 shadow-sm">
-                <div className="flex items-center gap-1" title={t('common.adminMode')}>
-                  <Unlock className="w-5 h-5 text-green-500 animate-pulse" />
-                  <span className="text-xs font-bold text-green-700 uppercase tracking-wider">Admin</span>
-                </div>
-                <div className="h-4 w-px bg-green-300 mx-1"></div>
-                <button 
+              <div className={`flex items-center gap-2 mr-1 px-4 py-2 rounded-full shadow-sm ${
+                user?.role === 'admin'
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-blue-50 border border-blue-200'
+              }`}>
+                {user?.role === 'admin' && (
+                  <div className="flex items-center gap-1" title={t('common.adminMode')}>
+                    <Unlock className="w-4 h-4 text-green-500" />
+                    <span className="text-xs font-bold text-green-700 uppercase tracking-wider">Admin</span>
+                    <div className="h-4 w-px bg-green-300 mx-1"></div>
+                  </div>
+                )}
+                {user?.name && (
+                  <span className="text-xs font-medium text-gray-600 max-w-[100px] truncate">{user.name}</span>
+                )}
+                <button
                   onClick={logout}
                   className="w-[24px] h-[24px] bg-red-100 border border-red-300 rounded-full flex items-center justify-center shadow-sm hover:bg-red-200 hover:shadow-md transition-all"
-                  title={t('common.closeAdminSession')}
+                  title={language === 'fr' ? 'Se déconnecter' : 'Log out'}
                 >
                   <LogOut className="w-3 h-3 text-red-600" />
                 </button>

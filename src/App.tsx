@@ -27,6 +27,7 @@ import PolitiqueConfidentialite from "@/pages/PolitiqueConfidentialite";
 import Retractation from "@/pages/Retractation";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { initCategories, db, AlbumMeta } from "./db";
 import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
 
@@ -41,37 +42,17 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/accueil" component={() => { window.location.href = '/albums'; return null; }} />
       <Route path="/photoclass">
-        <Layout 
-          title={pageTitle} 
-          zoomLevel={zoomLevel} 
-          setZoomLevel={setZoomLevel}
-          onToolbarAction={setToolbarAction}
-          displayMode={displayMode}
-          onDisplayModeChange={setDisplayMode}
-        >
-          <PhotoClass 
-            zoomLevel={zoomLevel} 
-            setZoomLevel={setZoomLevel}
-            toolbarAction={toolbarAction}
-            resetToolbarAction={() => setToolbarAction(null)}
-            onTitleChange={setPageTitle}
-            displayMode={displayMode}
-          />
-        </Layout>
-      </Route>
-      <Route path="/photoclass/:albumId">
-        {(params) => (
-          <Layout 
-            title={pageTitle} 
-            zoomLevel={zoomLevel} 
+        <ProtectedRoute>
+          <Layout
+            title={pageTitle}
+            zoomLevel={zoomLevel}
             setZoomLevel={setZoomLevel}
             onToolbarAction={setToolbarAction}
             displayMode={displayMode}
             onDisplayModeChange={setDisplayMode}
-            currentAlbumId={params.albumId}
           >
-            <PhotoClass 
-              zoomLevel={zoomLevel} 
+            <PhotoClass
+              zoomLevel={zoomLevel}
               setZoomLevel={setZoomLevel}
               toolbarAction={toolbarAction}
               resetToolbarAction={() => setToolbarAction(null)}
@@ -79,21 +60,45 @@ function Router() {
               displayMode={displayMode}
             />
           </Layout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/photoclass/:albumId">
+        {(params) => (
+          <ProtectedRoute>
+            <Layout
+              title={pageTitle}
+              zoomLevel={zoomLevel}
+              setZoomLevel={setZoomLevel}
+              onToolbarAction={setToolbarAction}
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
+              currentAlbumId={params.albumId}
+            >
+              <PhotoClass
+                zoomLevel={zoomLevel}
+                setZoomLevel={setZoomLevel}
+                toolbarAction={toolbarAction}
+                resetToolbarAction={() => setToolbarAction(null)}
+                onTitleChange={setPageTitle}
+                displayMode={displayMode}
+              />
+            </Layout>
+          </ProtectedRoute>
         )}
       </Route>
-      <Route path="/workspace" component={Home} />
-      
-      {/* Routes principales */}
-      <Route path="/paiement" component={Paiement} />
-      <Route path="/paiement/succes" component={PaiementSucces} />
-      <Route path="/parametres" component={Parametres} />
-      <Route path="/utilitaires" component={Utilitaires} />
-      <Route path="/albums" component={Albums} />
-      <Route path="/albums-prives" component={AlbumsPrives} />
-      <Route path="/themes" component={Themes} />
-      <Route path="/aide" component={Aide} />
-      <Route path="/admin/licenses" component={AdminLicenses} />
-      <Route path="/mes-licences" component={MesLicences} />
+      <Route path="/workspace">{() => <ProtectedRoute><Home /></ProtectedRoute>}</Route>
+
+      {/* Routes principales (protégées) */}
+      <Route path="/paiement">{() => <ProtectedRoute><Paiement /></ProtectedRoute>}</Route>
+      <Route path="/paiement/succes">{() => <ProtectedRoute><PaiementSucces /></ProtectedRoute>}</Route>
+      <Route path="/parametres">{() => <ProtectedRoute><Parametres /></ProtectedRoute>}</Route>
+      <Route path="/utilitaires">{() => <ProtectedRoute><Utilitaires /></ProtectedRoute>}</Route>
+      <Route path="/albums">{() => <ProtectedRoute><Albums /></ProtectedRoute>}</Route>
+      <Route path="/albums-prives">{() => <ProtectedRoute><AlbumsPrives /></ProtectedRoute>}</Route>
+      <Route path="/themes">{() => <ProtectedRoute><Themes /></ProtectedRoute>}</Route>
+      <Route path="/aide">{() => <ProtectedRoute><Aide /></ProtectedRoute>}</Route>
+      <Route path="/admin/licenses">{() => <ProtectedRoute><AdminLicenses /></ProtectedRoute>}</Route>
+      <Route path="/mes-licences">{() => <ProtectedRoute><MesLicences /></ProtectedRoute>}</Route>
       
       {/* Pages légales */}
       <Route path="/cgu" component={CGU} />

@@ -1,4 +1,3 @@
- 
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
@@ -9,8 +8,8 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
-     options ?? {};
+  const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
+    options ?? {};
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -44,7 +43,8 @@ const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
   const state = useMemo(() => {
     return {
       user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
+      // loading = true tant que la requête est en cours (initial OU refetch)
+      loading: meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
       isAuthenticated: Boolean(meQuery.data),
     };
@@ -52,23 +52,26 @@ const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,
+    meQuery.isFetching,
     logoutMutation.error,
     logoutMutation.isPending,
   ]);
 
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
-    if (meQuery.isLoading || logoutMutation.isPending) return;
+    // Ne pas rediriger tant qu'une requête est en cours
+    if (meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    window.location.href = redirectPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
+    meQuery.isFetching,
     state.user,
   ]);
 
