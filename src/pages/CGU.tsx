@@ -70,7 +70,7 @@ L'accès à l'Application DuoClass est proposé au tarif de :
 
 MODALITÉS DE PAIEMENT
 
-• Le paiement s'effectue via la plateforme Stripe
+• Le paiement s'effectue par activation d'une licence fournie par l'administrateur
 • Le paiement est unique et donne accès permanent à l'Application
 
 FACTURATION
@@ -157,7 +157,7 @@ L'Application collecte les données personnelles suivantes :
 
 • Nom et prénom
 • Adresse email
-• Informations de paiement (traitées par Stripe)
+• Code de licence (activation manuelle)
 • Données d'utilisation (logs d'accès, actions effectuées)
 
 UTILISATION DES DONNÉES
@@ -314,7 +314,7 @@ Access to the DuoClass Application is offered at the rate of:
 
 PAYMENT METHODS
 
-• Payment is made via the Stripe platform
+• Payment is made by activating a license provided by the administrator
 • Payment is one-time and provides permanent access to the Application
 
 BILLING
@@ -401,7 +401,7 @@ The Application collects the following personal data:
 
 • First and last name
 • Email address
-• Payment information (processed by Stripe)
+• License code (manual activation)
 • Usage data (access logs, actions performed)
 
 USE OF DATA

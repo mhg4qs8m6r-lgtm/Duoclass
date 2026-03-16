@@ -49,7 +49,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SymbolWithTooltip } from "@/components/SymbolWithTooltip";
-import CloudStorageGuide from "@/components/CloudStorageGuide";
 
 interface HelpSection {
   id: string;
@@ -493,10 +492,14 @@ export default function Aide() {
       titleEn: "Cloud Storage",
       icon: <Cloud className="w-5 h-5" />,
       contentFr: (
-        <CloudStorageGuide language="fr" />
+        <div className="space-y-4">
+          <p>Vos photos et documents sont stockés localement sur votre appareil. La synchronisation avec le serveur permet de conserver vos métadonnées et miniatures en toute sécurité.</p>
+        </div>
       ),
       contentEn: (
-        <CloudStorageGuide language="en" />
+        <div className="space-y-4">
+          <p>Your photos and documents are stored locally on your device. Server synchronization keeps your metadata and thumbnails safe.</p>
+        </div>
       )
     },
     {

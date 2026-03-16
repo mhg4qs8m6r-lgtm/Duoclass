@@ -17,16 +17,12 @@ import {
   Loader2,
   Gift
 } from "lucide-react";
-import Turnstile from "@/components/Turnstile";
-
 export default function Paiement() {
   const { t, language } = useLanguage();
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const [isLoading, setIsLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [turnstileVerified, setTurnstileVerified] = useState(false);
   const [showRetractationModal, setShowRetractationModal] = useState(false);
   const [retractationAccepted, setRetractationAccepted] = useState(false);
 
@@ -50,7 +46,7 @@ export default function Paiement() {
         toast.info(language === "fr" 
           ? language === "fr" ? "Redirection vers le paiement sécurisé..." : "Redirecting to secure payment..." 
           : "Redirecting to secure payment...");
-        // Ouvrir Stripe Checkout dans un nouvel onglet
+        // Ouvrir la page de paiement
         window.open(data.url, "_blank");
       }
       setIsLoading(false);
@@ -66,66 +62,22 @@ export default function Paiement() {
 
   const handlePurchase = async () => {
     if (!isAuthenticated) {
-      toast.error(language === "fr" 
-        ? "Veuillez vous connecter pour acheter." 
+      toast.error(language === "fr"
+        ? "Veuillez vous connecter pour acheter."
         : "Please log in to purchase.");
       return;
     }
-    
-    // Vérifier que l'utilisateur a accepté les conditions de rétractation
+
     if (!retractationAccepted) {
       setShowRetractationModal(true);
-      toast.error(language === "fr" 
-        ? language === "fr" ? "Veuillez accepter les conditions de rétractation." : "Please accept the withdrawal conditions." 
+      toast.error(language === "fr"
+        ? "Veuillez accepter les conditions de rétractation."
         : "Please accept the withdrawal conditions.");
       return;
     }
-    
-    // Vérifier le token Turnstile
-    if (!turnstileToken) {
-      toast.error(language === "fr" 
-        ? language === "fr" ? "Veuillez compléter la vérification de sécurité." : "Please complete the security verification." 
-        : "Please complete the security verification.");
-      return;
-    }
-    
+
     setIsLoading(true);
-    
-    // Vérifier le token côté serveur
-    try {
-      const verifyResponse = await fetch("/api/turnstile/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: turnstileToken }),
-      });
-      const verifyData = await verifyResponse.json();
-      
-      if (!verifyData.success) {
-        toast.error(language === "fr" 
-          ? language === "fr" ? "Vérification de sécurité échouée. Veuillez réessayer." : "Security verification failed. Please try again." 
-          : "Security verification failed. Please try again.");
-        setIsLoading(false);
-        setTurnstileToken(null);
-        return;
-      }
-    } catch (error) {
-      console.error("Erreur de vérification Turnstile:", error);
-      // En cas d'erreur, on continue quand même (fail-open pour ne pas bloquer les utilisateurs légitimes)
-    }
-    
     createCheckout.mutate({ planId: "lifetime" });
-  };
-  
-  // Callback quand Turnstile est vérifié
-  const handleTurnstileVerify = (token: string) => {
-    setTurnstileToken(token);
-    setTurnstileVerified(true);
-  };
-  
-  // Callback quand Turnstile expire
-  const handleTurnstileExpire = () => {
-    setTurnstileToken(null);
-    setTurnstileVerified(false);
   };
 
   const features = language === "fr" ? [
@@ -154,7 +106,7 @@ export default function Paiement() {
       purchase: "Acheter maintenant",
       purchasing: "Redirection...",
       trialInfo: language === "fr" ? "Vous bénéficiez actuellement de 14 jours d'essai gratuit" : "You currently have a 14-day free trial",
-      securePayment: language === "fr" ? "Paiement sécurisé par Stripe" : "Secure payment by Stripe",
+      securePayment: language === "fr" ? "Paiement sécurisé" : "Secure payment",
       lifetimeAccess: language === "fr" ? "Accès à vie" : "Lifetime access",
       back: "Retour",
       features: "Tout est inclus",
@@ -173,7 +125,7 @@ export default function Paiement() {
       purchase: "Buy now",
       purchasing: "Redirecting...",
       trialInfo: "You currently have a 14-day free trial",
-      securePayment: "Secure payment by Stripe",
+      securePayment: "Secure payment",
       lifetimeAccess: "Lifetime access",
       back: "Back",
       features: "Everything included",
@@ -228,24 +180,6 @@ export default function Paiement() {
             </p>
           </div>
 
-          {/* Vérification de sécurité Turnstile */}
-          <div className="flex justify-center mb-4">
-            <Turnstile
-              onVerify={handleTurnstileVerify}
-              onExpire={handleTurnstileExpire}
-              theme="light"
-              language={language}
-            />
-          </div>
-          
-          {/* Indicateur de vérification */}
-          {turnstileVerified && (
-            <div className="flex items-center justify-center gap-2 text-green-600 text-sm mb-4">
-              <Check className="w-4 h-4" />
-              {language === "fr" ? "Vérification réussie" : "Verification successful"}
-            </div>
-          )}
-          
           {/* Checkbox Droit de rétractation */}
           <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
             <input
@@ -267,7 +201,7 @@ export default function Paiement() {
             size="lg" 
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
             onClick={handlePurchase}
-            disabled={isLoading || !turnstileVerified}
+            disabled={isLoading}
           >
             {isLoading ? (
               <>

@@ -80,7 +80,7 @@ export default function RetouchePhoto({
   const [showEnlargedRetouched, setShowEnlargedRetouched] = useState(false);
   const [showQuitModal, setShowQuitModal] = useState(false);
 
-  // Appliquer la retouche avec API IA
+  // Appliquer la retouche (traitement local uniquement)
   const applyRetouch = async () => {
     if (!selectedFunction) {
       toast.info(language === "fr" ? "Veuillez sélectionner une fonction de retouche" : "Please select an editing function");
@@ -92,67 +92,11 @@ export default function RetouchePhoto({
     toast.loading(`Application de "${functionName}"...`, { id: 'retouch' });
 
     try {
-      // Appel à l'API Forge pour la retouche IA
-      const apiKey = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-      const apiUrl = import.meta.env.VITE_FRONTEND_FORGE_API_URL;
-
-      if (!apiKey || !apiUrl) {
-        // Fallback vers traitement local si pas d'API
-        await applyLocalRetouch();
-        return;
-      }
-
-      // Préparer le prompt selon la fonction sélectionnée
-      let prompt = "";
-      switch (selectedFunction) {
-        case 1:
-          prompt = "Enhance this image: improve quality, sharpness, and color balance";
-          break;
-        case 2:
-          prompt = "Upscale this image to higher resolution while maintaining quality";
-          break;
-        case 3:
-          prompt = "Remove red eye effect from this photo";
-          break;
-        case 4:
-          prompt = "Remove unwanted objects from this image";
-          break;
-        case 5:
-          prompt = "Remove the background from this image";
-          break;
-        case 6:
-          prompt = "Apply bokeh blur effect to the background";
-          break;
-        case 7:
-          prompt = "Fill and extend the image using generative AI";
-          break;
-        case 8:
-          prompt = "Restore this old photo: remove scratches, improve clarity";
-          break;
-        case 9:
-          prompt = "Colorize this black and white photo naturally";
-          break;
-        case 10:
-          prompt = "Smart crop this image to improve composition";
-          break;
-        case 11:
-          prompt = "Auto-rotate this image to correct horizon";
-          break;
-        case 12:
-          prompt = "Transform this photo into artistic style";
-          break;
-        default:
-          prompt = "Enhance this image";
-      }
-
-      // Pour l'instant, utiliser le traitement local car l'API d'édition d'image 
-      // nécessite une configuration spécifique
       await applyLocalRetouch();
-
     } catch (error) {
-      console.error("Erreur API:", error);
-      // Fallback vers traitement local
-      await applyLocalRetouch();
+      console.error("Erreur retouche:", error);
+      toast.error(language === "fr" ? "Erreur lors de la retouche" : "Retouch error", { id: 'retouch' });
+      setIsProcessing(false);
     }
   };
 

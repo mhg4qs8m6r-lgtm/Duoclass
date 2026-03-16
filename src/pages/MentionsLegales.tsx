@@ -93,7 +93,7 @@ Pour plus d'informations, consultez notre Politique de Confidentialité.`
 - [À COMPLÉTER - AUTRES COOKIES]
 
 **Cookies tiers :**
-- Stripe (paiement sécurisé)
+- Aucun service de paiement tiers
 - [À COMPLÉTER - AUTRES SERVICES TIERS]
 
 Vous pouvez configurer votre navigateur pour refuser les cookies, mais certaines fonctionnalités de l'Application pourraient ne plus être disponibles.`
@@ -225,7 +225,7 @@ For more information, see our Privacy Policy.`
 - [TO BE COMPLETED - OTHER COOKIES]
 
 **Third-party cookies:**
-- Stripe (secure payment)
+- No third-party payment service
 - [TO BE COMPLETED - OTHER THIRD-PARTY SERVICES]
 
 You can configure your browser to refuse cookies, but some features may no longer be available.`

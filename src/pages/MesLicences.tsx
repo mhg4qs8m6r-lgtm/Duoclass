@@ -40,7 +40,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import Turnstile from "@/components/Turnstile";
 
 export default function MesLicences() {
   const [, setLocation] = useLocation();
@@ -53,8 +52,6 @@ export default function MesLicences() {
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [licenseToDeactivate, setLicenseToDeactivate] = useState<string | null>(null);
   const [expandedLicense, setExpandedLicense] = useState<number | null>(null);
-  const [activationTurnstileToken, setActivationTurnstileToken] = useState<string | null>(null);
-  
   // Récupérer les licences de l'utilisateur
   const { data: licenses, isLoading, refetch } = trpc.license.getMyLicenses.useQuery();
   
@@ -101,36 +98,7 @@ export default function MesLicences() {
       toast.error(t('licenses.enterCode'));
       return;
     }
-    
-    // Vérifier le token Turnstile
-    if (!activationTurnstileToken) {
-      toast.error(language === "fr" 
-        ? language === "fr" ? "Veuillez compléter la vérification de sécurité." : "Please complete the security verification." 
-        : "Please complete the security verification.");
-      return;
-    }
-    
-    // Vérifier le token côté serveur
-    try {
-      const verifyResponse = await fetch("/api/turnstile/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: activationTurnstileToken }),
-      });
-      const verifyData = await verifyResponse.json();
-      
-      if (!verifyData.success) {
-        toast.error(language === "fr" 
-          ? language === "fr" ? "Vérification de sécurité échouée. Veuillez réessayer." : "Security verification failed. Please try again." 
-          : "Security verification failed. Please try again.");
-        setActivationTurnstileToken(null);
-        return;
-      }
-    } catch (error) {
-      console.error("Erreur de vérification Turnstile:", error);
-      // En cas d'erreur, on continue (fail-open)
-    }
-    
+
     activateMutation.mutate({
       licenseCode: activationCode.trim().toUpperCase(),
     });
@@ -422,35 +390,15 @@ export default function MesLicences() {
                 <p>{deviceName}</p>
               </div>
               
-              {/* Vérification de sécurité Turnstile */}
-              <div className="flex justify-center">
-                <Turnstile
-                  onVerify={(token) => setActivationTurnstileToken(token)}
-                  onExpire={() => setActivationTurnstileToken(null)}
-                  theme="light"
-                  size="compact"
-                  language={language}
-                />
-              </div>
-              
-              {activationTurnstileToken && (
-                <div className="flex items-center justify-center gap-2 text-green-600 text-sm">
-                  <Check className="w-4 h-4" />
-                  {language === "fr" ? "Vérification réussie" : "Verification successful"}
-                </div>
-              )}
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setShowActivateDialog(false);
-                setActivationTurnstileToken(null);
-              }}>
+              <Button variant="outline" onClick={() => setShowActivateDialog(false)}>
                 {t('licenses.cancel')}
               </Button>
               <Button 
                 onClick={handleActivate}
-                disabled={activateMutation.isPending || !activationTurnstileToken}
+                disabled={activateMutation.isPending}
               >
                 {activateMutation.isPending ? (
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />

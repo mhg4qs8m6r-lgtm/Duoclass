@@ -38,53 +38,37 @@ export async function getUserLicense(userId: number): Promise<License | null> {
 }
 
 /**
- * Crée une nouvelle licence pour un utilisateur
+ * Crée une nouvelle licence (admin génère un code).
+ * Le code est en statut "pending" jusqu'à activation par un utilisateur.
  */
 export async function createLicense(data: {
-  userId: number;
-  paymentId: string;
-  paymentProvider: string;
+  email?: string;
+  licenseType?: string;
 }): Promise<License | null> {
   const db = await getDb();
   if (!db) return null;
 
   try {
-    // Vérifier si l'utilisateur a déjà une licence
-    const existing = await getUserLicense(data.userId);
-    if (existing) {
-      console.log("[License] User already has a license");
-      return existing;
-    }
-
     const licenseCode = generateLicenseCode();
-    const now = new Date();
 
-    const insertData: InsertLicense = {
-      userId: data.userId,
-      licenseCode,
-      licenseType: 'lifetime',
-      status: 'active',
-      stripePaymentIntentId: data.paymentId,
-      activatedAt: now,
-    };
-
-    const result = await db.insert(licenses).values(insertData);
-    const insertId = Number(result[0].insertId);
+    const [created] = await db
+      .insert(licenses)
+      .values({
+        licenseCode,
+        email: data.email || null,
+        licenseType: data.licenseType || "lifetime",
+        status: "pending",
+      })
+      .returning();
 
     // Enregistrer dans l'historique
     await db.insert(licenseHistory).values({
-      licenseId: insertId,
-      eventType: 'created',
-      details: JSON.stringify({ paymentId: data.paymentId, paymentProvider: data.paymentProvider }),
+      licenseId: created.id,
+      eventType: "created",
+      details: JSON.stringify({ email: data.email }),
     });
 
-    const created = await db
-      .select()
-      .from(licenses)
-      .where(eq(licenses.id, insertId))
-      .limit(1);
-
-    return created[0] || null;
+    return created;
   } catch (error) {
     console.error("[License] Failed to create license:", error);
     return null;

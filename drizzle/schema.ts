@@ -15,8 +15,6 @@ export const users = pgTable("users", {
   photoCount: integer("photoCount").default(0).notNull(),
   subscriptionStatus: varchar("subscriptionStatus", { length: 32 }).default("trial").notNull(),
   subscriptionPlan: varchar("subscriptionPlan", { length: 32 }),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
   subscriptionEndDate: bigint("subscriptionEndDate", { mode: "number" }),
 });
 
@@ -147,7 +145,6 @@ export const licenses = pgTable("licenses", {
   deviceName: varchar("deviceName", { length: 255 }),
   licenseType: varchar("licenseType", { length: 32 }).default("lifetime").notNull(),
   status: varchar("status", { length: 32 }).default("pending").notNull(),
-  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
   activatedAt: timestamp("activatedAt"),
   expiresAt: timestamp("expiresAt"),
   transferCount: integer("transferCount").default(0).notNull(),
@@ -172,3 +169,15 @@ export const licenseHistory = pgTable("licenseHistory", {
 
 export type LicenseHistory = typeof licenseHistory.$inferSelect;
 export type InsertLicenseHistory = typeof licenseHistory.$inferInsert;
+
+export const passwordResetTokens = pgTable("passwordResetTokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;

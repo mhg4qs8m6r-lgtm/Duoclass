@@ -4,7 +4,7 @@
  * sans avoir besoin des photos originales (qui restent en local)
  */
 
-import { storagePut, storageGet } from './storage';
+import { storagePut, storageGet } from './local-storage';
 
 /**
  * Génère le chemin S3 pour une miniature

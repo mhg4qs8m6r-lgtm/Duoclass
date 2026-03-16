@@ -33,7 +33,7 @@ Email : [À COMPLÉTER]`
         content: `**2.1. Données que vous nous fournissez directement :**
 - Adresse email (lors de l'inscription)
 - Nom et prénom (optionnel)
-- Informations de paiement (traitées par Stripe, non stockées par nous)
+- Code de licence (activation manuelle, aucune donnée de paiement stockée)
 
 **2.2. Données collectées automatiquement :**
 - Données de connexion (adresse IP, type de navigateur)
@@ -86,7 +86,7 @@ DuoClass utilise la technologie IndexedDB de votre navigateur pour stocker vos p
 
 | Prestataire | Service | Pays | Garanties |
 |-------------|---------|------|-----------|
-| Stripe | Paiements | USA | Clauses contractuelles types |
+| Aucun | - | - | - |
 | [À COMPLÉTER] | Hébergement | [À COMPLÉTER] | [À COMPLÉTER] |
 | [À COMPLÉTER] | Analytics | [À COMPLÉTER] | [À COMPLÉTER] |
 
@@ -219,7 +219,7 @@ Email: [TO BE COMPLETED]`
         content: `**2.1. Data you provide directly:**
 - Email address (during registration)
 - Name (optional)
-- Payment information (processed by Stripe, not stored by us)
+- License code (manual activation, no payment data stored)
 
 **2.2. Data collected automatically:**
 - Connection data (IP address, browser type)
@@ -272,7 +272,7 @@ DuoClass uses your browser's IndexedDB technology to store your photos and docum
 
 | Provider | Service | Country | Safeguards |
 |----------|---------|---------|------------|
-| Stripe | Payments | USA | Standard contractual clauses |
+| None | - | - | - |
 | [TO BE COMPLETED] | Hosting | [TO BE COMPLETED] | [TO BE COMPLETED] |
 
 **5.2. We NEVER sell your data**

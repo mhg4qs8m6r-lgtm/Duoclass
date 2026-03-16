@@ -33,14 +33,14 @@ export const appRouter = router({
   // Routes de synchronisation
   sync: syncRouter,
 
-  // Routes de paiement (placeholder pour Stripe)
+  // Routes de paiement (licences gérées par l'admin)
   payment: router({
     getPlans: publicProcedure.query(() => {
       return [
         {
           id: 'lifetime',
           name: 'Licence à vie',
-          price: 4900, // 49€ en centimes
+          price: 4900,
           currency: 'EUR',
           features: [
             'Accès à vie',
@@ -54,16 +54,12 @@ export const appRouter = router({
     createCheckoutSession: protectedProcedure
       .input(z.object({
         planId: z.string(),
-        turnstileToken: z.string().optional(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        // TODO: Intégrer Stripe ici
-        // Pour l'instant, retourner une URL de test
-        console.log('[Payment] Creating checkout session for user:', ctx.user.id, 'plan:', input.planId);
+      .mutation(async () => {
         return {
           url: null,
           sessionId: null,
-          message: 'Stripe non configuré. Veuillez contacter le support.',
+          message: 'Contactez l\'administrateur pour obtenir une licence.',
         };
       }),
   }),
@@ -102,18 +98,20 @@ export const appRouter = router({
     }),
 
     /**
-     * Crée une nouvelle licence après paiement
+     * Génère une nouvelle licence (admin uniquement)
      */
     create: protectedProcedure
       .input(z.object({
-        paymentId: z.string(),
-        paymentProvider: z.string().optional(),
+        email: z.string().optional(),
+        licenseType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized');
+        }
         const license = await createLicense({
-          userId: ctx.user.id,
-          paymentId: input.paymentId,
-          paymentProvider: input.paymentProvider || 'stripe',
+          email: input.email,
+          licenseType: input.licenseType,
         });
         return { success: !!license, license };
       }),
@@ -227,86 +225,6 @@ export const appRouter = router({
       }),
   }),
 
-  // Routes de détourage d'images
-  detourage: router({
-    /**
-     * Détoure une image (supprime le fond) en utilisant @imgly/background-removal-node
-     * Accepte soit une URL, soit des données base64
-     */
-    removeBackground: publicProcedure
-      .input(z.object({
-        imageData: z.string(), // URL ou data:image/...;base64,...
-      }))
-      .mutation(async ({ input }) => {
-        const { removeBackground } = await import('@imgly/background-removal-node');
-        const { storagePut } = await import('./storage');
-        
-        try {
-          console.log('[Detourage] Starting background removal...');
-          
-          // Préparer l'image source
-          let imageSource: string | Blob;
-          
-          if (input.imageData.startsWith('data:')) {
-            // Convertir base64 en Blob
-            // Regex amélioré pour accepter tous les formats: image/jpeg, image/png, image/gif, image/webp, image/svg+xml, etc.
-            const matches = input.imageData.match(/^data:(image\/[\w+.-]+);base64,([\s\S]+)$/);
-            if (!matches) {
-              // Essayer un format alternatif sans le type MIME complet
-              const simpleMatch = input.imageData.match(/^data:([^;]+);base64,([\s\S]+)$/);
-              if (!simpleMatch) {
-                console.error('[Detourage] Invalid base64 format, data starts with:', input.imageData.substring(0, 100));
-                throw new Error('Format base64 invalide');
-              }
-              const mimeType = simpleMatch[1];
-              const base64Data = simpleMatch[2];
-              const binaryData = Buffer.from(base64Data, 'base64');
-              imageSource = new Blob([binaryData], { type: mimeType });
-              console.log('[Detourage] Processing base64 image with mime:', mimeType);
-            } else {
-              const mimeType = matches[1];
-              const base64Data = matches[2];
-              const binaryData = Buffer.from(base64Data, 'base64');
-              imageSource = new Blob([binaryData], { type: mimeType });
-              console.log('[Detourage] Processing base64 image with mime:', mimeType);
-            }
-          } else {
-            // C'est une URL
-            imageSource = input.imageData;
-            console.log('[Detourage] Processing URL:', input.imageData);
-          }
-          
-          // Supprimer le fond avec @imgly/background-removal-node
-          const resultBlob = await removeBackground(imageSource, {
-            progress: (key: string, current: number, total: number) => {
-              console.log(`[Detourage] Progress: ${key} ${current}/${total}`);
-            },
-          });
-          
-          // Convertir le Blob en Buffer
-          const arrayBuffer = await resultBlob.arrayBuffer();
-          const resultBuffer = Buffer.from(arrayBuffer);
-          
-          // Uploader sur S3
-          const timestamp = Date.now();
-          const { url } = await storagePut(
-            `detourage/${timestamp}.png`,
-            resultBuffer,
-            'image/png'
-          );
-          
-          console.log('[Detourage] Success, result URL:', url);
-          
-          return {
-            success: true,
-            resultUrl: url,
-          };
-        } catch (error: any) {
-          console.error('[Detourage] Error:', error);
-          throw new Error(`Erreur lors du détourage: ${error.message || 'Erreur inconnue'}`);
-        }
-      }),
-  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -56,48 +56,40 @@ describe('License Database Functions', () => {
   });
 
   describe('createLicense', () => {
-    it('should create a new license for user', async () => {
+    it('should create a new pending license (admin flow)', async () => {
       const mockLicense = {
         id: 1,
-        userId: 1,
+        userId: null,
         licenseCode: 'ABCD-EFGH-IJKL-MNOP',
         licenseType: 'lifetime' as const,
-        status: 'active' as const,
+        status: 'pending' as const,
       };
-      
+
       vi.mocked(createLicense).mockResolvedValue(mockLicense as any);
-      
+
       const result = await createLicense({
-        userId: 1,
-        paymentId: 'pi_test123',
-        paymentProvider: 'stripe',
+        email: 'user@example.com',
       });
-      
+
       expect(result).toEqual(mockLicense);
       expect(createLicense).toHaveBeenCalledWith({
-        userId: 1,
-        paymentId: 'pi_test123',
-        paymentProvider: 'stripe',
+        email: 'user@example.com',
       });
     });
 
-    it('should return existing license if user already has one', async () => {
-      const existingLicense = {
-        id: 1,
-        userId: 1,
-        licenseCode: 'EXISTING-CODE',
-        status: 'active' as const,
+    it('should create license without email', async () => {
+      const mockLicense = {
+        id: 2,
+        userId: null,
+        licenseCode: 'WXYZ-1234-5678-ABCD',
+        status: 'pending' as const,
       };
-      
-      vi.mocked(createLicense).mockResolvedValue(existingLicense as any);
-      
-      const result = await createLicense({
-        userId: 1,
-        paymentId: 'pi_new123',
-        paymentProvider: 'stripe',
-      });
-      
-      expect(result?.licenseCode).toBe('EXISTING-CODE');
+
+      vi.mocked(createLicense).mockResolvedValue(mockLicense as any);
+
+      const result = await createLicense({});
+
+      expect(result?.licenseCode).toBe('WXYZ-1234-5678-ABCD');
     });
   });
 
