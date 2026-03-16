@@ -673,8 +673,8 @@ export default function Layout(props: LayoutProps) {
             }}
           >
             {/* Dynamic Content - Allow scrolling for pages that need it, unless no-scroll class is passed */}
-            <div 
-              className={`flex-1 p-6 relative ${className === 'no-scroll' ? '' : 'overflow-auto'}`}
+            <div
+              className={`flex-1 p-6 relative flex flex-col ${className === 'no-scroll' ? '' : 'overflow-auto'}`}
               style={{ 
                 color: customTextColor || undefined,
                 // Appliquer la couleur de texte à tous les éléments enfants via CSS custom property
