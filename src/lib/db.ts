@@ -140,6 +140,7 @@ export const db = new DuoClassDB();
  */
 export async function initCategories(): Promise<void> {
   try {
+    // Album Modèles Stickers
     const existing = await db.album_metas.get(MODELES_STICKERS_ALBUM_ID);
     if (!existing) {
       await db.album_metas.put({
@@ -149,6 +150,53 @@ export async function initCategories(): Promise<void> {
         series: 'photoclass',
         createdAt: Date.now(),
       });
+    }
+
+    // 4 catégories NON CLASSEE par défaut (si absentes)
+    const defaultCategories: Category[] = [
+      {
+        id: 'cat_nc_photos',
+        label: 'NON CLASSEE',
+        color: '#9CA3AF',
+        series: 'photoclass',
+        accessType: 'standard',
+        mediaType: 'mixed',
+        isDefault: true,
+      },
+      {
+        id: 'cat_nc_docs',
+        label: 'NON CLASSEE',
+        color: '#9CA3AF',
+        series: 'classpapiers',
+        accessType: 'standard',
+        mediaType: 'documents',
+        isDefault: true,
+      },
+      {
+        id: 'cat_sec_nc_photos',
+        label: 'NON CLASSEE',
+        color: '#9CA3AF',
+        series: 'photoclass',
+        accessType: 'secure',
+        mediaType: 'mixed',
+        isDefault: true,
+      },
+      {
+        id: 'cat_sec_nc_docs',
+        label: 'NON CLASSEE',
+        color: '#9CA3AF',
+        series: 'classpapiers',
+        accessType: 'secure',
+        mediaType: 'documents',
+        isDefault: true,
+      },
+    ];
+
+    for (const cat of defaultCategories) {
+      const exists = await db.categories.get(cat.id);
+      if (!exists) {
+        await db.categories.add(cat);
+      }
     }
   } catch (err) {
     console.warn('[DB] initCategories error:', err);
