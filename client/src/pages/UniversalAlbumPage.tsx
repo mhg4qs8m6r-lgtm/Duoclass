@@ -1965,8 +1965,7 @@ export default function UniversalAlbumPage({
       toast.info(language === "fr" ? "Sélectionnez des éléments à envoyer par email" : "Select items to send by email");
       return;
     }
-    
-    // Ouvrir la modale d'envoi par email
+
     setShowSendModal(true);
   };
 
@@ -3314,7 +3313,7 @@ export default function UniversalAlbumPage({
                   </>
                 )}
 
-                {/* Option Envoyer par @mail - actif si photo cliquée OU photos sélectionnées */}
+                {/* Option Envoyer - actif si photo cliquée OU photos sélectionnées */}
                 {(() => {
                   const selectedPhotos = frames.filter(f => f.isSelected && f.photoUrl);
                   const hasSelectedPhotos = selectedPhotos.length > 0;
@@ -3342,7 +3341,7 @@ export default function UniversalAlbumPage({
                         }}
                       >
                         <Send className="w-4 h-4" />
-                        Envoyer par @mail
+                        Envoyer
                       </button>
                     </>
                   );
@@ -4146,7 +4145,12 @@ export default function UniversalAlbumPage({
       <SendModal
         isOpen={showSendModal}
         onClose={() => setShowSendModal(false)}
-        itemCount={frames.filter(f => f.isSelected && f.photoUrl).length}
+        photos={frames
+          .filter(f => f.isSelected && f.photoUrl)
+          .map((f, i) => ({
+            filename: f.title || `photo-${i + 1}.jpg`,
+            dataUrl: f.photoUrl!,
+          }))}
       />
 
       {/* MODALE SUPPRESSION ALBUM */}

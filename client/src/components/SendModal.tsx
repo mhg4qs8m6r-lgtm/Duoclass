@@ -7,41 +7,53 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Mail } from 'lucide-react';
 import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { trpc } from '@/lib/trpc';
+
+interface PhotoToSend {
+  filename: string;
+  dataUrl: string;
+}
 
 interface SendModalProps {
   isOpen: boolean;
   onClose: () => void;
-  itemCount: number;
+  photos: PhotoToSend[];
 }
 
-export default function SendModal({ isOpen, onClose, itemCount }: SendModalProps) {
+export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
   const { language } = useLanguage();
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('Photos partagées depuis DuoClass');
   const [message, setMessage] = useState('Voici les photos que je souhaite partager avec vous.');
-  const [isSending, setIsSending] = useState(false);
+  const sendMutation = trpc.email.sendPhotos.useMutation();
 
-  const handleSend = () => {
+  const itemCount = photos.length;
+
+  const handleSend = async () => {
     if (!email) {
       toast.error(language === "fr" ? "Veuillez entrer une adresse email" : "Please enter an email address");
       return;
     }
     if (!email.includes('@')) {
-      toast.error("Adresse email invalide");
+      toast.error(language === "fr" ? "Adresse email invalide" : "Invalid email address");
       return;
     }
 
-    setIsSending(true);
-
-    // Simulation d'envoi
-    setTimeout(() => {
-      setIsSending(false);
+    try {
+      await sendMutation.mutateAsync({
+        to: email,
+        subject,
+        message,
+        photos,
+      });
       toast.success(language === 'fr' ? `Photos envoyées avec succès à ${email}` : `Photos sent successfully to ${email}`);
       onClose();
-      // Reset form
       setEmail('');
       setMessage('Voici les photos que je souhaite partager avec vous.');
-    }, 1500);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error(language === 'fr' ? `Erreur d'envoi : ${errorMsg}` : `Send error: ${errorMsg}`);
+    }
   };
 
   return (
@@ -50,21 +62,35 @@ export default function SendModal({ isOpen, onClose, itemCount }: SendModalProps
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="w-5 h-5 text-blue-600" />
-            Envoyer par email
+            {language === 'fr' ? 'Envoyer par email' : 'Send by email'}
           </DialogTitle>
           <DialogDescription>
-            Partagez {itemCount} photo{itemCount > 1 ? 's' : ''} par email
+            {language === 'fr'
+              ? `Partagez ${itemCount} photo${itemCount > 1 ? 's' : ''} par email`
+              : `Share ${itemCount} photo${itemCount > 1 ? 's' : ''} by email`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Aperçu des photos */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {photos.map((photo, i) => (
+              <img
+                key={i}
+                src={photo.dataUrl}
+                alt={photo.filename}
+                className="h-16 w-16 rounded-md object-cover border border-gray-200 flex-shrink-0"
+              />
+            ))}
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="email">Destinataire</Label>
+            <Label htmlFor="email">{language === 'fr' ? 'Destinataire' : 'Recipient'}</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input 
-                id="email" 
-                placeholder="exemple@email.com" 
+              <Input
+                id="email"
+                placeholder="exemple@email.com"
                 className="pl-9"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -73,9 +99,9 @@ export default function SendModal({ isOpen, onClose, itemCount }: SendModalProps
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="subject">Sujet</Label>
-            <Input 
-              id="subject" 
+            <Label htmlFor="subject">{language === 'fr' ? 'Sujet' : 'Subject'}</Label>
+            <Input
+              id="subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
             />
@@ -83,8 +109,8 @@ export default function SendModal({ isOpen, onClose, itemCount }: SendModalProps
 
           <div className="space-y-2">
             <Label htmlFor="message">Message</Label>
-            <Textarea 
-              id="message" 
+            <Textarea
+              id="message"
               rows={4}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -94,16 +120,16 @@ export default function SendModal({ isOpen, onClose, itemCount }: SendModalProps
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{language === 'fr' ? 'Annuler' : 'Cancel'}</Button>
-          <Button onClick={handleSend} disabled={isSending} className="bg-blue-600 hover:bg-blue-700">
-            {isSending ? (
+          <Button onClick={handleSend} disabled={sendMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+            {sendMutation.isPending ? (
               <>
-                <span className="animate-spin mr-2">⏳</span>
-                Envoi...
+                <span className="animate-spin mr-2">&#9203;</span>
+                {language === 'fr' ? 'Envoi...' : 'Sending...'}
               </>
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Envoyer
+                {language === 'fr' ? 'Envoyer' : 'Send'}
               </>
             )}
           </Button>
