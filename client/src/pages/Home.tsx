@@ -304,7 +304,7 @@ export default function Home() {
   const [basketDragOver, setBasketDragOver] = useState(false);
 
   // Items du panier
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('dateAdded').reverse().toArray(), []) || [];
+  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').reverse().toArray(), []) || [];
 
   // Handler pour les actions toolbar (panier)
   const handleToolbarAction = (action: string | null) => {

@@ -51,7 +51,7 @@ export default function Albums() {
   const albums = useLiveQuery(() => db.album_metas.toArray());
 
   // Items du panier
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('dateAdded').reverse().toArray(), []) || [];
+  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').reverse().toArray(), []) || [];
 
   // Fonction pour traduire les labels de catégories et albums par défaut
   const translateLabel = (label: string): string => {

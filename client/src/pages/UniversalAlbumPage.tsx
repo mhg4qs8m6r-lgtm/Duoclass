@@ -436,7 +436,7 @@ export default function UniversalAlbumPage({
 
   // --- CATÉGORIES ---
   // Contenu du panier (réactif)
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('dateAdded').toArray(), []) || [];
+  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').toArray(), []) || [];
 
   const allCategories = useLiveQuery(() => db.categories.toArray()) || [];
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);

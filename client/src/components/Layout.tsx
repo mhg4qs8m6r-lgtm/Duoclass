@@ -117,7 +117,7 @@ export default function Layout(props: LayoutProps) {
   // Items du panier pour l'aperçu (limité à 6 pour la popup)
   // Toujours montrer les dernières photos ajoutées, tous albums confondus
   const basketItems = useLiveQuery(
-    () => db.creations_basket.orderBy('dateAdded').reverse().limit(6).toArray(), 
+    () => db.creations_basket.orderBy('addedAt').reverse().limit(6).toArray(), 
     []
   ) || [];
   

@@ -643,7 +643,7 @@ export default function CreationsAtelierV2({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
   
   // Contenu du panier (réactif avec useLiveQuery)
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('dateAdded').toArray(), []) || [];
+  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').toArray(), []) || [];
   
   // État pour la sauvegarde automatique
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
