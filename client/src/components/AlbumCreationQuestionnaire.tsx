@@ -144,13 +144,18 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
   const handleDeleteCategory = (categoryId: string) => {
     const category = allCategories.find(c => c.id === categoryId);
     
-    // Seule la catégorie "Non classées" est protégée contre la suppression
-    const isNonClassees = category?.label.toLowerCase() === 'non classées' || 
-                          category?.label.toLowerCase() === 'non classee' || 
-                          category?.label.toLowerCase() === 'non classees';
-    
-    if (isNonClassees) {
-      toast.error(language === "fr" ? "La catégorie 'Non classées' ne peut pas être supprimée" : "The 'Not classified' category cannot be deleted");
+    // Catégories protégées : NON CLASSEE, MES PROJETS, MES COLLAGES
+    const label = category?.label?.toUpperCase() || '';
+    const isProtected = label.includes('NON CLASSEE') ||
+                        label.includes('NON CLASSÉES') ||
+                        label.includes('MES PROJETS') ||
+                        label.includes('MES COLLAGES') ||
+                        category?.id === 'cat_mes_projets' ||
+                        category?.id === 'cat_mes_collages' ||
+                        category?.isDefault === true;
+
+    if (isProtected) {
+      toast.error(language === "fr" ? "Cette catégorie système ne peut pas être supprimée" : "This system category cannot be deleted");
       return;
     }
     
