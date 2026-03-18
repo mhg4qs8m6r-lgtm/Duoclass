@@ -125,9 +125,20 @@ export default function RetouchePhoto({
       try {
         toast.loading(language === 'fr' ? 'Suppression de l\'arrière-plan en cours... (cela peut prendre quelques secondes)' : 'Removing background... (this may take a few seconds)', { id: 'retouch' });
         
-        // Convertir l'URL de l'image en Blob
-        const response = await fetch(originalPhoto);
-        const blob = await response.blob();
+        // Convertir l'image en Blob via un canvas pour éviter
+        // l'erreur "The string did not match the expected pattern" de fetch()
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement("canvas");
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            c.getContext("2d")!.drawImage(img, 0, 0);
+            c.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+          };
+          img.onerror = () => reject(new Error("Image load failed"));
+          img.src = originalPhoto;
+        });
         
         // Utiliser @imgly/background-removal avec CDN officiel pour les modèles ONNX/WASM
         const resultBlob = await removeBackground(blob, {

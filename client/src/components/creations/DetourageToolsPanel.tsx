@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { removeBackground } from "@imgly/background-removal";
 
 export type DetourageMode = "auto" | "manual";
 export type ManualTool = "lasso" | "polygon" | "bezier" | "wand" | "face";
@@ -268,43 +269,35 @@ export default function DetourageToolsPanel({
       }
       
       console.log('[DetourageV6] Got image blob, size:', imageBlob.size, 'type:', imageBlob.type);
-      
-      // Étape 2 : Envoyer au serveur via FormData
-      setProgressMessage(language === "fr" ? "Envoi au serveur..." : "Sending to server...");
-      
-      const formData = new FormData();
-      formData.append('image', imageBlob, 'image.png');
-      
-      console.log('[DetourageV6] Sending FormData to /api/detourage/remove-background...');
-      
-      const response = await fetch('/api/detourage/remove-background', {
-        method: 'POST',
-        body: formData,
-        // PAS de Content-Type header - le navigateur le définit automatiquement avec le boundary
+
+      // Étape 2 : Détourage local avec @imgly/background-removal (pas de serveur)
+      setProgressMessage(language === "fr" ? "Traitement IA en cours..." : "AI processing...");
+
+      const resultBlob = await removeBackground(imageBlob, {
+        publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
+        progress: (key, current, total) => {
+          const percent = Math.round((current / total) * 100);
+          setProgressMessage(
+            language === "fr" ? `Traitement IA... ${percent}%` : `AI processing... ${percent}%`
+          );
+        },
       });
-      
-      console.log('[DetourageV6] Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[DetourageV6] Server error:', errorText);
-        throw new Error(`Erreur serveur: ${response.status} - ${errorText}`);
-      }
-      
-      const result = await response.json();
-      console.log('[DetourageV6] Result:', result);
-      
-      if (result.success && result.resultUrl) {
-        setProgressMessage(language === "fr" ? "Application du résultat..." : "Applying result...");
-        
-        // Appliquer directement le détourage sur l'élément sélectionné
-        if (onApplyDetourageToElement && selectedElementId) {
-          onApplyDetourageToElement(selectedElementId, result.resultUrl);
-          setLastDetourageResult(result.resultUrl);
-          toast.success(language === "fr" ? "Détourage appliqué avec succès !" : "Cutout applied successfully!");
-        }
-      } else {
-        throw new Error(result.error || "Pas de résultat retourné par le serveur");
+
+      // Convertir le résultat en data URL
+      const resultUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("FileReader failed"));
+        reader.readAsDataURL(resultBlob);
+      });
+
+      setProgressMessage(language === "fr" ? "Application du résultat..." : "Applying result...");
+
+      // Appliquer directement le détourage sur l'élément sélectionné
+      if (onApplyDetourageToElement && selectedElementId) {
+        onApplyDetourageToElement(selectedElementId, resultUrl);
+        setLastDetourageResult(resultUrl);
+        toast.success(language === "fr" ? "Détourage appliqué avec succès !" : "Cutout applied successfully!");
       }
     } catch (error: any) {
       console.error('[DetourageV6] Error:', error);

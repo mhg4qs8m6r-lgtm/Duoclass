@@ -31,10 +31,11 @@ export default defineConfig({
         "@tensorflow/tfjs-backend-cpu",
         "@tensorflow/tfjs-converter",
         "@tensorflow/tfjs-layers",
-        "onnxruntime-web",
-        "onnxruntime-web/webgpu",
       ],
     },
+  },
+  optimizeDeps: {
+    exclude: ["onnxruntime-web"],
   },
   server: {
     host: true,

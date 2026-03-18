@@ -898,10 +898,22 @@ export default function DetourageTab({
     setProgress(0);
 
     try {
+      // Convertir l'image source en Blob via le canvas pour éviter
+      // l'erreur "The string did not match the expected pattern" de fetch()
+      // lorsque la source est un blob: révoqué ou une chaîne non-URL.
       let imageBlob: Blob;
-      if (selectedPhoto.src.startsWith("data:")) {
-        const response = await fetch(selectedPhoto.src);
-        imageBlob = await response.blob();
+      if (originalImageRef.current) {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = originalImageRef.current.naturalWidth;
+        tempCanvas.height = originalImageRef.current.naturalHeight;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx!.drawImage(originalImageRef.current, 0, 0);
+        imageBlob = await new Promise<Blob>((resolve, reject) => {
+          tempCanvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Canvas toBlob failed"));
+          }, "image/png");
+        });
       } else {
         const response = await fetch(selectedPhoto.src);
         imageBlob = await response.blob();

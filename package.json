@@ -85,7 +85,7 @@
     "next-themes": "^0.4.6",
     "nodemailer": "^8.0.2",
     "nsfwjs": "^4.2.1",
-    "onnxruntime-web": "^1.24.3",
+    "onnxruntime-web": "1.21.0",
     "pg": "^8.11.0",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.1",
@@ -135,7 +135,8 @@
       "wouter@3.7.1": "patches/wouter@3.7.1.patch"
     },
     "overrides": {
-      "tailwindcss>nanoid": "3.3.7"
+      "tailwindcss>nanoid": "3.3.7",
+      "onnxruntime-web": "1.21.0"
     },
     "onlyBuiltDependencies": [],
     "ignoredBuiltDependencies": [
