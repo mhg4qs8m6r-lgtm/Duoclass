@@ -27,6 +27,7 @@ import PolitiqueConfidentialite from "@/pages/PolitiqueConfidentialite";
 import Retractation from "@/pages/Retractation";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import TestCanvas from "@/pages/TestCanvas";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { initCategories, db, AlbumMeta } from "./db";
 import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
@@ -105,6 +106,7 @@ function Router() {
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/politique-confidentialite" component={PolitiqueConfidentialite} />
       <Route path="/retractation" component={Retractation} />
+      <Route path="/test-canvas" component={TestCanvas} />
       <Route path="/404" component={NotFound} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />

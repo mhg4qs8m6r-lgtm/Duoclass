@@ -8046,14 +8046,16 @@ export default function CreationsAtelierV2({
                 {existingProjects.length > 0 ? (
                   <div className="space-y-2">
                     {existingProjects.map((project) => (
-                      <button
+                      <div
                         key={project.id}
-                        className="w-full p-4 text-left border rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors group"
+                        role="button"
+                        tabIndex={0}
+                        className="w-full p-4 text-left border rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors group cursor-pointer"
                         onClick={() => {
                           setSelectedProjectId(project.id ?? null);
                           setCurrentProjectId(project.id ?? null);
                           setCurrentProjectName(project.name);
-                          
+
                           // Charger les photos du projet dans sourcePhotos
                           if ((project.photos ?? []).length > 0) {
                             const projectPhotos: CollectorItem[] = (project.photos ?? []).map(photo => ({
@@ -8068,10 +8070,11 @@ export default function CreationsAtelierV2({
                           } else {
                             setSourcePhotos([]);
                           }
-                          
+
                           setShowProjectModal(false);
                           toast.success(language === "fr" ? `Projet "${project.name}" ouvert` : `Project "${project.name}" opened`);
                         }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
@@ -8079,7 +8082,7 @@ export default function CreationsAtelierV2({
                               {project.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {(project.photos ?? []).length} {language === "fr" ? "photo(s)" : "photo(s)"} • 
+                              {(project.photos ?? []).length} {language === "fr" ? "photo(s)" : "photo(s)"} •
                               {language === "fr" ? " Modifié le " : " Modified "}
                               {new Date(project.updatedAt ?? project.createdAt).toLocaleDateString()}
                             </div>
@@ -8114,7 +8117,7 @@ export default function CreationsAtelierV2({
                             <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-500" />
                           </div>
                         </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
