@@ -674,6 +674,8 @@ export default function CreationsAtelierV2({
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   /** Intensité de l'arrondi du segment sélectionné (0–100, correspond à 0–50% de la longueur du segment) */
   const [roundIntensity, setRoundIntensity] = useState<number>(35);
+  /** Index du segment dont on drag le point de contrôle Bézier (null = aucun) */
+  const [draggingCPIndex, setDraggingCPIndex] = useState<number | null>(null);
   // ─── Fin Éditeur de segments ──────────────────────────────────────────────────────
 
   // ── Mode découpe par ligne ──────────────────────────────────────────────────────────
@@ -3059,7 +3061,7 @@ export default function CreationsAtelierV2({
 
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
-    
+
     e.preventDefault();
     e.stopPropagation();
     
@@ -3390,7 +3392,7 @@ export default function CreationsAtelierV2({
     if (isLineDrawMode) return;
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
-    
+
     e.preventDefault();
     e.stopPropagation();
     
@@ -3532,14 +3534,45 @@ export default function CreationsAtelierV2({
           customPathUpdate = `M ${parseFloat(m[1])} ${parseFloat(m[2])} Q ${ctrlX} ${ctrlY} ${newWidth} ${Math.max(MIN_SIZE_CM, newHeight)}`;
         }
       }
+    } else if (resizingEl?.customPath && resizingEl.shape !== 'line') {
+      // Forme avec segments personnalisés : rescaler les coordonnées proportionnellement
+      const segs = buildShapeSegments(resizingEl);
+      if (segs && segs.length > 0) {
+        const oldX = elementStartPos.x;
+        const oldY = elementStartPos.y;
+        const oldW = elementStartSize.width;
+        const oldH = elementStartSize.height;
+        const scaleW = newWidth / oldW;
+        const scaleH = Math.max(MIN_SIZE_CM, newHeight) / oldH;
+        const rescaled = segs.map(seg => {
+          const s: Segment = {
+            ...seg,
+            x1: newX + (seg.x1 - oldX) * scaleW,
+            y1: newY + (seg.y1 - oldY) * scaleH,
+            x2: newX + (seg.x2 - oldX) * scaleW,
+            y2: newY + (seg.y2 - oldY) * scaleH,
+          };
+          if (seg.type === 'Q' && seg.cx !== undefined && seg.cy !== undefined) {
+            s.cx = newX + (seg.cx - oldX) * scaleW;
+            s.cy = newY + (seg.cy - oldY) * scaleH;
+          }
+          return s;
+        });
+        customPathUpdate = pathFromSegments(rescaled);
+      }
     }
-    updateCanvasElement(selectedElementId, {
+    // Contraindre : taille minimale uniquement (laisser l'utilisateur positionner librement)
+    newWidth = Math.max(MIN_SIZE_CM, newWidth);
+    newHeight = Math.max(MIN_SIZE_CM, newHeight);
+
+    const updatePayload = {
       width: newWidth,
-      height: Math.max(MIN_SIZE_CM, newHeight),
+      height: newHeight,
       x: newX,
       y: newY,
       ...(customPathUpdate !== undefined ? { customPath: customPathUpdate } : {}),
-    });
+    };
+    updateCanvasElement(selectedElementId, updatePayload);
   }, [isResizing, dragStart, elementStartSize, elementStartPos, selectedElementId, resizeHandle, canvasDimensions.pxPerCm, canvasElements]);
   
   if (!isOpen) return null;
@@ -6080,28 +6113,18 @@ export default function CreationsAtelierV2({
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
                         zIndex: element.zIndex, // Conserver le z-index de l'élément même s'il est sélectionné
                         opacity: element.opacity,
-                        transition: isDragging ? 'none' : 'all 0.1s ease',
+                        transition: (isDragging || isResizing) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
-                        // La forme 'line' a une hauteur très faible (0.1cm) :
-                        // overflow:visible garantit que le SVG et les poignées restent visibles
-                        overflow: element.type === 'shape' && element.shape === 'line' ? 'visible' : undefined,
+                        // overflow:visible obligatoire pour que les poignées de redimensionnement
+                        // (positionnées hors des limites du div) restent visibles et cliquables
+                        overflow: 'visible',
                         // Agrandir la zone de clic invisible pour faciliter la sélection de la ligne
                         paddingTop: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                       }}
-                      draggable={!element.locked}
-                      onDragStart={(e) => {
-                        if (element.src) {
-                          e.dataTransfer.setData("text/plain", JSON.stringify({ 
-                            src: element.src, 
-                            name: element.name || (language === 'fr' ? 'Pièce' : 'Piece'),
-                            fromCanvas: true,
-                            elementId: element.id
-                          }));
-                        }
-                      }}
+                      draggable={false}
                       onMouseDown={(e) => handleMouseDown(e, element.id)}
                       onContextMenu={(e) => handleContextMenu(e, element.id)}
                       onClick={(e) => {
@@ -6474,20 +6497,23 @@ export default function CreationsAtelierV2({
                           <>
                             {/* Extrémité gauche */}
                             <div
-                              className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-full cursor-nw-resize shadow-md hover:bg-purple-600 z-20"
-                              onMouseDown={(e) => handleResizeStart(e, element.id, 'nw')}
+                              className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-full cursor-nw-resize shadow-md hover:bg-purple-600 z-[100]"
+                              draggable={false}
+                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'nw'); }}
                             />
                             {/* Extrémité droite */}
                             <div
-                              className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-full cursor-ne-resize shadow-md hover:bg-purple-600 z-20"
-                              onMouseDown={(e) => handleResizeStart(e, element.id, 'ne')}
+                              className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-full cursor-ne-resize shadow-md hover:bg-purple-600 z-[100]"
+                              draggable={false}
+                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'ne'); }}
                             />
                             {/* Poignée de rotation */}
                             {selectedElementId === element.id && (
                               <div
-                                className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-30 flex items-center justify-center"
+                                className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                                draggable={false}
                                 title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
-                                onMouseDown={(e) => handleRotateStart(e, element.id)}
+                                onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
                               >
                                 <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
                               </div>
@@ -6497,59 +6523,72 @@ export default function CreationsAtelierV2({
                         {/* Poignées de redimensionnement aux 4 coins */}
                         {/* Nord-Ouest (haut-gauche) */}
                         <div
-                          className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-nw-resize shadow-md hover:bg-purple-600 z-20"
+                          className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-nw-resize shadow-md hover:bg-purple-600 z-[100]"
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Redimensionner (Maj = carré)' : 'Resize (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'nw')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'nw'); }}
                         />
                         {/* Nord-Est (haut-droite) */}
                         <div
-                          className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-ne-resize shadow-md hover:bg-purple-600 z-20"
+                          className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-ne-resize shadow-md hover:bg-purple-600 z-[100]"
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Redimensionner (Maj = carré)' : 'Resize (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'ne')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'ne'); }}
                         />
                         {/* Sud-Ouest (bas-gauche) */}
                         <div
-                          className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-sw-resize shadow-md hover:bg-purple-600 z-20"
+                          className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-sw-resize shadow-md hover:bg-purple-600 z-[100]"
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Redimensionner (Maj = carré)' : 'Resize (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'sw')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'sw'); }}
                         />
                         {/* Sud-Est (bas-droite) */}
                         <div
-                          className="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-se-resize shadow-md hover:bg-purple-600 z-20"
+                          className="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-se-resize shadow-md hover:bg-purple-600 z-[100]"
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Redimensionner (Maj = carré)' : 'Resize (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'se')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'se'); }}
                         />
                         {/* Poignées de côté - étirement indépendant largeur/hauteur (Maj = carré pour non-Rond/Carré) */}
                         {/* Nord (milieu haut) */}
                         <div
-                          className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-2.5 bg-blue-400 border-2 border-white rounded-sm cursor-n-resize shadow-md hover:bg-blue-500 z-20"
+                          className="absolute left-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-n-resize shadow-md hover:bg-blue-500"
+                          style={{ top: -5, transform: 'translateX(-50%)', width: 20, height: 8, zIndex: 100 }}
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Étirer (Maj = carré)' : 'Stretch (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'n')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'n'); }}
                         />
                         {/* Sud (milieu bas) */}
                         <div
-                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-2.5 bg-blue-400 border-2 border-white rounded-sm cursor-s-resize shadow-md hover:bg-blue-500 z-20"
+                          className="absolute left-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-s-resize shadow-md hover:bg-blue-500"
+                          style={{ bottom: -5, transform: 'translateX(-50%)', width: 20, height: 8, zIndex: 100 }}
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Étirer (Maj = carré)' : 'Stretch (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 's')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 's'); }}
                         />
                         {/* Ouest (milieu gauche) */}
                         <div
-                          className="absolute top-1/2 -left-1 -translate-y-1/2 w-2.5 h-4 bg-blue-400 border-2 border-white rounded-sm cursor-w-resize shadow-md hover:bg-blue-500 z-20"
+                          className="absolute top-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-w-resize shadow-md hover:bg-blue-500"
+                          style={{ left: -5, transform: 'translateY(-50%)', width: 8, height: 20, zIndex: 100 }}
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Étirer (Maj = carré)' : 'Stretch (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'w')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'w'); }}
                         />
                         {/* Est (milieu droit) */}
                         <div
-                          className="absolute top-1/2 -right-1 -translate-y-1/2 w-2.5 h-4 bg-blue-400 border-2 border-white rounded-sm cursor-e-resize shadow-md hover:bg-blue-500 z-20"
+                          className="absolute top-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-e-resize shadow-md hover:bg-blue-500"
+                          style={{ right: -5, transform: 'translateY(-50%)', width: 8, height: 20, zIndex: 100 }}
+                          draggable={false}
                           title={(element.shape !== 'round' && element.shape !== 'square') ? (language === 'fr' ? 'Étirer (Maj = carré)' : 'Stretch (Shift = square)') : undefined}
-                          onMouseDown={(e) => handleResizeStart(e, element.id, 'e')}
+                          onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'e'); }}
                         />
                         {/* Poignée de rotation (cercle vert, au-dessus au centre) */}
                         {selectedElementId === element.id && (
                           <div
-                            className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-30 flex items-center justify-center"
+                            className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                            draggable={false}
                             title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
-                            onMouseDown={(e) => handleRotateStart(e, element.id)}
+                            onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
                           >
                             <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
                           </div>
@@ -6557,7 +6596,8 @@ export default function CreationsAtelierV2({
                         {/* Bouton menu contextuel ⋮ (en haut à droite de l'élément sélectionné) */}
                         {selectedElementId === element.id && (
                           <div
-                            className="absolute -top-4 right-3 w-6 h-6 bg-white border border-gray-300 rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-gray-100 z-30"
+                            className="absolute -top-4 right-3 w-6 h-6 bg-white border border-gray-300 rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-gray-100 z-[110]"
+                            draggable={false}
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -6596,27 +6636,74 @@ export default function CreationsAtelierV2({
                               const x2 = (seg.x2 - element.x) * pxPerCm;
                               const y2 = (seg.y2 - element.y) * pxPerCm;
                               const isSelected = selectedSegmentIndex === i;
-                              const pathD = seg.type === 'Q' && seg.cx !== undefined && seg.cy !== undefined
-                                ? `M ${x1} ${y1} Q ${(seg.cx - element.x) * pxPerCm} ${(seg.cy - element.y) * pxPerCm} ${x2} ${y2}`
+                              const hasCp = seg.type === 'Q' && seg.cx !== undefined && seg.cy !== undefined;
+                              const cpx = hasCp ? (seg.cx! - element.x) * pxPerCm : 0;
+                              const cpy = hasCp ? (seg.cy! - element.y) * pxPerCm : 0;
+                              const pathD = hasCp
+                                ? `M ${x1} ${y1} Q ${cpx} ${cpy} ${x2} ${y2}`
                                 : `M ${x1} ${y1} L ${x2} ${y2}`;
                               return (
-                                <g key={i} style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    if (!isSelected) setRoundIntensity(35);
-                                    setSelectedSegmentIndex(isSelected ? null : i);
-                                  }}
-                                >
+                                <g key={i}>
                                   {/* Zone de clic élargie transparente */}
-                                  <path d={pathD} fill="none" stroke="transparent" strokeWidth={18} />
-                                  {/* Trait de surbrillance discret */}
+                                  <path d={pathD} fill="none" stroke="transparent" strokeWidth={18}
+                                    style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                    onClick={(e) => {
+                                      e.stopPropagation(); e.preventDefault();
+                                      if (!isSelected) setRoundIntensity(35);
+                                      setSelectedSegmentIndex(isSelected ? null : i);
+                                    }}
+                                  />
+                                  {/* Trait de surbrillance */}
                                   {isSelected && (
-                                    <path d={pathD} fill="none" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" />
+                                    <path d={pathD} fill="none" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                                  )}
+                                  {/* Poignée Bézier : ligne + cercle draggable */}
+                                  {hasCp && (
+                                    <>
+                                      {/* Ligne du milieu du segment vers le point de contrôle */}
+                                      <line
+                                        x1={(x1 + x2) / 2} y1={(y1 + y2) / 2} x2={cpx} y2={cpy}
+                                        stroke="#818cf8" strokeWidth={1} strokeDasharray="3 2"
+                                        style={{ pointerEvents: 'none' }}
+                                      />
+                                      {/* Cercle du point de contrôle */}
+                                      <circle
+                                        cx={cpx} cy={cpy} r={6}
+                                        fill={draggingCPIndex === i ? "#f97316" : "#6366f1"}
+                                        stroke="#fff" strokeWidth={2}
+                                        style={{ pointerEvents: 'all', cursor: draggingCPIndex === i ? 'grabbing' : 'grab' }}
+                                        onMouseDown={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          setDraggingCPIndex(i);
+                                          setSelectedSegmentIndex(i);
+
+                                          const svgEl = (e.target as SVGCircleElement).closest('svg')!;
+                                          const elRef = element; // capture
+                                          const segsSnapshot = [...segs];
+
+                                          const onMove = (ev: globalThis.MouseEvent) => {
+                                            const svgRect = svgEl.getBoundingClientRect();
+                                            const localX = ev.clientX - svgRect.left;
+                                            const localY = ev.clientY - svgRect.top;
+                                            const newCx = localX / pxPerCm + elRef.x;
+                                            const newCy = localY / pxPerCm + elRef.y;
+                                            const updated = segsSnapshot.map((s, idx) =>
+                                              idx === i ? { ...s, cx: newCx, cy: newCy } : s
+                                            );
+                                            updateCanvasElement(elRef.id, { customPath: pathFromSegments(updated) });
+                                          };
+                                          const onUp = () => {
+                                            setDraggingCPIndex(null);
+                                            window.removeEventListener('mousemove', onMove);
+                                            window.removeEventListener('mouseup', onUp);
+                                          };
+                                          window.addEventListener('mousemove', onMove);
+                                          window.addEventListener('mouseup', onUp);
+                                        }}
+                                      />
+                                    </>
                                   )}
                                 </g>
                               );
