@@ -4974,15 +4974,45 @@ export default function CreationsAtelierV2({
                           filets.forEach(filet => {
                             const off = filet.offsetMm;
                             const sw = Math.max(0.1, filet.thicknessMm);
-                            const fx = ex + off, fy = ey + off;
-                            const fw = ew - 2 * off, fh = eh - 2 * off;
-                            if (fw <= 0 || fh <= 0) return;
+                            // Décalage vers l'EXTÉRIEUR de la découpe
+                            const fx = ex - off, fy = ey - off;
+                            const fw = ew + 2 * off, fh = eh + 2 * off;
                             let fd = '';
                             if (shape === 'round') {
                               const r = Math.min(fw, fh) / 2;
                               fd = `M ${(fx + fw/2).toFixed(2)},${fy.toFixed(2)} a ${r.toFixed(2)},${r.toFixed(2)} 0 1,0 0.001,0 Z`;
                             } else if (shape === 'oval') {
                               fd = `M ${(fx + fw/2).toFixed(2)},${fy.toFixed(2)} a ${(fw/2).toFixed(2)},${(fh/2).toFixed(2)} 0 1,0 0.001,0 Z`;
+                            } else if (shape === 'arch') {
+                              fd = `M${fx.toFixed(2)},${(fy + fh).toFixed(2)} L${fx.toFixed(2)},${(fy + fh/2).toFixed(2)} Q${fx.toFixed(2)},${fy.toFixed(2)} ${(fx + fw/2).toFixed(2)},${fy.toFixed(2)} Q${(fx + fw).toFixed(2)},${fy.toFixed(2)} ${(fx + fw).toFixed(2)},${(fy + fh/2).toFixed(2)} L${(fx + fw).toFixed(2)},${(fy + fh).toFixed(2)} Z`;
+                            } else if (shape === 'square') {
+                              const side = Math.min(fw, fh);
+                              const sqX = fx + (fw - side) / 2, sqY = fy + (fh - side) / 2;
+                              fd = `M ${sqX.toFixed(2)},${sqY.toFixed(2)} h ${side.toFixed(2)} v ${side.toFixed(2)} h -${side.toFixed(2)} Z`;
+                            } else if (shape === 'heart') {
+                              const hd = (el.heartDepth ?? 50) / 100;
+                              const hny = fy + fh * (0.25 + hd * 0.25);
+                              fd = `M ${(fx+fw*0.5).toFixed(2)} ${hny.toFixed(2)} C ${(fx+fw*0.5).toFixed(2)} ${(fy+fh*0.10).toFixed(2)} ${fx.toFixed(2)} ${(fy+fh*0.10).toFixed(2)} ${fx.toFixed(2)} ${(fy+fh*0.35).toFixed(2)} C ${fx.toFixed(2)} ${(fy+fh*0.60).toFixed(2)} ${(fx+fw*0.5).toFixed(2)} ${(fy+fh*0.75).toFixed(2)} ${(fx+fw*0.5).toFixed(2)} ${(fy+fh).toFixed(2)} C ${(fx+fw*0.5).toFixed(2)} ${(fy+fh*0.75).toFixed(2)} ${(fx+fw).toFixed(2)} ${(fy+fh*0.60).toFixed(2)} ${(fx+fw).toFixed(2)} ${(fy+fh*0.35).toFixed(2)} C ${(fx+fw).toFixed(2)} ${(fy+fh*0.10).toFixed(2)} ${(fx+fw*0.5).toFixed(2)} ${(fy+fh*0.10).toFixed(2)} ${(fx+fw*0.5).toFixed(2)} ${hny.toFixed(2)} Z`;
+                            } else if (shape === 'star') {
+                              const outerR = Math.min(fw, fh) / 2, innerR = outerR * 0.42;
+                              const scx = fx + fw/2, scy = fy + fh/2;
+                              const branches = el.starBranches ?? 5;
+                              const pts: string[] = [];
+                              for (let si = 0; si < branches * 2; si++) {
+                                const a = (si * Math.PI) / branches - Math.PI / 2;
+                                const r = si % 2 === 0 ? outerR : innerR;
+                                pts.push(`${si === 0 ? 'M' : 'L'} ${(scx + r * Math.cos(a)).toFixed(2)},${(scy + r * Math.sin(a)).toFixed(2)}`);
+                              }
+                              fd = pts.join(' ') + ' Z';
+                            } else if (shape === 'diamond') {
+                              fd = `M ${(fx+fw/2).toFixed(2)},${fy.toFixed(2)} L ${(fx+fw).toFixed(2)},${(fy+fh/2).toFixed(2)} L ${(fx+fw/2).toFixed(2)},${(fy+fh).toFixed(2)} L ${fx.toFixed(2)},${(fy+fh/2).toFixed(2)} Z`;
+                            } else if (shape === 'hexagon') {
+                              const hpts: string[] = [];
+                              for (let hi = 0; hi < 6; hi++) {
+                                const a = (hi * Math.PI) / 3 - Math.PI / 6;
+                                hpts.push(`${hi === 0 ? 'M' : 'L'} ${(fx+fw/2+fw/2*Math.cos(a)).toFixed(2)},${(fy+fh/2+fh/2*Math.sin(a)).toFixed(2)}`);
+                              }
+                              fd = hpts.join(' ') + ' Z';
                             } else {
                               fd = `M ${fx.toFixed(2)},${fy.toFixed(2)} h ${fw.toFixed(2)} v ${fh.toFixed(2)} h -${fw.toFixed(2)} Z`;
                             }
@@ -7427,14 +7457,14 @@ export default function CreationsAtelierV2({
                     de offsetMm mm, avec une épaisseur thicknessMm mm.
                     Les coordonnées sont en px (pxPerCm de canvasDimensions). */}
                 {filets.length > 0 && (() => {
-                  const { pxPerCm } = canvasDimensions;
+                  const { pxPerCm, pageOffsetX, pageOffsetY, pageWidth, pageHeight } = canvasDimensions;
                   const openingEls = canvasElements.filter(el => el.type === 'shape');
                   if (openingEls.length === 0) return null;
                   return (
                     <svg
                       key="filets-overlay"
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: 58 }}
+                      className="absolute pointer-events-none"
+                      style={{ left: pageOffsetX, top: pageOffsetY, width: pageWidth, height: pageHeight, overflow: 'visible', zIndex: 58 }}
                     >
                       {openingEls.map(el => {
                         const elX = el.x * pxPerCm;
@@ -7448,12 +7478,11 @@ export default function CreationsAtelierV2({
                           const offsetPx = (filet.offsetMm / 10) * pxPerCm;
                           const strokePx = Math.max(0.5, (filet.thicknessMm / 10) * pxPerCm);
                           const shape = el.shape || 'rect';
-                          const rx = elX + offsetPx;
-                          const ry = elY + offsetPx;
-                          const rw = elW - 2 * offsetPx;
-                          const rh = elH - 2 * offsetPx;
-                          // Ne pas rendre si le filet est plus grand que l'ouverture
-                          if (rw <= 0 || rh <= 0) return null;
+                          // Décalage vers l'EXTÉRIEUR de la découpe (la forme est un trou)
+                          const rx = elX - offsetPx;
+                          const ry = elY - offsetPx;
+                          const rw = elW + 2 * offsetPx;
+                          const rh = elH + 2 * offsetPx;
                           let pathEl: React.ReactNode;
                           if (shape === 'round') {
                             const r = Math.min(rw, rh) / 2;
@@ -7543,8 +7572,34 @@ export default function CreationsAtelierV2({
                                 transform={`rotate(${el.rotation || 0},${cx},${cy})`}
                               />
                             );
+                          } else if (shape === 'arch') {
+                            // Filet arche : rectangle avec le haut arrondi
+                            const archD = `M${rx},${ry + rh} L${rx},${ry + rh / 2} Q${rx},${ry} ${rx + rw / 2},${ry} Q${rx + rw},${ry} ${rx + rw},${ry + rh / 2} L${rx + rw},${ry + rh} Z`;
+                            pathEl = (
+                              <path key={filet.id}
+                                d={archD}
+                                fill="none"
+                                stroke={filet.color}
+                                strokeWidth={strokePx}
+                                transform={`rotate(${el.rotation || 0},${cx},${cy})`}
+                              />
+                            );
+                          } else if (shape === 'square') {
+                            // Filet carré centré
+                            const side = Math.min(rw, rh);
+                            const sqX = rx + (rw - side) / 2;
+                            const sqY = ry + (rh - side) / 2;
+                            pathEl = (
+                              <rect key={filet.id}
+                                x={sqX} y={sqY} width={side} height={side}
+                                fill="none"
+                                stroke={filet.color}
+                                strokeWidth={strokePx}
+                                transform={`rotate(${el.rotation || 0},${cx},${cy})`}
+                              />
+                            );
                           } else {
-                            // rect, square, arch : rectangle simple
+                            // rect : rectangle simple
                             pathEl = (
                               <rect key={filet.id}
                                 x={rx} y={ry} width={rw} height={rh}

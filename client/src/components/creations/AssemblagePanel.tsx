@@ -475,6 +475,8 @@ function PassePartoutSection({
 
   // --- Section active : accordéon exclusif ---
   const [activeSection, setActiveSection] = useState<"shape" | "pattern" | "template" | null>(null);
+  const [filetsOpen, setFiletsOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
   const toggleSection = (section: "shape" | "pattern" | "template") => {
     // Si on clique sur la section déjà active → la fermer (toggle)
     // Si on clique sur une autre section → l'ouvrir directement (sans passer par null)
@@ -1185,202 +1187,240 @@ function PassePartoutSection({
       {/* ------------------------------------------------------------------ */}
       {/* Rubrique Filets : traits fins concentriques autour des ouvertures     */}
       {/* ------------------------------------------------------------------ */}
-      <div className="border-t border-gray-100 mt-3 pt-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-700">
-            {fr ? 'Filets' : 'Rules'}
+      <div className={`border rounded-lg overflow-hidden transition-all ${
+        filetsOpen ? "border-amber-400 shadow-sm" : "border-gray-200"
+      }`}>
+        <button
+          type="button"
+          className={`relative z-10 w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+            filetsOpen
+              ? "bg-amber-600 text-white"
+              : "bg-gray-50 text-gray-700 hover:bg-amber-50"
+          }`}
+          onClick={() => setFiletsOpen(v => !v)}
+        >
+          <span className="text-xs font-bold">
+            {fr ? `E - Filets${(filets?.length ?? 0) > 0 ? ` (${filets!.length})` : ''}` : `E - Rules${(filets?.length ?? 0) > 0 ? ` (${filets!.length})` : ''}`}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              if ((filets?.length ?? 0) >= 3) {
-                toast.error(fr ? 'Maximum 3 filets' : 'Maximum 3 rules');
-                return;
-              }
-              const newFilet: FiletConfig = {
-                id: `filet-${Date.now()}`,
-                offsetMm: (filets?.length ?? 0) === 0 ? 2 : Math.min(5, ((filets?.[filets.length - 1]?.offsetMm ?? 2) + 1.5)),
-                thicknessMm: 0.5,
-                color: '#1a1a1a',
-              };
-              onFiletsChange?.([...(filets ?? []), newFilet]);
-            }}
-            className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-            title={fr ? 'Ajouter un filet' : 'Add a rule'}
-          >
-            <Plus className="w-3 h-3" />
-            {fr ? 'Ajouter' : 'Add'}
-          </button>
-        </div>
+          <span className="text-xs opacity-70">{filetsOpen ? "▲" : "▼"}</span>
+        </button>
 
-        {(!filets || filets.length === 0) && (
-          <p className="text-[10px] text-gray-400 italic text-center py-1">
-            {fr ? 'Aucun filet — cliquez sur Ajouter' : 'No rules — click Add'}
-          </p>
-        )}
-
-        {(filets ?? []).map((filet, idx) => (
-          <div key={filet.id} className="bg-gray-50 rounded border border-gray-200 p-2 mb-2">
-            {/* En-tête du filet */}
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-600">
-                {fr ? `Filet ${idx + 1}` : `Rule ${idx + 1}`}
-              </span>
+        {filetsOpen && (
+          <div className="p-3 space-y-2 bg-white">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-gray-400 italic">
+                {fr ? 'Traits fins autour des découpes' : 'Fine lines around openings'}
+              </p>
               <button
                 type="button"
-                onClick={() => onFiletsChange?.((filets ?? []).filter(f => f.id !== filet.id))}
-                className="text-gray-400 hover:text-red-500 transition-colors"
-                title={fr ? 'Supprimer ce filet' : 'Remove this rule'}
+                onClick={() => {
+                  if ((filets?.length ?? 0) >= 3) {
+                    toast.error(fr ? 'Maximum 3 filets' : 'Maximum 3 rules');
+                    return;
+                  }
+                  const newFilet: FiletConfig = {
+                    id: `filet-${Date.now()}`,
+                    offsetMm: (filets?.length ?? 0) === 0 ? 2 : Math.min(5, ((filets?.[filets.length - 1]?.offsetMm ?? 2) + 1.5)),
+                    thicknessMm: 0.5,
+                    color: '#1a1a1a',
+                  };
+                  onFiletsChange?.([...(filets ?? []), newFilet]);
+                }}
+                className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 hover:text-amber-800 border border-amber-200 rounded px-2 py-0.5 bg-amber-50 hover:bg-amber-100 transition-colors"
+                title={fr ? 'Ajouter un filet' : 'Add a rule'}
               >
-                <Trash2 className="w-3 h-3" />
+                <Plus className="w-3 h-3" />
+                {fr ? 'Ajouter' : 'Add'}
               </button>
             </div>
 
-            {/* Offset */}
-            <div className="mb-1.5">
-              <div className="flex items-center justify-between mb-0.5">
-                <label className="text-[10px] text-gray-500">{fr ? 'Décalage' : 'Offset'}</label>
-                <span className="text-[10px] font-mono text-indigo-600">{filet.offsetMm.toFixed(1)} mm</span>
-              </div>
-              <Slider
-                min={0}
-                max={5}
-                step={0.1}
-                value={[filet.offsetMm]}
-                onValueChange={([v]) => onFiletsChange?.(
-                  (filets ?? []).map(f => f.id === filet.id ? { ...f, offsetMm: v } : f)
-                )}
-                className="h-1.5"
-              />
-            </div>
+            {(!filets || filets.length === 0) && (
+              <p className="text-[10px] text-gray-400 italic text-center py-1">
+                {fr ? 'Aucun filet — cliquez sur Ajouter' : 'No rules — click Add'}
+              </p>
+            )}
 
-            {/* Épaisseur */}
-            <div className="mb-1.5">
-              <div className="flex items-center justify-between mb-0.5">
-                <label className="text-[10px] text-gray-500">{fr ? 'Épaisseur' : 'Thickness'}</label>
-                <span className="text-[10px] font-mono text-indigo-600">{filet.thicknessMm.toFixed(1)} mm</span>
-              </div>
-              <Slider
-                min={0.3}
-                max={2}
-                step={0.1}
-                value={[filet.thicknessMm]}
-                onValueChange={([v]) => onFiletsChange?.(
-                  (filets ?? []).map(f => f.id === filet.id ? { ...f, thicknessMm: v } : f)
-                )}
-                className="h-1.5"
-              />
-            </div>
-
-            {/* Couleur */}
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-gray-500">{fr ? 'Couleur' : 'Color'}</label>
-              <div className="relative flex items-center gap-1.5">
-                <input
-                  type="color"
-                  value={filet.color}
-                  onChange={e => onFiletsChange?.(
-                    (filets ?? []).map(f => f.id === filet.id ? { ...f, color: e.target.value } : f)
-                  )}
-                  className="w-6 h-6 rounded border border-gray-200 cursor-pointer p-0"
-                  title={fr ? 'Choisir la couleur du filet' : 'Choose rule color'}
-                />
-                {/* Préréglages de couleurs classiques */}
-                {['#1a1a1a', '#c8a96e', '#8b0000', '#ffffff', '#4a4a8a'].map(preset => (
+            {(filets ?? []).map((filet, idx) => (
+              <div key={filet.id} className="bg-gray-50 rounded border border-gray-200 p-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-semibold text-gray-600">
+                    {fr ? `Filet ${idx + 1}` : `Rule ${idx + 1}`}
+                  </span>
                   <button
-                    key={preset}
                     type="button"
-                    onClick={() => onFiletsChange?.(
-                      (filets ?? []).map(f => f.id === filet.id ? { ...f, color: preset } : f)
+                    onClick={() => onFiletsChange?.((filets ?? []).filter(f => f.id !== filet.id))}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                    title={fr ? 'Supprimer ce filet' : 'Remove this rule'}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div className="mb-1.5">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] text-gray-500">{fr ? 'Décalage' : 'Offset'}</label>
+                    <span className="text-[10px] font-mono text-amber-600">{filet.offsetMm.toFixed(1)} mm</span>
+                  </div>
+                  <Slider
+                    min={0} max={5} step={0.1}
+                    value={[filet.offsetMm]}
+                    onValueChange={([v]) => onFiletsChange?.(
+                      (filets ?? []).map(f => f.id === filet.id ? { ...f, offsetMm: v } : f)
                     )}
-                    className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
-                    style={{ backgroundColor: preset }}
-                    title={preset}
+                    className="h-1.5"
                   />
-                ))}
+                </div>
+
+                <div className="mb-1.5">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] text-gray-500">{fr ? 'Épaisseur' : 'Thickness'}</label>
+                    <span className="text-[10px] font-mono text-amber-600">{filet.thicknessMm.toFixed(1)} mm</span>
+                  </div>
+                  <Slider
+                    min={0.3} max={2} step={0.1}
+                    value={[filet.thicknessMm]}
+                    onValueChange={([v]) => onFiletsChange?.(
+                      (filets ?? []).map(f => f.id === filet.id ? { ...f, thicknessMm: v } : f)
+                    )}
+                    className="h-1.5"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-gray-500">{fr ? 'Couleur' : 'Color'}</label>
+                  <input
+                    type="color"
+                    value={filet.color}
+                    onChange={e => onFiletsChange?.(
+                      (filets ?? []).map(f => f.id === filet.id ? { ...f, color: e.target.value } : f)
+                    )}
+                    className="w-8 h-8 rounded border border-gray-200 cursor-pointer p-0.5"
+                    title={fr ? 'Choisir la couleur du filet' : 'Choose rule color'}
+                  />
+                  <span className="text-[10px] font-mono text-gray-400">{filet.color}</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Séparateur */}
+            <div className="border-t border-gray-200 mt-2 pt-2">
+              {/* Toggle : Afficher cadre extérieur */}
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-gray-700">
+                    {fr ? "Cadre extérieur" : "Outer frame"}
+                  </span>
+                  <span className="text-[9px] text-gray-400">
+                    {fr ? "(limite du format)" : "(format boundary)"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!showFormatBorder}
+                  onClick={() => onShowFormatBorderChange?.(!showFormatBorder)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    showFormatBorder ? "bg-amber-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                    showFormatBorder ? "translate-x-4.5" : "translate-x-0.5"
+                  }`} />
+                </button>
+              </div>
+
+              {/* Bouton SVG de découpe */}
+              <div className="mt-2">
+                {(() => {
+                  const hasOpenings = !!(canvasOpenings && canvasOpenings.length > 0);
+                  const openingCount = canvasOpenings?.length ?? 0;
+                  const labelFr = hasOpenings
+                    ? `Télécharger SVG découpe (${openingCount} ouverture${openingCount > 1 ? "s" : ""})`
+                    : "Télécharger SVG découpe";
+                  const labelEn = hasOpenings
+                    ? `Download cut SVG (${openingCount} opening${openingCount > 1 ? "s" : ""})`
+                    : "Download cut SVG";
+                  const titleFr = hasOpenings
+                    ? `Télécharger le SVG de découpe (${openingCount} ouverture${openingCount > 1 ? "s" : ""}${showFormatBorder ? " + cadre extérieur" : ""})`
+                    : "Ajoutez des ouvertures pour activer l’export SVG";
+                  const titleEn = hasOpenings
+                    ? `Download cut SVG (${openingCount} opening${openingCount > 1 ? "s" : ""}${showFormatBorder ? " + outer frame" : ""})`
+                    : "Add openings to enable SVG export";
+                  return (
+                    <button
+                      type="button"
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded border text-xs font-semibold transition-colors ${
+                        hasOpenings
+                          ? "border-amber-400 bg-amber-600 text-white hover:bg-amber-700"
+                          : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                      }`}
+                      disabled={!hasOpenings}
+                      onClick={() => {
+                        if (hasOpenings && onExportLaserSVG) onExportLaserSVG();
+                      }}
+                      title={fr ? titleFr : titleEn}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      <span>
+                        {fr ? labelFr : labelEn}
+                        {showFormatBorder
+                          ? <span className="ml-1 font-bold text-amber-200">{fr ? "+ cadre" : "+ frame"}</span>
+                          : <span className="ml-1 line-through text-amber-300 opacity-60">{fr ? "+ cadre" : "+ frame"}</span>
+                        }
+                      </span>
+                    </button>
+                  );
+                })()}
+                <p className="text-[10px] text-gray-400 text-center mt-1">{fr ? "Compatible LightBurn, RDWorks, LaserGRBL" : "Compatible with LightBurn, RDWorks, LaserGRBL"}</p>
               </div>
             </div>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Toggle : Afficher cadre extérieur */}
-      <div className="flex items-center justify-between px-1 py-2 border-t border-gray-100 mt-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-700">
-            {fr ? 'Afficher cadre extérieur' : 'Show format border'}
-          </span>
-          <span className="text-[10px] text-gray-400">
-            {fr ? '(limite du format)' : '(format boundary)'}
-          </span>
-        </div>
+      {/* ------------------------------------------------------------------ */}
+      {/* Section F - Format                                                    */}
+      {/* ------------------------------------------------------------------ */}
+      <div className={`border rounded-lg overflow-hidden transition-all ${
+        formatOpen ? "border-slate-400 shadow-sm" : "border-gray-200"
+      }`}>
         <button
           type="button"
-          role="switch"
-          aria-checked={!!showFormatBorder}
-          onClick={() => onShowFormatBorderChange?.(!showFormatBorder)}
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-            showFormatBorder ? 'bg-indigo-500' : 'bg-gray-300'
+          className={`relative z-10 w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+            formatOpen
+              ? "bg-slate-600 text-white"
+              : "bg-gray-50 text-gray-700 hover:bg-slate-50"
           }`}
+          onClick={() => setFormatOpen(v => !v)}
         >
-          <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-            showFormatBorder ? 'translate-x-4.5' : 'translate-x-0.5'
-          }`} />
+          <span className="text-xs font-bold">
+            {fr ? `F - Format (${canvasFormat.label})` : `F - Format (${canvasFormat.label})`}
+          </span>
+          <span className="text-xs opacity-70">{formatOpen ? "▲" : "▼"}</span>
         </button>
-      </div>
 
-      {/* Bouton SVG de découpe */}
-      <div className="mt-2">
-        {(() => {
-          const hasOpenings = !!(canvasOpenings && canvasOpenings.length > 0);
-          const openingCount = canvasOpenings?.length ?? 0;
-          const labelFr = hasOpenings
-            ? `Télécharger SVG découpe (${openingCount} ouverture${openingCount > 1 ? 's' : ''})`
-            : 'Télécharger SVG découpe';
-          const labelEn = hasOpenings
-            ? `Download cut SVG (${openingCount} opening${openingCount > 1 ? 's' : ''})`
-            : 'Download cut SVG';
-          const titleFr = hasOpenings
-            ? `Télécharger le SVG de découpe (${openingCount} ouverture${openingCount > 1 ? 's' : ''}${showFormatBorder ? ' + cadre extérieur' : ''})`
-            : 'Ajoutez des ouvertures pour activer l’export SVG';
-          const titleEn = hasOpenings
-            ? `Download cut SVG (${openingCount} opening${openingCount > 1 ? 's' : ''}${showFormatBorder ? ' + outer frame' : ''})`
-            : 'Add openings to enable SVG export';
-          return (
-            <button
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded border text-xs font-semibold transition-colors ${
-                hasOpenings
-                  ? 'border-indigo-400 bg-indigo-600 text-white hover:bg-indigo-700'
-                  : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-              }`}
-              disabled={!hasOpenings}
-              onClick={() => {
-                if (hasOpenings && onExportLaserSVG) onExportLaserSVG();
-              }}
-              title={fr ? titleFr : titleEn}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <span>
-                {fr ? labelFr : labelEn}
-                {/* Indicateur cadre : "+ cadre" actif, ou "+ cadre" barré si toggle OFF */}
-                {showFormatBorder
-                  ? <span className="ml-1 font-bold text-indigo-200">{fr ? '+ cadre' : '+ frame'}</span>
-                  : <span className="ml-1 line-through text-indigo-300 opacity-60">{fr ? '+ cadre' : '+ frame'}</span>
-                }
-              </span>
-            </button>
-          );
-        })()}
-        <p className="text-xs text-gray-400 text-center mt-1">{fr ? 'Compatible LightBurn, RDWorks, LaserGRBL' : 'Compatible with LightBurn, RDWorks, LaserGRBL'}</p>
+        {formatOpen && (
+          <div className="p-3 space-y-2 bg-white">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-500">{fr ? "Format actif" : "Active format"}</span>
+              <span className="text-xs font-semibold text-slate-700">{canvasFormat.label}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-500">{fr ? "Dimensions" : "Dimensions"}</span>
+              <span className="text-xs font-mono text-slate-600">{canvasFormat.width} × {canvasFormat.height} cm</span>
+            </div>
+            <p className="text-[10px] text-gray-400 italic">
+              {fr
+                ? "Pour changer le format ou l'orientation, utilisez les contrôles en haut de la barre d'outils."
+                : "To change the format or orientation, use the controls at the top of the toolbar."}
+            </p>
+          </div>
+        )}
       </div>
-
-      <p className="text-xs text-gray-400 text-center mt-2">
-        {fr ? `Format : ${canvasFormat.label}` : `Format: ${canvasFormat.label}`}
-      </p>
     </div>
   );
 }
