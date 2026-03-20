@@ -6417,10 +6417,11 @@ export default function CreationsAtelierV2({
                           <path
                             d={pathD}
                             fill="none"
-                            stroke={isSelected ? '#6366f1' : (element.shape === 'puzzle' ? (element.puzzleTransparent ? '#000000' : '#1a1a1a') : 'transparent')}
-                            strokeWidth={element.shape === 'puzzle' ? (element.puzzleTransparent ? 4 : (isSelected ? 4 : 3)) : (isSelected ? 2 : 0)}
+                            stroke={isSelected ? '#6366f1' : (element.shape === 'puzzle' ? (element.puzzleTransparent ? '#000000' : '#1a1a1a') : '#9ca3af')}
+                            strokeWidth={element.shape === 'puzzle' ? (element.puzzleTransparent ? 4 : (isSelected ? 4 : 3)) : (isSelected ? 2 : 1)}
                             strokeLinecap="round"
                             strokeLinejoin="round"
+                            strokeDasharray={!isSelected && element.shape !== 'puzzle' ? '4 3' : undefined}
                           />
                           {/* Numéro de pièce au centre (optionnel, pour puzzles enfants) */}
                           {element.shape === 'puzzle' && element.puzzleShowNumber && element.openingIndex != null && (
