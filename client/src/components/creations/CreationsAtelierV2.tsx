@@ -7639,9 +7639,9 @@ export default function CreationsAtelierV2({
                         alt={item.name}
                         className="w-full h-auto object-contain rounded bg-[url('/images/transparent-bg.png')] bg-repeat"
                       />
-                      {/* Bouton supprimer au survol */}
+                      {/* Bouton supprimer — toujours visible */}
                       <button
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 z-10"
                         onClick={(e) => {
                           e.stopPropagation();
                           setCollectorItems(prev => prev.filter(i => i.id !== item.id));
@@ -8305,29 +8305,25 @@ export default function CreationsAtelierV2({
       )}
       
       {/* Modale d'aide pour créer un nouveau projet */}
-      {/* Portail pour l'aperçu agrandi des vignettes au survol */}
+      {/* Portail pour l'aperçu agrandi des vignettes — positionné à gauche de la colonne */}
       {hoveredThumbnail && createPortal(
         <div
           className="fixed pointer-events-none"
           style={{
-            left: hoveredThumbnail.rect.left - 100,
-            top: hoveredThumbnail.rect.top - 100,
-            width: hoveredThumbnail.rect.width + 200,
-            height: hoveredThumbnail.rect.height + 200,
+            left: hoveredThumbnail.rect.left - 220,
+            top: Math.max(8, hoveredThumbnail.rect.top + hoveredThumbnail.rect.height / 2 - 110),
             zIndex: 999999,
           }}
           onMouseEnter={() => setHoveredThumbnail(null)}
         >
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-white rounded-lg shadow-2xl border-2 border-purple-500 ring-4 ring-purple-400/50 p-1 animate-in zoom-in-50 duration-150">
-              <img
-                src={hoveredThumbnail.src}
-                alt={hoveredThumbnail.name}
-                className="max-w-[200px] max-h-[200px] object-contain rounded"
-              />
-              <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                {hoveredThumbnail.name}
-              </div>
+          <div className="bg-white rounded-lg shadow-2xl border-2 border-purple-500 ring-4 ring-purple-400/50 p-1 animate-in zoom-in-50 duration-150">
+            <img
+              src={hoveredThumbnail.src}
+              alt={hoveredThumbnail.name}
+              className="max-w-[200px] max-h-[200px] object-contain rounded"
+            />
+            <div className="mt-1 bg-gray-900 text-white text-xs px-2 py-1 rounded text-center truncate max-w-[200px]">
+              {hoveredThumbnail.name}
             </div>
           </div>
         </div>,
