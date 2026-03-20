@@ -809,14 +809,29 @@ function PassePartoutSection({
                 onChange={(e) => {
                   const newColor = e.target.value;
                   setOpeningColor(newColor);
-                  // Mettre à jour la couleur de la découpe en cours en temps réel
-                  if (activeOpeningId && onApplyColorToOpenings) {
-                    onApplyColorToOpenings(newColor, [activeOpeningId]);
+                  // Mettre à jour la couleur de la forme sélectionnée en temps réel
+                  const targetId = selectedCanvasElementId || activeOpeningId;
+                  if (targetId && onApplyColorToOpenings) {
+                    onApplyColorToOpenings(newColor, [targetId]);
                   }
                 }}
                 className="w-8 h-8 rounded cursor-pointer border border-gray-300"
                 title={fr ? "Choisir la couleur de l'ouverture" : "Choose opening color"}
               />
+              <button
+                type="button"
+                className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-1 hover:bg-red-50 transition-colors"
+                title={fr ? "Supprimer la couleur" : "Remove color"}
+                onClick={() => {
+                  setOpeningColor('#ffffff');
+                  const targetId = selectedCanvasElementId || activeOpeningId;
+                  if (targetId && onApplyColorToOpenings) {
+                    onApplyColorToOpenings('transparent', [targetId]);
+                  }
+                }}
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
             </div>
 
             {/* Options avancées : branches étoile et profondeur cœur */}

@@ -6164,7 +6164,8 @@ export default function CreationsAtelierV2({
                       key={element.id}
                       data-canvas-element="true"
                       className={`absolute ${element.locked ? "cursor-not-allowed" : isDragging && (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"} ${
-                        element.type === 'shape' && element.shape === 'line' ? '' :
+                        // Pas de ring rectangulaire sur les shapes (le contour SVG suffit) ni les lignes
+                        element.type === 'shape' ? '' :
                         isMultiMode && isInMultiSelection && isSelected
                           ? "ring-2 ring-purple-500 ring-offset-1" // Élément principal dans la multi-sélection
                           : isMultiMode && isInMultiSelection
@@ -6247,10 +6248,10 @@ export default function CreationsAtelierV2({
                     {element.type === "shape" && (() => {
                       const w = elementWidthPx;
                       const h = elementHeightPx;
-                      // Rendu uniforme : couleur opaque, contour fin discret
+                      // Couleur de l'ouverture : transparent si aucune couleur n'est définie
                       const fillColor = element.openingColor && element.openingColor !== 'transparent'
                         ? element.openingColor
-                        : '#ffffff';
+                        : 'transparent';
 
                       // Si un path personnalisé (déformation de bord) est présent,
                       // le convertir de coordonnées cm (page blanche) en coordonnées px (element local)
