@@ -4255,6 +4255,9 @@ export default function CreationsAtelierV2({
                     }}
                     hasExistingPassePartout={canvasElements.some(el => el.name === "Passe-partout" || el.name === "Mat frame")}
                     hasExistingBackground={canvasElements.some(el => el.name === (language === 'fr' ? 'Fond' : 'Background'))}
+                    onRemoveBackground={() => {
+                      setCanvasElements(prev => prev.filter(el => el.name !== (language === 'fr' ? 'Fond' : 'Background')));
+                    }}
                     onReplacePassePartout={(data: PassePartoutData) => {
                       // Supprimer tous les passe-partouts existants puis ajouter le nouveau
                       const existingIds = canvasElements

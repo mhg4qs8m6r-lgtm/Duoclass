@@ -151,6 +151,8 @@ export interface AssemblagePanelProps {
   onAddBackground?: (patternSrc: string | null, patternOpacity: number, bgColor: string) => void;
   /** Indique si un fond (Fond) existe déjà sur le canvas */
   hasExistingBackground?: boolean;
+  /** Supprime le fond existant du canvas */
+  onRemoveBackground?: () => void;
   /**
    * Éléments image actuellement sur le canvas (stickers, cliparts, photos).
    * Utilisé pour calculer les contours offset et générer le SVG de découpe.
@@ -438,6 +440,7 @@ function PassePartoutSection({
   onExportLaserSVG,
   onAddBackground,
   hasExistingBackground,
+  onRemoveBackground,
   showFormatBorder,
   onShowFormatBorderChange,
   filets,
@@ -464,7 +467,7 @@ function PassePartoutSection({
   onLineColorChange,
   lineStrokeWidth = 0.5,
   onLineStrokeWidthChange,
-}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode" | "lineSelected" | "lineIsRounded" | "onRoundLine" | "lineChainCount" | "lineColor" | "onLineColorChange" | "lineStrokeWidth" | "onLineStrokeWidthChange">) {
+}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode" | "lineSelected" | "lineIsRounded" | "onRoundLine" | "lineChainCount" | "lineColor" | "onLineColorChange" | "lineStrokeWidth" | "onLineStrokeWidthChange">) {
   const { language } = useLanguage();
 
   // --- Section active : accordéon exclusif ---
@@ -674,6 +677,28 @@ function PassePartoutSection({
                 ? "Le fond est placé automatiquement en arrière-plan du cadre, sous toutes les découpes. Sa taille correspond exactement au format choisi."
                 : "The background is automatically placed behind all openings. Its size matches the chosen format exactly."}
             </p>
+
+            {/* Indicateur + bouton supprimer si un fond est déjà appliqué */}
+            {hasExistingBackground && (
+              <div className="flex items-center justify-between gap-2 bg-pink-50 border border-pink-200 rounded-lg px-3 py-2">
+                <span className="text-xs text-pink-700 font-medium">
+                  {fr ? "✓ Fond appliqué" : "✓ Background applied"}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-red-600 hover:text-red-800 bg-white border border-red-200 rounded px-2 py-1 hover:bg-red-50 transition-colors"
+                  onClick={() => {
+                    onRemoveBackground?.();
+                    showConfirmation(fr ? 'Fond supprimé' : 'Background removed');
+                  }}
+                >
+                  <span className="flex items-center gap-1">
+                    <Trash2 className="w-3 h-3" />
+                    {fr ? "Supprimer le fond" : "Remove background"}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Couleur unie de fond */}
             <div className="space-y-2">
@@ -2956,6 +2981,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                     onExportLaserSVG={props.onExportLaserSVG}
                      onAddBackground={props.onAddBackground}
                      hasExistingBackground={props.hasExistingBackground}
+                     onRemoveBackground={props.onRemoveBackground}
                      showFormatBorder={props.showFormatBorder}
                      onShowFormatBorderChange={props.onShowFormatBorderChange}
                      filets={props.filets}
