@@ -614,6 +614,10 @@ export default function CreationsAtelierV2({
   
   // États pour les dimensions de l'image
   const [lockAspectRatio, setLockAspectRatio] = useState(true); // Verrouillage des proportions
+  // États texte intermédiaires pour les champs largeur/hauteur d'éléments (saisie fluide, validation onBlur)
+  const [elemWidthText, setElemWidthText] = useState('');
+  const [elemHeightText, setElemHeightText] = useState('');
+  const [elemDimEditing, setElemDimEditing] = useState<'width' | 'height' | null>(null);
   const [showDimensionsInCm, setShowDimensionsInCm] = useState(false); // Afficher en cm au lieu de px
   
   // États pour le détourage manuel
@@ -3781,23 +3785,51 @@ export default function CreationsAtelierV2({
                   return (
                     <div className="flex items-center gap-1">
                       <input
-                        type="number"
-                        step="0.1"
-                        min="0.5"
-                        value={selectedElement.width.toFixed(1)}
-                        onChange={(e) => handleWidthChange(e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={elemDimEditing === 'width' ? elemWidthText : selectedElement.width.toFixed(1)}
+                        onFocus={(e) => {
+                          setElemWidthText(selectedElement.width.toFixed(1));
+                          setElemDimEditing('width');
+                          requestAnimationFrame(() => e.target.select());
+                        }}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(',', '.');
+                          if (/^\d{0,3}(\.\d{0,1})?$/.test(raw)) {
+                            setElemWidthText(raw);
+                          }
+                        }}
+                        onBlur={() => {
+                          setElemDimEditing(null);
+                          handleWidthChange(elemWidthText);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         disabled={isLocked}
                         className={`w-12 h-5 text-xs text-center border rounded font-medium focus:outline-none focus:ring-1 focus:ring-purple-500 ${isLocked ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed' : 'border-purple-300 bg-purple-50 text-purple-700'}`}
                         title={getTooltip("width")}
                       />
                       <span className="text-gray-400 text-xs">×</span>
                       <input
-                        type="number"
-                        step="0.1"
-                        min="0.5"
-                        value={selectedElement.height.toFixed(1)}
+                        type="text"
+                        inputMode="decimal"
+                        value={elemDimEditing === 'height' ? elemHeightText : selectedElement.height.toFixed(1)}
+                        onFocus={(e) => {
+                          setElemHeightText(selectedElement.height.toFixed(1));
+                          setElemDimEditing('height');
+                          requestAnimationFrame(() => e.target.select());
+                        }}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(',', '.');
+                          if (/^\d{0,3}(\.\d{0,1})?$/.test(raw)) {
+                            setElemHeightText(raw);
+                          }
+                        }}
+                        onBlur={() => {
+                          setElemDimEditing(null);
+                          handleHeightChange(elemHeightText);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         disabled={isLocked}
-                        onChange={(e) => handleHeightChange(e.target.value)}
                         className={`w-12 h-5 text-xs text-center border rounded font-medium focus:outline-none focus:ring-1 focus:ring-purple-500 ${isLocked ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed' : 'border-purple-300 bg-purple-50 text-purple-700'}`}
                         title={getTooltip("height")}
                       />
