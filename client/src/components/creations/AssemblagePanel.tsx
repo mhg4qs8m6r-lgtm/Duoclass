@@ -144,6 +144,8 @@ export interface AssemblagePanelProps {
   selectedCanvasElementId?: string | null;
   /** Applique un gabarit multi-ouvertures (place toutes les découpes validées en une fois) */
   onApplyTemplate?: (openings: Array<{ shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star'; xFrac: number; yFrac: number; wFrac: number; hFrac: number }>) => void;
+  /** Retourne les formes actuelles du canvas en coordonnées fractionnaires pour sauvegarde */
+  onGetCurrentShapes?: () => Array<{ shape: string; xFrac: number; yFrac: number; wFrac: number; hFrac: number }> | null;
   onGenerateFullPagePuzzle?: (cols: number, rows: number, showNumbers?: boolean, transparent?: boolean, numberSize?: 'small' | 'medium' | 'large') => void;
   /** Génère et télécharge le SVG de découpe laser (périmètre + ouvertures) */
   onExportLaserSVG?: () => void;
@@ -436,6 +438,7 @@ function PassePartoutSection({
   activeOpeningId,
   selectedCanvasElementId,
   onApplyTemplate,
+  onGetCurrentShapes,
   onGenerateFullPagePuzzle,
   onExportLaserSVG,
   onAddBackground,
@@ -467,7 +470,7 @@ function PassePartoutSection({
   onLineColorChange,
   lineStrokeWidth = 0.5,
   onLineStrokeWidthChange,
-}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode" | "lineSelected" | "lineIsRounded" | "onRoundLine" | "lineChainCount" | "lineColor" | "onLineColorChange" | "lineStrokeWidth" | "onLineStrokeWidthChange">) {
+}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGetCurrentShapes" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode" | "lineSelected" | "lineIsRounded" | "onRoundLine" | "lineChainCount" | "lineColor" | "onLineColorChange" | "lineStrokeWidth" | "onLineStrokeWidthChange">) {
   const { language } = useLanguage();
 
   // --- Section active : accordéon exclusif ---
@@ -483,7 +486,36 @@ function PassePartoutSection({
     if (lineSelected) {
       setActiveSection("shape");
     }
-  }, [lineSelected]);;
+  }, [lineSelected]);
+
+  // Modèles personnalisés sauvegardés par l'utilisateur (persistés en localStorage)
+  const [customTemplates, setCustomTemplates] = useState<Array<{
+    id: string;
+    label: string;
+    openings: Array<{ shape: string; xFrac: number; yFrac: number; wFrac: number; hFrac: number }>;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem("duoclass-custom-templates");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const saveCustomTemplates = (templates: typeof customTemplates) => {
+    setCustomTemplates(templates);
+    localStorage.setItem("duoclass-custom-templates", JSON.stringify(templates));
+  };
+
+  // Modèles prédéfinis masqués par l'utilisateur
+  const [hiddenBuiltinIds, setHiddenBuiltinIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("duoclass-hidden-builtin-templates");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const hideBuiltinTemplate = (id: string) => {
+    const next = [...hiddenBuiltinIds, id];
+    setHiddenBuiltinIds(next);
+    localStorage.setItem("duoclass-hidden-builtin-templates", JSON.stringify(next));
+  };
 
   // --- Forme & dimensions ---
   const [shape, setShape] = useState<PassePartoutShape>("rect");
@@ -998,9 +1030,33 @@ function PassePartoutSection({
           <div className="p-3 space-y-2 bg-white">
             <p className="text-xs text-gray-500 italic">
               {fr
-                ? "Cliquez sur un modèle pour placer toutes les découpes d'un coup sur le canvas."
-                : "Click a template to place all openings at once on the canvas."}
+                ? "Cliquez sur un modèle pour ajouter les découpes sur le canvas (les formes existantes sont conservées)."
+                : "Click a template to add openings to the canvas (existing shapes are kept)."}
             </p>
+
+            {/* Bouton sauvegarder le montage actuel comme modèle */}
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded border-2 border-dashed border-indigo-300 hover:border-indigo-500 hover:bg-indigo-50 transition-colors text-xs text-indigo-600 font-medium"
+              onClick={() => {
+                const shapes = onGetCurrentShapes?.();
+                if (!shapes || shapes.length === 0) {
+                  toast.error(fr ? "Aucune forme sur le canvas à sauvegarder" : "No shapes on canvas to save");
+                  return;
+                }
+                const label = prompt(fr ? "Nom du modèle :" : "Template name:", fr ? `Mon modèle (${shapes.length} formes)` : `My template (${shapes.length} shapes)`);
+                if (!label) return;
+                const newTemplate = {
+                  id: `custom-${Date.now()}`,
+                  label,
+                  openings: shapes,
+                };
+                saveCustomTemplates([...customTemplates, newTemplate]);
+                toast.success(fr ? "Modèle sauvegardé !" : "Template saved!");
+              }}
+            >
+              + {fr ? "Sauvegarder le montage actuel" : "Save current layout"}
+            </button>
 
             {([
               {
@@ -1045,32 +1101,83 @@ function PassePartoutSection({
                   { shape: "round" as const, xFrac: 0.55, yFrac: 0.2, wFrac: 0.4, hFrac: 0.6 },
                 ],
               },
-            ] as const).map((tpl) => (
-              <button
-                key={tpl.id}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded border border-gray-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left"
-                onClick={() => {
-                  if (onApplyTemplate) {
-                    onApplyTemplate(tpl.openings.map(o => ({ ...o })));
-                  }
-                }}
-              >
-                {/* Mini-aperçu SVG du gabarit */}
-                <svg width="40" height="30" viewBox="0 0 100 75" className="flex-shrink-0 border border-gray-200 rounded bg-gray-50">
-                  {tpl.openings.map((op, i) => {
-                    const x = op.xFrac * 100;
-                    const y = op.yFrac * 75;
-                    const w = op.wFrac * 100;
-                    const h = op.hFrac * 75;
-                    if (op.shape === 'round') {
-                      return <ellipse key={i} cx={x + w/2} cy={y + h/2} rx={w/2} ry={h/2} fill="#6366f1" opacity={0.7} />;
+            ] as const).filter(tpl => !hiddenBuiltinIds.includes(tpl.id)).map((tpl) => (
+              <div key={tpl.id} className="group flex items-center gap-1">
+                <button
+                  type="button"
+                  className="flex-1 flex items-center gap-3 px-3 py-2 rounded border border-gray-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left"
+                  onClick={() => {
+                    if (onApplyTemplate) {
+                      onApplyTemplate(tpl.openings.map(o => ({ ...o })));
                     }
-                    return <rect key={i} x={x} y={y} width={w} height={h} fill="#6366f1" opacity={0.7} rx={2} />;
-                  })}
-                </svg>
-                <span className="text-xs text-gray-700">{fr ? tpl.labelFr : tpl.labelEn}</span>
-              </button>
+                  }}
+                >
+                  <svg width="40" height="30" viewBox="0 0 100 75" className="flex-shrink-0 border border-gray-200 rounded bg-gray-50">
+                    {tpl.openings.map((op, i) => {
+                      const x = op.xFrac * 100;
+                      const y = op.yFrac * 75;
+                      const w = op.wFrac * 100;
+                      const h = op.hFrac * 75;
+                      if (op.shape === 'round') {
+                        return <ellipse key={i} cx={x + w/2} cy={y + h/2} rx={w/2} ry={h/2} fill="#6366f1" opacity={0.7} />;
+                      }
+                      return <rect key={i} x={x} y={y} width={w} height={h} fill="#6366f1" opacity={0.7} rx={2} />;
+                    })}
+                  </svg>
+                  <span className="text-xs text-gray-700">{fr ? tpl.labelFr : tpl.labelEn}</span>
+                </button>
+                <button
+                  type="button"
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  title={fr ? "Masquer ce modèle" : "Hide this template"}
+                  onClick={() => hideBuiltinTemplate(tpl.id)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ))}
+
+            {/* Modèles personnalisés */}
+            {customTemplates.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 text-xs text-gray-400 pt-2">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span>{fr ? "Mes modèles" : "My templates"}</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+                {customTemplates.map((tpl) => (
+                  <div key={tpl.id} className="group flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="flex-1 flex items-center gap-3 px-3 py-2 rounded border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left"
+                      onClick={() => {
+                        if (onApplyTemplate) {
+                          onApplyTemplate(tpl.openings.map(o => ({ ...o })) as any);
+                        }
+                      }}
+                    >
+                      <svg width="40" height="30" viewBox="0 0 100 75" className="flex-shrink-0 border border-gray-200 rounded bg-gray-50">
+                        {tpl.openings.map((op, i) => {
+                          const x = op.xFrac * 100, y = op.yFrac * 75, w = op.wFrac * 100, h = op.hFrac * 75;
+                          if (op.shape === 'round') return <ellipse key={i} cx={x + w/2} cy={y + h/2} rx={w/2} ry={h/2} fill="#6366f1" opacity={0.7} />;
+                          if (op.shape === 'oval') return <ellipse key={i} cx={x + w/2} cy={y + h/2} rx={w/2} ry={h/2} fill="#6366f1" opacity={0.7} />;
+                          return <rect key={i} x={x} y={y} width={w} height={h} fill="#6366f1" opacity={0.7} rx={2} />;
+                        })}
+                      </svg>
+                      <span className="text-xs text-gray-700">{tpl.label}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                      title={fr ? "Supprimer ce modèle" : "Delete this template"}
+                      onClick={() => saveCustomTemplates(customTemplates.filter(t => t.id !== tpl.id))}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -2992,6 +3099,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                     activeOpeningId={props.activeOpeningId}
                     selectedCanvasElementId={props.selectedCanvasElementId}
                     onApplyTemplate={props.onApplyTemplate}
+                    onGetCurrentShapes={props.onGetCurrentShapes}
                     onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
                     onExportLaserSVG={props.onExportLaserSVG}
                      onAddBackground={props.onAddBackground}

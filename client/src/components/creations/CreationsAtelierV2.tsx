@@ -5093,13 +5093,16 @@ export default function CreationsAtelierV2({
                       );
                     }}
                     onApplyTemplate={(openings) => {
-                      // Supprimer les découpes shape existantes
+                      // Ajouter les formes du modèle SANS supprimer les existantes
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
-                      openingCounterRef.current = 0;
+                      const maxExistingIdx = canvasElements
+                        .filter(el => el.type === 'shape' && el.openingIndex != null)
+                        .reduce((max, el) => Math.max(max, el.openingIndex!), 0);
+                      const maxZIndex = canvasElements.reduce((max, el) => Math.max(max, el.zIndex), 0);
                       const newOpenings: CanvasElement[] = openings.map((op, i) => {
-                        openingCounterRef.current += 1;
-                        const idx = openingCounterRef.current;
+                        const idx = maxExistingIdx + i + 1;
+                        openingCounterRef.current = Math.max(openingCounterRef.current, idx);
                         return {
                           id: `opening-${Date.now()}-${i}`,
                           type: 'shape' as const,
@@ -5109,24 +5112,34 @@ export default function CreationsAtelierV2({
                           width: op.wFrac * formatW,
                           height: op.hFrac * formatH,
                           rotation: 0,
-                          zIndex: canvasElements.filter(el => el.type !== 'shape').length + 10 + i,
+                          zIndex: maxZIndex + 1 + i,
                           opacity: 1,
                           validated: true,
                           openingIndex: idx,
                           name: language === 'fr' ? `Découpe ${idx}` : `Opening ${idx}`,
-                          openingColor: '#ffffff',
+                          openingColor: 'transparent',
                         };
                       });
-                      setCanvasElements(prev => [
-                        ...prev.filter(el => el.type !== 'shape'),
-                        ...newOpenings,
-                      ]);
+                      setCanvasElements(prev => [...prev, ...newOpenings]);
                       setActiveOpeningId(null);
                       toast.success(
                         language === 'fr'
-                          ? `Modèle appliqué : ${openings.length} découpe${openings.length > 1 ? 's' : ''} placée${openings.length > 1 ? 's' : ''}`
-                          : `Template applied: ${openings.length} opening${openings.length > 1 ? 's' : ''} placed`
+                          ? `Modèle ajouté : ${openings.length} découpe${openings.length > 1 ? 's' : ''} placée${openings.length > 1 ? 's' : ''}`
+                          : `Template added: ${openings.length} opening${openings.length > 1 ? 's' : ''} placed`
                       );
+                    }}
+                    onGetCurrentShapes={() => {
+                      const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
+                      const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+                      const shapes = canvasElements.filter(el => el.type === 'shape');
+                      if (shapes.length === 0) return null;
+                      return shapes.map(el => ({
+                        shape: el.shape || 'rect',
+                        xFrac: el.x / formatW,
+                        yFrac: el.y / formatH,
+                        wFrac: el.width / formatW,
+                        hFrac: el.height / formatH,
+                      }));
                     }}
                     canvasImageElements={stableCanvasImageElements}
                     onStickerOverlayChange={stableOnStickerOverlayChange}
@@ -6684,6 +6697,22 @@ export default function CreationsAtelierV2({
                             }}
                           >
                             <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
+                          </div>
+                        )}
+                        {/* Bouton corbeille (supprimer la forme) */}
+                        {selectedElementId === element.id && element.type === 'shape' && (
+                          <div
+                            className="absolute -top-4 -right-4 w-6 h-6 bg-red-500 border-2 border-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-red-600 z-[110]"
+                            draggable={false}
+                            title={language === 'fr' ? 'Supprimer cette forme' : 'Delete this shape'}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCanvasElements(prev => prev.filter(el => el.id !== element.id));
+                              setSelectedElementId(null);
+                            }}
+                          >
+                            <X className="w-3 h-3 text-white pointer-events-none" />
                           </div>
                         )}
                       </>)}
