@@ -626,6 +626,26 @@ export default function CreationsAtelierV2({
   const [detouragePoints, setDetouragePoints] = useState<{x: number, y: number}[]>([]);
   const [isDetourageActive, setIsDetourageActive] = useState(false);
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
+
+  // Écouter le résultat du détourage manuel (retour depuis /test-canvas via postMessage)
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== "detourage-result") return;
+      const { elementId: eid, result } = e.data;
+      if (!result) return;
+      // Appliquer le détourage sur l'élément d'origine
+      if (eid) {
+        updateCanvasElement(eid, { src: result });
+      }
+      // Ajouter aussi au collecteur
+      addToCollector(result, language === "fr" ? "Détourage manuel" : "Manual cutout", "detourage");
+      toast.success(language === "fr" ? "Détourage appliqué !" : "Cutout applied!");
+      // Nettoyage
+      localStorage.removeItem("detourage-image");
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [language]);
   
   // État pour le menu contextuel (clic droit sur élément)
   const [contextMenu, setContextMenu] = useState<{
@@ -4008,11 +4028,31 @@ export default function CreationsAtelierV2({
                         updateCanvasElement(elementId, { src: detourageResult });
                       }}
                       onModeChange={(mode, tool) => {
+                        // "Point par point" (polygon) → ouvrir TestCanvas dans un nouvel onglet
+                        if (mode === "manual" && tool === "polygon") {
+                          const selectedEl = selectedElementId ? canvasElements.find(el => el.id === selectedElementId) : null;
+                          const src = selectedEl?.src
+                            || activeCanvasPhoto
+                            || canvasElements.find(el => el.type === "image" && el.src)?.src
+                            || null;
+                          const eid = selectedEl?.src ? selectedElementId
+                            : !activeCanvasPhoto ? canvasElements.find(el => el.type === "image" && el.src)?.id || null
+                            : selectedElementId;
+                          if (!src) {
+                            toast.error(language === "fr"
+                              ? "Ajoutez d'abord une image sur le canvas"
+                              : "Add an image to the canvas first");
+                            return;
+                          }
+                          localStorage.setItem("detourage-image", JSON.stringify({ src, elementId: eid }));
+                          window.open('/test-canvas', '_blank');
+                          return;
+                        }
+                        // Autres modes/outils : juste mettre à jour l'état
                         setDetourageMode(mode);
                         setManualTool(tool);
-                        // Réinitialiser les points quand on change de mode
                         setDetouragePoints([]);
-                        setIsDetourageActive(mode === "manual");
+                        setIsDetourageActive(mode === "manual" && tool !== "polygon");
                       }}
                     />
                     
@@ -5640,13 +5680,12 @@ export default function CreationsAtelierV2({
                   handleLassoMove(e);
                   // Mettre à jour la position du curseur pour le détourage
                   if (isDetourageActive && manualTool === "polygon") {
-                    const canvas = canvasRef.current;
-                    if (!canvas) return;
-                    const rect = canvas.getBoundingClientRect();
-                    // Calculer la position relative à la PAGE (pas à la zone de travail)
+                    const page = pageRef.current;
+                    if (!page) return;
+                    const rect = page.getBoundingClientRect();
                     setCursorPosition({
-                      x: e.clientX - rect.left + canvas.scrollLeft - canvasDimensions.pageOffsetX,
-                      y: e.clientY - rect.top + canvas.scrollTop - canvasDimensions.pageOffsetY
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top
                     });
                   }
                 }}
@@ -5818,14 +5857,13 @@ export default function CreationsAtelierV2({
                 onClick={(e) => {
                   // Gestion du clic pour le détourage point par point
                   if (isDetourageActive && manualTool === "polygon" && selectedElementId) {
-                    // Utiliser canvasRef pour obtenir la position exacte du canvas
-                    const canvas = canvasRef.current;
-                    if (!canvas) return;
-                    const rect = canvas.getBoundingClientRect();
-                    // Calculer la position relative à la PAGE (pas à la zone de travail)
-                    // Soustraire les offsets de la page pour que les coordonnées correspondent au SVG
-                    const x = e.clientX - rect.left + canvas.scrollLeft - canvasDimensions.pageOffsetX;
-                    const y = e.clientY - rect.top + canvas.scrollTop - canvasDimensions.pageOffsetY;
+                    // Utiliser pageRef (la page blanche) pour des coordonnées directement
+                    // relatives au SVG overlay — même approche que le tracé de ligne
+                    const page = pageRef.current;
+                    if (!page) return;
+                    const rect = page.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
                     
                     // Vérifier si on clique près du premier point pour fermer
                     if (detouragePoints.length >= 3) {

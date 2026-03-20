@@ -167,17 +167,6 @@ export default function DetourageTab({
   // Redessiner à chaque changement
   useEffect(() => { redraw(); }, [redraw]);
 
-  // ─── Coordonnées : offsetX/Y natif, zéro décalage ─────────────────────────
-  const getCoords = useCallback((e: MouseEvent<HTMLCanvasElement>): Point => {
-    const c = e.currentTarget;
-    const scaleX = c.width / c.offsetWidth;
-    const scaleY = c.height / c.offsetHeight;
-    return {
-      x: e.nativeEvent.offsetX * scaleX,
-      y: e.nativeEvent.offsetY * scaleY,
-    };
-  }, []);
-
   const findPoint = useCallback((pos: Point, threshold = 12): number | null => {
     for (let i = 0; i < points.length; i++) {
       if (Math.hypot(pos.x - points[i].x, pos.y - points[i].y) < threshold) return i;
@@ -185,34 +174,58 @@ export default function DetourageTab({
     return null;
   }, [points]);
 
-  // ─── Handlers souris ──────────────────────────────────────────────────────
-  const handleMouseDown = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
-    if (mode !== "manual") return;
-    const pos = getCoords(e);
+  // ─── Handlers souris — code copié littéralement de TestCanvas.tsx ──────────
 
-    if (closed) {
-      const idx = findPoint(pos);
-      if (idx !== null) setDragIdx(idx);
-      return;
-    }
-    if (points.length >= 3 && Math.hypot(pos.x - points[0].x, pos.y - points[0].y) < 12) {
+  // onClick : placement des points (copie exacte de TestCanvas handleClick)
+  const handleClick = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    if (mode !== "manual") return;
+    const c = canvasRef.current!;
+    const rect = c.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * c.width;
+    const y = ((e.clientY - rect.top) / rect.height) * c.height;
+
+    // DEBUG — à lire dans la console Safari
+    console.log('[DetourageTab click]', {
+      clientX: e.clientX, clientY: e.clientY,
+      rectLeft: rect.left, rectTop: rect.top,
+      rectW: rect.width, rectH: rect.height,
+      bufferW: c.width, bufferH: c.height,
+      resultX: x, resultY: y,
+    });
+
+    if (closed) return; // en mode fermé, onClick ne place pas de points (drag via onMouseDown)
+    if (points.length >= 3 && Math.hypot(x - points[0].x, y - points[0].y) < 12) {
       setClosed(true);
       toast.success(language === "fr"
         ? "Sélection fermée ! Déplacez les points pour affiner, puis cliquez Détourer."
         : "Selection closed! Drag points to refine, then click Cutout.");
       return;
     }
-    setPoints(prev => [...prev, pos]);
-  }, [mode, closed, points, getCoords, findPoint, language]);
+    setPoints(prev => [...prev, { x, y }]);
+  }, [mode, closed, points, language]);
+
+  // onMouseDown : uniquement pour démarrer le drag d'un point (polygone fermé)
+  const handleMouseDown = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    if (mode !== "manual" || !closed) return;
+    const c = canvasRef.current!;
+    const rect = c.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * c.width;
+    const y = ((e.clientY - rect.top) / rect.height) * c.height;
+    const idx = findPoint({ x, y });
+    if (idx !== null) setDragIdx(idx);
+  }, [mode, closed, findPoint]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     if (mode !== "manual") return;
-    const pos = getCoords(e);
-    setCursorPos(pos);
+    const c = canvasRef.current!;
+    const rect = c.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * c.width;
+    const y = ((e.clientY - rect.top) / rect.height) * c.height;
+    setCursorPos({ x, y });
     if (dragIdx !== null) {
-      setPoints(prev => { const n = [...prev]; n[dragIdx] = pos; return n; });
+      setPoints(prev => { const n = [...prev]; n[dragIdx] = { x, y }; return n; });
     }
-  }, [mode, dragIdx, getCoords]);
+  }, [mode, dragIdx]);
 
   const handleMouseUp = useCallback(() => {
     if (dragIdx !== null) setDragIdx(null);
@@ -221,13 +234,16 @@ export default function DetourageTab({
   const handleContextMenu = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (mode !== "manual") return;
-    const pos = getCoords(e);
-    const idx = findPoint(pos, 15);
+    const c = canvasRef.current!;
+    const rect = c.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * c.width;
+    const y = ((e.clientY - rect.top) / rect.height) * c.height;
+    const idx = findPoint({ x, y }, 15);
     if (idx !== null && points.length > 1) {
       setPoints(prev => prev.filter((_, i) => i !== idx));
       if (closed && points.length - 1 < 3) setClosed(false);
     }
-  }, [mode, points, closed, getCoords, findPoint]);
+  }, [mode, points, closed, findPoint]);
 
   const getCursor = (): string => {
     if (mode !== "manual") return "default";
@@ -434,6 +450,18 @@ export default function DetourageTab({
         {/* Canvas unique */}
         <div
           className={`flex-1 flex flex-col items-center justify-center rounded-xl p-4 transition-all ${isDragOver ? "bg-purple-100 border-2 border-dashed border-purple-400" : "bg-gray-100"}`}
+          onClickCapture={(e) => {
+            const target = e.target as HTMLElement;
+            console.log('[DetourageTab onClickCapture]', {
+              tagName: target.tagName,
+              className: target.className?.slice?.(0, 80),
+              id: target.id,
+              pointerEvents: window.getComputedStyle(target).pointerEvents,
+              zIndex: window.getComputedStyle(target).zIndex,
+              position: window.getComputedStyle(target).position,
+              isCanvas: target === canvasRef.current,
+            });
+          }}
           onDragOver={(e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDragOver(true); }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={(e: DragEvent<HTMLDivElement>) => {
@@ -450,11 +478,15 @@ export default function DetourageTab({
               height={imageSize.h}
               style={{
                 display: "block",
+                width: imageSize.w,
+                height: imageSize.h,
+                flexShrink: 0,
                 cursor: getCursor(),
                 borderRadius: 8,
                 boxShadow: "0 1px 3px rgba(0,0,0,.2)",
                 background: "repeating-conic-gradient(#ccc 0% 25%, white 0% 50%) 50% / 20px 20px",
               }}
+              onClick={handleClick}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}

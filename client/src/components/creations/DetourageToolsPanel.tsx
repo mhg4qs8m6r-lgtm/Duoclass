@@ -201,13 +201,7 @@ export default function DetourageToolsPanel({
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string>("");
   
-  // Notifier le parent quand le mode change
-  useEffect(() => {
-    if (onModeChange) {
-      onModeChange(mode, mode === "manual" ? manualTool : null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, manualTool]);
+  // (notification au parent déplacée dans handleModeChange / handleManualToolChange)
   
   // Modes principaux
   const mainModes = [
@@ -323,13 +317,17 @@ export default function DetourageToolsPanel({
   
   const handleModeChange = (newMode: DetourageMode) => {
     setMode(newMode);
-    // Réinitialiser l'état quand on change de mode
     setLastDetourageResult(null);
     setOriginalImage(null);
+    // Notifier le parent : mode seul, sans tool (le tool sera envoyé au clic sur l'outil)
+    onModeChange?.(newMode, null);
   };
-  
+
   const handleManualToolChange = (tool: ManualTool) => {
     setManualTool(tool);
+    if (mode === "manual") {
+      onModeChange?.(mode, tool);
+    }
   };
   
   return (
