@@ -172,6 +172,69 @@ const ContextMenuPositioned = ({
   );
 };
 
+// Composant helper : affiche une image via <canvas> drawImage (invisible pour Safari — pas de contrôles natifs)
+const CanvasImage = ({ src, className, dataElementId }: { src: string; className?: string; dataElementId?: string }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const draw = () => {
+      const img = imgRef.current;
+      if (!img || !img.complete) return;
+      // Adapter la résolution du canvas à la taille CSS affichée
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+
+    if (imgRef.current && imgRef.current.src === src && imgRef.current.complete) {
+      draw();
+      return;
+    }
+
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { imgRef.current = img; draw(); };
+    img.src = src;
+  }, [src]);
+
+  // Redessiner quand le canvas est redimensionné (zoom, resize poignée, etc.)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(() => {
+      const ctx = canvas.getContext('2d');
+      const img = imgRef.current;
+      if (!ctx || !img || !img.complete) return;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className={className}
+      data-element-id={dataElementId}
+      style={{ width: '100%', height: '100%', pointerEvents: 'none', userSelect: 'none' }}
+    />
+  );
+};
+
 /**
  * Génère le SVG path d'une pièce de puzzle avec encoches Bezier.
  * @param w Largeur de la pièce (en unités quelconques : px, mm, cm)
@@ -2643,31 +2706,38 @@ export default function CreationsAtelierV2({
     }
   };
 
-  const addToCanvas = (src: string, name?: string) => {
+  const addToCanvas = (src: string, name?: string, dropPositionCm?: { x: number; y: number }) => {
     // Charger l'image pour obtenir ses dimensions réelles en pixels
     const img = document.createElement('img');
     img.onload = () => {
       // Convertir les dimensions de l'image de pixels vers cm (résolution standard 96 DPI)
       let widthCm = img.naturalWidth / PX_PER_CM_STANDARD;
       let heightCm = img.naturalHeight / PX_PER_CM_STANDARD;
-      
+
       // Dimensions max en cm (80% du format papier)
       const formatWidthCm = orientation === "portrait" ? paperFormat.width : paperFormat.height;
       const formatHeightCm = orientation === "portrait" ? paperFormat.height : paperFormat.width;
       const maxWidthCm = formatWidthCm * 0.8;
       const maxHeightCm = formatHeightCm * 0.8;
-      
+
       // Redimensionner si nécessaire tout en gardant les proportions
       if (widthCm > maxWidthCm || heightCm > maxHeightCm) {
         const ratio = Math.min(maxWidthCm / widthCm, maxHeightCm / heightCm);
         widthCm = widthCm * ratio;
         heightCm = heightCm * ratio;
       }
-      
-      // Centrer l'image sur le format papier (en cm)
-      const xCm = (formatWidthCm - widthCm) / 2;
-      const yCm = (formatHeightCm - heightCm) / 2;
-      
+
+      // Position : utiliser le point de drop (centré sur l'image) ou centrer sur la page
+      let xCm: number;
+      let yCm: number;
+      if (dropPositionCm) {
+        xCm = dropPositionCm.x - widthCm / 2;
+        yCm = dropPositionCm.y - heightCm / 2;
+      } else {
+        xCm = (formatWidthCm - widthCm) / 2;
+        yCm = (formatHeightCm - heightCm) / 2;
+      }
+
       const newElement: CanvasElement = {
         id: `element-${Date.now()}`,
         type: "image",
@@ -5942,6 +6012,16 @@ export default function CreationsAtelierV2({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={async (e) => {
                   e.preventDefault();
+                  // Calculer la position du drop en cm (relative à la page blanche)
+                  let dropPositionCm: { x: number; y: number } | undefined;
+                  const page = pageRef.current;
+                  if (page) {
+                    const pageRect = page.getBoundingClientRect();
+                    const pxPerCm = canvasDimensions.pxPerCm;
+                    const dropXcm = (e.clientX - pageRect.left) / pxPerCm;
+                    const dropYcm = (e.clientY - pageRect.top) / pxPerCm;
+                    dropPositionCm = { x: dropXcm, y: dropYcm };
+                  }
                   // 1) Fichiers glissés depuis le bureau
                   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                     const files = Array.from(e.dataTransfer.files).filter(f =>
@@ -5956,20 +6036,20 @@ export default function CreationsAtelierV2({
                           reader.readAsDataURL(file);
                         });
                         const name = file.name.replace(/\.[^/.]+$/, "");
-                        addToCanvas(dataUrl, name);
+                        addToCanvas(dataUrl, name, dropPositionCm);
                       } catch (err) {
                         console.error("Erreur import fichier sur canvas:", err);
                       }
                     }
                     if (files.length > 0) return;
                   }
-                  // 2) Données internes (panier, bibliothèque)
+                  // 2) Données internes (panier, bibliothèque, collecteur)
                   const data = e.dataTransfer.getData("text/plain");
                   if (data) {
                     try {
                       const item = JSON.parse(data);
                       if (item.src) {
-                        addToCanvas(item.src, item.name);
+                        addToCanvas(item.src, item.name, dropPositionCm);
                         const basketItem = basketItems.find(b => b.photoUrl === item.src);
                         if (basketItem) {
                           if (basketItem.id !== undefined) if (basketItem.id !== undefined) await removeFromCreationsBasket(basketItem.id);
@@ -5977,7 +6057,7 @@ export default function CreationsAtelierV2({
                       }
                     } catch {
                       if (data.startsWith("data:") || data.startsWith("http")) {
-                        addToCanvas(data);
+                        addToCanvas(data, undefined, dropPositionCm);
                       }
                     }
                   }
@@ -6278,12 +6358,9 @@ export default function CreationsAtelierV2({
                       }}
                     >
                     {element.type === "image" && element.src && (
-                      <img
+                      <CanvasImage
                         src={element.src}
-                        alt={element.name || ""}
-                        className="w-full h-full object-fill"
-                        draggable={false}
-                        data-element-id={element.id}
+                        dataElementId={element.id}
                       />
                     )}
 
@@ -6709,6 +6786,30 @@ export default function CreationsAtelierV2({
                             onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
                           >
                             <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
+                          </div>
+                        )}
+                        {/* Bouton "Valider le détourage" — envoie l'image dans le collecteur (éléments image uniquement) */}
+                        {selectedElementId === element.id && element.type === 'image' && element.src && (
+                          <div
+                            className="absolute -top-9 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 hover:bg-purple-50 text-purple-700 rounded-full px-3 py-1 shadow-lg cursor-pointer z-[120] flex items-center gap-1.5 whitespace-nowrap"
+                            draggable={false}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newItem: CollectorItem = {
+                                id: `collector_${Date.now()}`,
+                                type: 'detourage',
+                                src: element.src!,
+                                name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
+                                thumbnail: element.src!
+                              };
+                              setCollectorItems(prev => [...prev, newItem]);
+                              toast.success(language === 'fr' ? 'Pièce envoyée vers "Pièces détourées"' : 'Piece sent to "Cutout pieces"');
+                            }}
+                          >
+                            <span className="text-[11px] font-semibold">
+                              {language === 'fr' ? '→ Envoyer vers Pièces détourées' : '→ Send to Cutout pieces'}
+                            </span>
                           </div>
                         )}
                         {/* Bouton menu contextuel ⋮ (en haut à droite de l'élément sélectionné) */}
@@ -7662,7 +7763,7 @@ export default function CreationsAtelierV2({
           {/* ZONE DROITE UNIFIÉE : Pièces détourées + Photos/Images */}
           <div className="w-56 bg-gray-50 border-l flex flex-col relative z-[1100]">
             {/* Section 1 : Pièces détourées (moitié haute) */}
-            <div 
+            <div
               className="flex-1 flex flex-col border-b min-h-0"
               onDragOver={(e) => {
                 e.preventDefault();
@@ -7709,27 +7810,33 @@ export default function CreationsAtelierV2({
                   {collectorItems.map((item) => (
                     <div
                       key={item.id}
-                      className="relative bg-white rounded border shadow-sm cursor-pointer transition-all duration-200 group w-16 h-auto"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("text/plain", JSON.stringify({ src: item.src, name: item.name }));
-                      }}
-                      onDoubleClick={() => addToCanvas(item.src, item.name)}
+                      className="relative bg-white rounded border shadow-sm transition-all duration-200 group w-16 h-auto"
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setHoveredThumbnail({ src: item.thumbnail || item.src, name: item.name, rect, type: 'collector' });
                       }}
                       onMouseLeave={() => setHoveredThumbnail(null)}
-                      title={`${item.name}\n${language === "fr" ? "Double-clic ou glisser vers le canvas" : "Double-click or drag to canvas"}`}
                     >
                       <img
                         src={item.thumbnail || item.src}
                         alt={item.name}
                         className="w-full h-auto object-contain rounded bg-[url('/images/transparent-bg.png')] bg-repeat"
                       />
-                      {/* Bouton supprimer — toujours visible */}
+                      {/* Bouton Utiliser — ajouter au canvas d'assemblage */}
                       <button
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 z-10"
+                        className="absolute -bottom-1 -right-1 bg-green-500 hover:bg-green-600 text-white rounded-full p-0.5 z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCanvas(item.src, item.name);
+                          setActiveMainTab("assemblage");
+                        }}
+                        title={language === "fr" ? "Utiliser sur le canvas" : "Use on canvas"}
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                      </button>
+                      {/* Bouton supprimer */}
+                      <button
+                        className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-0.5 z-10"
                         onClick={(e) => {
                           e.stopPropagation();
                           setCollectorItems(prev => prev.filter(i => i.id !== item.id));
@@ -7752,7 +7859,7 @@ export default function CreationsAtelierV2({
             </div>
             
             {/* Section 2 : Photos/Images (moitié basse) */}
-            <div 
+            <div
               className="flex-1 flex flex-col min-h-0"
               onDragOver={(e) => {
                 e.preventDefault();
