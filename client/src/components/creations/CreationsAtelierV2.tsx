@@ -111,6 +111,15 @@ interface CollectorItem {
   src: string;
   name: string;
   thumbnail?: string;
+  widthCm?: number;        // Largeur sur le canvas au moment de l'envoi
+  heightCm?: number;       // Hauteur sur le canvas au moment de l'envoi
+  groupId?: string;        // ID du groupe d'origine (pour garder le lien)
+  groupSrcs?: string[];    // Toutes les sources du groupe (quand fusionné)
+  groupNames?: string[];   // Noms correspondants
+  groupWidths?: number[];  // Largeurs cm de chaque membre
+  groupHeights?: number[]; // Hauteurs cm de chaque membre
+  groupXs?: number[];      // Positions X cm de chaque membre
+  groupYs?: number[];      // Positions Y cm de chaque membre
 }
 
 // Onglets principaux
@@ -628,14 +637,79 @@ export default function CreationsAtelierV2({
   const [activeAssemblageSubTab] = useState<AssemblageSubTab>("bibliotheque");
   
   // Éléments sur le canvas
-  const [canvasElements, setCanvasElements] = useState<CanvasElement[]>([]);
+  const [canvasElements, setCanvasElementsRaw] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+  // ── Historique Undo ──
+  const undoStackRef = useRef<CanvasElement[][]>([]);
+  const [undoCount, setUndoCount] = useState(0);
+  const canvasElementsRef = useRef<CanvasElement[]>([]);
+  const undoBatchActiveRef = useRef(false);
+  const lastSnapshotJsonRef = useRef(''); // empêche les doublons
+  const MAX_UNDO = 50;
+
+  // Sauvegarder un snapshot seulement si le contenu a changé
+  const pushSnapshot = useCallback((snapshot: CanvasElement[]) => {
+    const json = JSON.stringify(snapshot);
+    if (json === lastSnapshotJsonRef.current) return; // identique → ignorer
+    lastSnapshotJsonRef.current = json;
+    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), snapshot];
+    setUndoCount(undoStackRef.current.length);
+    console.log("[Undo] snapshot saved, stack size:", undoStackRef.current.length);
+  }, []);
+
+  // Début d'action continue (drag, resize) : sauvegarder et verrouiller
+  const undoBatchStart = useCallback(() => {
+    if (!undoBatchActiveRef.current) {
+      pushSnapshot(canvasElementsRef.current);
+      undoBatchActiveRef.current = true;
+    }
+  }, [pushSnapshot]);
+
+  // Fin d'action continue : déverrouiller
+  const undoBatchEnd = useCallback(() => { undoBatchActiveRef.current = false; }, []);
+
+  // Wrapper setCanvasElements : sauvegarde l'état AVANT la mutation seulement si changé
+  const setCanvasElements: typeof setCanvasElementsRaw = useCallback((action) => {
+    if (!undoBatchActiveRef.current) {
+      setCanvasElementsRaw(prev => {
+        const next = typeof action === 'function' ? (action as (p: CanvasElement[]) => CanvasElement[])(prev) : action;
+        // Ne sauvegarder que si le contenu a réellement changé
+        if (prev !== next && JSON.stringify(prev) !== JSON.stringify(next)) {
+          pushSnapshot(prev);
+        }
+        return next;
+      });
+    } else {
+      setCanvasElementsRaw(action);
+    }
+  }, [pushSnapshot]);
+
+  // Garder la ref synchrone
+  useEffect(() => { canvasElementsRef.current = canvasElements; }, [canvasElements]);
+
+  // Undo : restaurer le dernier snapshot
+  const handleUndo = useCallback(() => {
+    const stack = undoStackRef.current;
+    console.log("[Undo] Revenir pressed, stack size:", stack.length);
+    if (stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    setCanvasElementsRaw(prev);
+    setSelectedElementId(null);
+    setSelectedElementIds(new Set());
+    undoBatchActiveRef.current = false;
+    setUndoCount(undoStackRef.current.length);
+    console.log("[Undo] restored to", prev.length, "elements, remaining stack:", undoStackRef.current.length);
+  }, []);
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
   // Modale d'aperçu SVG laser
   const [svgPreviewModal, setSvgPreviewModal] = useState<{ svgContent: string; filename: string } | null>(null);
   
   // Refs pour le déplacement groupé (multi-sélection)
   const multiDragStartPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  // Ref pour le redimensionnement groupé : stocke { x, y, width, height } de chaque membre au début du resize
+  const groupResizeStart = useRef<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
   
   // Photos sources (colonne de droite extrême)
   const [sourcePhotos, setSourcePhotos] = useState<CollectorItem[]>([]);
@@ -734,7 +808,9 @@ export default function CreationsAtelierV2({
   
   // État pour la sauvegarde automatique
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true); // Toggle auto-save ON/OFF
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInitialLoadRef = useRef(true); // Pour éviter la sauvegarde au chargement initial
   const autoSaveCounterRef = useRef(0); // Compteur pour éviter les sauvegardes en boucle
   const justDidRightClickRef = useRef(false); // Flag pour empêcher onClick de désélectionner après un clic droit
@@ -860,6 +936,12 @@ export default function CreationsAtelierV2({
     name: string;
     rect: DOMRect;
     type: 'collector' | 'basket';
+    groupSrcs?: string[];    // Pour afficher toutes les images d'un groupe dans le preview
+    groupNames?: string[];
+    groupWidths?: number[];
+    groupHeights?: number[];
+    groupXs?: number[];
+    groupYs?: number[];
   } | null>(null);
   
   // Fermer automatiquement le survol après 3 secondes ou au scroll/clic
@@ -1103,6 +1185,14 @@ export default function CreationsAtelierV2({
     if (!isOpen) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z / Cmd+Z : Undo
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
       // Ctrl+A : tout sélectionner
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         // Ne pas intercepter si on est dans un input
@@ -1192,7 +1282,7 @@ export default function CreationsAtelierV2({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, canvasElements, selectedElementIds, language]);
+  }, [isOpen, canvasElements, selectedElementIds, language, handleUndo]);
   
   // Marquer la fin du chargement initial après un délai
   useEffect(() => {
@@ -1313,11 +1403,51 @@ export default function CreationsAtelierV2({
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, isOpen]);
-  
-  // Ref pour accéder aux éléments canvas courants sans les mettre dans les dépendances du useEffect.
-  // Cela évite que le useEffect se re-déclenche à chaque re-render du parent.
-  const canvasElementsRef = useRef(canvasElements);
-  useEffect(() => { canvasElementsRef.current = canvasElements; });
+
+  // ── Auto-save localStorage (toutes les 2 minutes) ──
+  const AUTOSAVE_LS_KEY = 'creations-atelier-autosave';
+  useEffect(() => {
+    if (!isOpen || !autoSaveEnabled) {
+      if (autoSaveIntervalRef.current) { clearInterval(autoSaveIntervalRef.current); autoSaveIntervalRef.current = null; }
+      return;
+    }
+    autoSaveIntervalRef.current = setInterval(() => {
+      try {
+        const snapshot = JSON.stringify({
+          canvasElements: canvasElementsRef.current,
+          collectorItems,
+          paperFormat: paperFormat.id,
+          ...(paperFormat.id === 'custom' ? { customWidth, customHeight } : {}),
+          orientation,
+          imageZoom,
+          projectName: currentProjectName,
+          projectId: currentProjectId,
+          timestamp: Date.now(),
+        });
+        localStorage.setItem(AUTOSAVE_LS_KEY, snapshot);
+      } catch { /* localStorage plein — on ignore silencieusement */ }
+    }, 120_000); // 2 minutes
+    return () => { if (autoSaveIntervalRef.current) clearInterval(autoSaveIntervalRef.current); };
+  }, [isOpen, autoSaveEnabled, collectorItems, paperFormat, orientation, imageZoom, currentProjectName, currentProjectId, customWidth, customHeight]);
+
+  // ── Restauration auto-save au montage ──
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const pendingRestoreRef = useRef<any>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_LS_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      // Proposer la restauration si la sauvegarde a moins de 24h
+      if (data.timestamp && Date.now() - data.timestamp < 86_400_000) {
+        pendingRestoreRef.current = data;
+        setShowRestoreModal(true);
+      }
+    } catch { /* JSON invalide */ }
+  }, [isOpen]);
+
+  // canvasElementsRef est déclaré plus haut avec l'historique Undo et synchronisé via useEffect.
   // IDs stables des éléments image sur le canvas (primitif string, stable comme dépendance).
   // Quand onDuplicateElement remplace l'élément original par des copies, les IDs changent
   // et le useEffect alpha tracing doit se re-déclencher pour calculer les paths des copies.
@@ -1819,16 +1949,29 @@ export default function CreationsAtelierV2({
   
   // === GROUPEMENT D'ÉLÉMENTS ===
   
-  // Grouper les éléments sélectionnés
+  // Grouper les éléments sélectionnés (ramène les éléments hors-canvas si nécessaire)
   const handleGroupElements = () => {
     if (selectedElementIds.size < 2) {
       toast.info(language === 'fr' ? 'Sélectionnez au moins 2 éléments pour grouper' : 'Select at least 2 elements to group');
       return;
     }
     const groupId = `group-${Date.now()}`;
-    setCanvasElements(prev => prev.map(el => 
-      selectedElementIds.has(el.id) ? { ...el, groupId } : el
-    ));
+    setCanvasElements(prev => {
+      // Trouver les coordonnées min des membres pour détecter les positions négatives
+      const members = prev.filter(el => selectedElementIds.has(el.id));
+      const minX = Math.min(...members.map(el => el.x));
+      const minY = Math.min(...members.map(el => el.y));
+      const shiftX = minX < 0 ? -minX : 0;
+      const shiftY = minY < 0 ? -minY : 0;
+      const updated = prev.map(el => {
+        if (!selectedElementIds.has(el.id)) return el;
+        return { ...el, groupId, x: el.x + shiftX, y: el.y + shiftY };
+      });
+      // DEBUG: confirmer l'assignation du groupId
+      const grouped = updated.filter(el => el.groupId === groupId);
+      console.log('[GROUP] groupé:', grouped.map(e => e.id + '→' + e.groupId));
+      return updated;
+    });
     toast.success(language === 'fr' ? `${selectedElementIds.size} éléments groupés` : `${selectedElementIds.size} elements grouped`);
   };
   
@@ -1868,6 +2011,7 @@ export default function CreationsAtelierV2({
     }
   };
   
+
   // === EXPORT : Télécharger, Imprimer, @Mail ===
   const [isExporting, setIsExporting] = useState(false);
   
@@ -2706,7 +2850,16 @@ export default function CreationsAtelierV2({
     }
   };
 
-  const addToCanvas = (src: string, name?: string, dropPositionCm?: { x: number; y: number }) => {
+  const addToCanvas = (src: string, name?: string, dropPositionCmOrGroupId?: { x: number; y: number } | string, groupIdArg?: string) => {
+    // Surcharge : (src, name, groupId) ou (src, name, dropPosition, groupId)
+    let dropPositionCm: { x: number; y: number } | undefined;
+    let assignGroupId: string | undefined;
+    if (typeof dropPositionCmOrGroupId === 'string') {
+      assignGroupId = dropPositionCmOrGroupId;
+    } else {
+      dropPositionCm = dropPositionCmOrGroupId;
+      assignGroupId = groupIdArg;
+    }
     // Charger l'image pour obtenir ses dimensions réelles en pixels
     const img = document.createElement('img');
     img.onload = () => {
@@ -2739,7 +2892,7 @@ export default function CreationsAtelierV2({
       }
 
       const newElement: CanvasElement = {
-        id: `element-${Date.now()}`,
+        id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: "image",
         src,
         x: xCm, // Position en cm
@@ -2751,7 +2904,8 @@ export default function CreationsAtelierV2({
         opacity: 1,
         name: name || (language === 'fr' ? 'Élément' : 'Element'),
         originalWidthPx: img.naturalWidth,
-        originalHeightPx: img.naturalHeight
+        originalHeightPx: img.naturalHeight,
+        ...(assignGroupId ? { groupId: assignGroupId } : {}),
       };
       setCanvasElements(prev => [...prev, newElement]);
       setSelectedElementId(newElement.id);
@@ -2881,26 +3035,59 @@ export default function CreationsAtelierV2({
   const alignSelected = (direction: 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom') => {
     const selected = canvasElements.filter(el => selectedElementIds.has(el.id));
     if (selected.length < 2) return;
+
+    // Regrouper en "unités" : un groupe = 1 unité (bounding box), un élément seul = 1 unité
+    type AlignUnit = { ids: string[]; x: number; y: number; w: number; h: number };
+    const units: AlignUnit[] = [];
+    const processed = new Set<string>();
+    for (const el of selected) {
+      if (processed.has(el.id)) continue;
+      if (el.groupId) {
+        // Tous les membres du même groupe sélectionnés
+        const members = selected.filter(m => m.groupId === el.groupId);
+        const minX = Math.min(...members.map(m => m.x));
+        const minY = Math.min(...members.map(m => m.y));
+        const maxX = Math.max(...members.map(m => m.x + m.width));
+        const maxY = Math.max(...members.map(m => m.y + m.height));
+        units.push({ ids: members.map(m => m.id), x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+        members.forEach(m => processed.add(m.id));
+      } else {
+        units.push({ ids: [el.id], x: el.x, y: el.y, w: el.width, h: el.height });
+        processed.add(el.id);
+      }
+    }
+    if (units.length < 2) return;
+
+    // Calculer la référence d'alignement sur les unités
     let ref: number;
     switch (direction) {
-      case 'left':    ref = Math.min(...selected.map(el => el.x)); break;
-      case 'right':   ref = Math.max(...selected.map(el => el.x + el.width)); break;
-      case 'centerH': ref = (Math.min(...selected.map(el => el.x)) + Math.max(...selected.map(el => el.x + el.width))) / 2; break;
-      case 'top':     ref = Math.min(...selected.map(el => el.y)); break;
-      case 'bottom':  ref = Math.max(...selected.map(el => el.y + el.height)); break;
-      case 'centerV': ref = (Math.min(...selected.map(el => el.y)) + Math.max(...selected.map(el => el.y + el.height))) / 2; break;
+      case 'left':    ref = Math.min(...units.map(u => u.x)); break;
+      case 'right':   ref = Math.max(...units.map(u => u.x + u.w)); break;
+      case 'centerH': ref = (Math.min(...units.map(u => u.x)) + Math.max(...units.map(u => u.x + u.w))) / 2; break;
+      case 'top':     ref = Math.min(...units.map(u => u.y)); break;
+      case 'bottom':  ref = Math.max(...units.map(u => u.y + u.h)); break;
+      case 'centerV': ref = (Math.min(...units.map(u => u.y)) + Math.max(...units.map(u => u.y + u.h))) / 2; break;
     }
-    setCanvasElements(prev => prev.map(el => {
-      if (!selectedElementIds.has(el.id)) return el;
+
+    // Calculer le delta de chaque unité, puis appliquer le même delta à tous ses membres
+    const deltas = new Map<string, { dx: number; dy: number }>();
+    for (const unit of units) {
+      let dx = 0, dy = 0;
       switch (direction) {
-        case 'left':    return { ...el, x: ref };
-        case 'right':   return { ...el, x: ref - el.width };
-        case 'centerH': return { ...el, x: ref - el.width / 2 };
-        case 'top':     return { ...el, y: ref };
-        case 'bottom':  return { ...el, y: ref - el.height };
-        case 'centerV': return { ...el, y: ref - el.height / 2 };
-        default: return el;
+        case 'left':    dx = ref - unit.x; break;
+        case 'right':   dx = ref - (unit.x + unit.w); break;
+        case 'centerH': dx = ref - (unit.x + unit.w / 2); break;
+        case 'top':     dy = ref - unit.y; break;
+        case 'bottom':  dy = ref - (unit.y + unit.h); break;
+        case 'centerV': dy = ref - (unit.y + unit.h / 2); break;
       }
+      for (const id of unit.ids) deltas.set(id, { dx, dy });
+    }
+
+    setCanvasElements(prev => prev.map(el => {
+      const d = deltas.get(el.id);
+      if (!d) return el;
+      return { ...el, x: el.x + d.dx, y: el.y + d.dy };
     }));
     const labels: Record<string, string> = {
       left: 'Alignés à gauche', right: 'Alignés à droite', centerH: 'Centrés horizontalement',
@@ -2909,46 +3096,63 @@ export default function CreationsAtelierV2({
     toast.success(labels[direction] ?? 'Alignés');
   };
 
-  // Distribuer l'écartement égal entre les éléments sélectionnés
+  // Distribuer l'écartement égal entre les unités sélectionnées (groupe = 1 bloc)
   const distributeSelected = (axis: 'horizontal' | 'vertical') => {
     const selected = canvasElements.filter(el => selectedElementIds.has(el.id));
-    if (selected.length < 3) {
-      toast.info(language === 'fr' ? 'Sélectionnez au moins 3 éléments pour distribuer' : 'Select at least 3 elements to distribute');
+    // Construire les unités (même logique que alignSelected)
+    type DistUnit = { ids: string[]; x: number; y: number; w: number; h: number };
+    const units: DistUnit[] = [];
+    const processed = new Set<string>();
+    for (const el of selected) {
+      if (processed.has(el.id)) continue;
+      if (el.groupId) {
+        const members = selected.filter(m => m.groupId === el.groupId);
+        const minX = Math.min(...members.map(m => m.x));
+        const minY = Math.min(...members.map(m => m.y));
+        const maxX = Math.max(...members.map(m => m.x + m.width));
+        const maxY = Math.max(...members.map(m => m.y + m.height));
+        units.push({ ids: members.map(m => m.id), x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+        members.forEach(m => processed.add(m.id));
+      } else {
+        units.push({ ids: [el.id], x: el.x, y: el.y, w: el.width, h: el.height });
+        processed.add(el.id);
+      }
+    }
+    if (units.length < 3) {
+      toast.info(language === 'fr' ? 'Sélectionnez au moins 3 éléments/groupes pour distribuer' : 'Select at least 3 elements/groups to distribute');
       return;
     }
+    const deltas = new Map<string, { dx: number; dy: number }>();
     if (axis === 'horizontal') {
-      // Trier par position X
-      const sorted = [...selected].sort((a, b) => a.x - b.x);
+      const sorted = [...units].sort((a, b) => a.x - b.x);
       const first = sorted[0];
       const last = sorted[sorted.length - 1];
-      const totalWidth = sorted.reduce((sum, el) => sum + el.width, 0);
-      const gap = (last.x + last.width - first.x - totalWidth) / (sorted.length - 1);
-      let currentX = first.x;
-      const positions: Record<string, number> = {};
-      for (const el of sorted) {
-        positions[el.id] = currentX;
-        currentX += el.width + gap;
+      const totalW = sorted.reduce((s, u) => s + u.w, 0);
+      const gap = (last.x + last.w - first.x - totalW) / (sorted.length - 1);
+      let cx = first.x;
+      for (const u of sorted) {
+        const dx = cx - u.x;
+        for (const id of u.ids) deltas.set(id, { dx, dy: 0 });
+        cx += u.w + gap;
       }
-      setCanvasElements(prev => prev.map(el =>
-        positions[el.id] !== undefined ? { ...el, x: positions[el.id] } : el
-      ));
     } else {
-      // Trier par position Y
-      const sorted = [...selected].sort((a, b) => a.y - b.y);
+      const sorted = [...units].sort((a, b) => a.y - b.y);
       const first = sorted[0];
       const last = sorted[sorted.length - 1];
-      const totalHeight = sorted.reduce((sum, el) => sum + el.height, 0);
-      const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1);
-      let currentY = first.y;
-      const positions: Record<string, number> = {};
-      for (const el of sorted) {
-        positions[el.id] = currentY;
-        currentY += el.height + gap;
+      const totalH = sorted.reduce((s, u) => s + u.h, 0);
+      const gap = (last.y + last.h - first.y - totalH) / (sorted.length - 1);
+      let cy = first.y;
+      for (const u of sorted) {
+        const dy = cy - u.y;
+        for (const id of u.ids) deltas.set(id, { dx: 0, dy });
+        cy += u.h + gap;
       }
-      setCanvasElements(prev => prev.map(el =>
-        positions[el.id] !== undefined ? { ...el, y: positions[el.id] } : el
-      ));
     }
+    setCanvasElements(prev => prev.map(el => {
+      const d = deltas.get(el.id);
+      if (!d) return el;
+      return { ...el, x: el.x + d.dx, y: el.y + d.dy };
+    }));
     toast.success(language === 'fr'
       ? (axis === 'horizontal' ? 'Espacement horizontal égalisé' : 'Espacement vertical égalisé')
       : (axis === 'horizontal' ? 'Horizontal spacing equalized' : 'Vertical spacing equalized')
@@ -3156,6 +3360,9 @@ export default function CreationsAtelierV2({
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
 
+    // Snapshot undo au début du drag (pas à chaque mousemove)
+    undoBatchStart();
+
     e.preventDefault();
     e.stopPropagation();
     
@@ -3208,6 +3415,10 @@ export default function CreationsAtelierV2({
       startPositions.set(elementId, { x: element.x, y: element.y });
     }
     multiDragStartPositions.current = startPositions;
+    // DEBUG: vérifier la sélection groupée
+    console.log('[GROUP] clic sur:', elementId, 'groupId:', element.groupId,
+      'effectiveIds:', Array.from(effectiveSelection),
+      'multiDragIds:', Array.from(startPositions.keys()));
   };
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -3244,6 +3455,8 @@ export default function CreationsAtelierV2({
     const deltaYCm = (e.clientY - dragStart.y) / pxPerCm;
     
     // Déplacement groupé : déplacer tous les éléments sélectionnés
+    console.log('[GROUP] multiDragIds:', Array.from(multiDragStartPositions.current.keys()),
+      'path:', multiDragStartPositions.current.size > 1 ? 'MULTI' : 'SINGLE');
     if (multiDragStartPositions.current.size > 1) {
       setCanvasElements(prev => prev.map(el => {
         const startPos = multiDragStartPositions.current.get(el.id);
@@ -3428,6 +3641,8 @@ export default function CreationsAtelierV2({
   };
   
   const handleMouseUp = useCallback(() => {
+    // Fin d'action continue → déverrouiller le batch undo
+    undoBatchEnd();
     // Fin du drag du point de contrôle de la courbe
     if (isDraggingCtrl) {
       setIsDraggingCtrl(false);
@@ -3443,13 +3658,14 @@ export default function CreationsAtelierV2({
     setElementStartSize(null);
     setResizeHandle(null);
     setRotationCenterRef(null);
-  }, [isDraggingCtrl]);
+  }, [isDraggingCtrl, undoBatchEnd]);
 
   // Démarrer la rotation libre
   const handleRotateStart = (e: React.MouseEvent, elementId: string) => {
     if (isLineDrawMode) return;
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
+    undoBatchStart();
     e.preventDefault();
     e.stopPropagation();
     // Centre de l'élément en coordonnées écran
@@ -3486,15 +3702,27 @@ export default function CreationsAtelierV2({
     if (isLineDrawMode) return;
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
+    undoBatchStart();
 
     e.preventDefault();
     e.stopPropagation();
-    
+
     setIsResizing(true);
     setResizeHandle(handle);
     setDragStart({ x: e.clientX, y: e.clientY });
     setElementStartPos({ x: element.x, y: element.y });
     setElementStartSize({ width: element.width, height: element.height });
+
+    // Sauvegarder les dimensions de départ de tous les membres du groupe pour le resize groupé
+    const grs = new Map<string, { x: number; y: number; width: number; height: number }>();
+    if (element.groupId) {
+      canvasElements.forEach(el => {
+        if (el.groupId === element.groupId && !el.locked) {
+          grs.set(el.id, { x: el.x, y: el.y, width: el.width, height: el.height });
+        }
+      });
+    }
+    groupResizeStart.current = grs;
   };
   
   const handleResizeMove = useCallback((e: React.MouseEvent) => {
@@ -3659,14 +3887,39 @@ export default function CreationsAtelierV2({
     newWidth = Math.max(MIN_SIZE_CM, newWidth);
     newHeight = Math.max(MIN_SIZE_CM, newHeight);
 
-    const updatePayload = {
+    const updatePayload: Partial<CanvasElement> = {
       width: newWidth,
       height: newHeight,
       x: newX,
       y: newY,
       ...(customPathUpdate !== undefined ? { customPath: customPathUpdate } : {}),
     };
-    updateCanvasElement(selectedElementId, updatePayload);
+
+    // Redimensionnement groupé : appliquer le même facteur d'échelle à tous les membres
+    if (groupResizeStart.current.size > 1) {
+      const scaleX = newWidth / elementStartSize.width;
+      const scaleY = newHeight / elementStartSize.height;
+      // Décalage de l'ancre (coin de référence de l'élément principal)
+      const anchorX = elementStartPos.x;
+      const anchorY = elementStartPos.y;
+      setCanvasElements(prev => prev.map(el => {
+        const startData = groupResizeStart.current.get(el.id);
+        if (!startData || el.locked) return el;
+        if (el.id === selectedElementId) {
+          return { ...el, ...updatePayload };
+        }
+        // Appliquer l'échelle : position relative à l'ancre + taille
+        return {
+          ...el,
+          x: newX + (startData.x - anchorX) * scaleX,
+          y: newY + (startData.y - anchorY) * scaleY,
+          width: startData.width * scaleX,
+          height: startData.height * scaleY,
+        };
+      }));
+    } else {
+      updateCanvasElement(selectedElementId, updatePayload);
+    }
   }, [isResizing, dragStart, elementStartSize, elementStartPos, selectedElementId, resizeHandle, canvasDimensions.pxPerCm, canvasElements]);
   
   if (!isOpen) return null;
@@ -5957,8 +6210,6 @@ export default function CreationsAtelierV2({
                 }}
                 onMouseLeave={() => {
                   if (isLineDrawMode && lineDrawStartRef.current) {
-                    // Annuler le segment en cours mais conserver la chaîne
-                    // (lineDrawStartRef.current reste défini pour le prochain segment)
                     setLineDrawEnd(null);
                     lineDrawEndRef.current = null;
                   }
@@ -6261,7 +6512,7 @@ export default function CreationsAtelierV2({
                             </>
                           );
                         })()}
-                        {/* Poignées aux extrémités (seulement si sélectionné) */}
+                        {/* Poignées aux extrémités (seulement si sélectionné et non groupé) */}
                         {isSelected && !isLineDrawMode && (
                           <>
                             {/* Extrémité gauche (point de départ) */}
@@ -6286,36 +6537,34 @@ export default function CreationsAtelierV2({
                     <div
                       key={element.id}
                       data-canvas-element="true"
-                      className={`absolute ${element.locked ? "cursor-not-allowed" : isDragging && (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"} ${
-                        // Pas de ring rectangulaire sur les shapes (le contour SVG suffit) ni les lignes
-                        element.type === 'shape' ? '' :
-                        isMultiMode && isInMultiSelection && isSelected
-                          ? "ring-2 ring-purple-500 ring-offset-1" // Élément principal dans la multi-sélection
-                          : isMultiMode && isInMultiSelection
-                            ? "ring-2 ring-blue-400 ring-offset-1" // Élément secondaire dans la multi-sélection
-                            : isSelected && !isMultiMode
-                              ? "ring-2 ring-purple-500" // Sélection simple
-                              : element.groupId
-                                ? "ring-1 ring-dashed ring-emerald-400" // Élément groupé (non sélectionné)
-                                : ""
-                      }`}
+                      className={`absolute ${element.locked ? "cursor-not-allowed" : isDragging && (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"}`}
+                      // Bordure appliquée via style pour supporter les pointillés sur les groupes
+                      data-grouped={element.groupId ? "true" : undefined}
                       style={{
                         left: elementLeftPx,
                         top: elementTopPx,
                         width: elementWidthPx,
                         height: elementHeightPx,
                         transform: `rotate(${element.rotation}deg) ${element.flipX ? "scaleX(-1)" : ""} ${element.flipY ? "scaleY(-1)" : ""}`,
-                        // Pour la forme 'line' : pivoter depuis le point de départ (gauche, milieu)
-                        // Cela garantit que la ligne reste ancrée à (x,y) quelle que soit l'orientation
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
-                        zIndex: element.zIndex, // Conserver le z-index de l'élément même s'il est sélectionné
+                        zIndex: element.zIndex,
                         opacity: element.opacity,
                         transition: (isDragging || isResizing) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
-                        // overflow:visible obligatoire pour que les poignées de redimensionnement
-                        // (positionnées hors des limites du div) restent visibles et cliquables
                         overflow: 'visible',
-                        // Agrandir la zone de clic invisible pour faciliter la sélection de la ligne
+                        // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
+                        outline: element.type !== 'shape' ? (
+                          element.groupId && isInMultiSelection
+                            ? '2px dashed #a855f7'
+                            : isMultiMode && isInMultiSelection && isSelected
+                              ? '2px solid #a855f7'
+                              : isMultiMode && isInMultiSelection
+                                ? '2px solid #60a5fa'
+                                : isSelected && !isMultiMode
+                                  ? '2px solid #a855f7'
+                                  : 'none'
+                        ) : 'none',
+                        outlineOffset: isInMultiSelection || isSelected ? '2px' : undefined,
                         paddingTop: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
@@ -6324,6 +6573,23 @@ export default function CreationsAtelierV2({
                       draggable={false}
                       onMouseDown={(e) => handleMouseDown(e, element.id)}
                       onContextMenu={(e) => handleContextMenu(e, element.id)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        if (element.groupId) {
+                          // Double-clic sur un élément groupé → proposer de dégrouper
+                          if (window.confirm(language === 'fr'
+                            ? 'Dégrouper pour modifier cet élément individuellement ?'
+                            : 'Ungroup to edit this element individually?'
+                          )) {
+                            setCanvasElements(prev => prev.map(el =>
+                              el.groupId === element.groupId ? { ...el, groupId: undefined } : el
+                            ));
+                            setSelectedElementIds(new Set([element.id]));
+                            setSelectedElementId(element.id);
+                            toast.success(language === 'fr' ? 'Groupe dégroupé' : 'Group ungrouped');
+                          }
+                        }
+                      }}
                       onClick={(e) => {
                         // Empêcher la propagation vers la page blanche (évite la désélection involontaire)
                         e.stopPropagation();
@@ -6796,15 +7062,44 @@ export default function CreationsAtelierV2({
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
-                              const newItem: CollectorItem = {
-                                id: `collector_${Date.now()}`,
-                                type: 'detourage',
-                                src: element.src!,
-                                name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
-                                thumbnail: element.src!
-                              };
-                              setCollectorItems(prev => [...prev, newItem]);
-                              toast.success(language === 'fr' ? 'Pièce envoyée vers "Pièces détourées"' : 'Piece sent to "Cutout pieces"');
+                              if (element.groupId) {
+                                // Groupe → fusionner en UNE seule entrée collecteur avec dimensions canvas
+                                const groupImages = canvasElements.filter(el => el.groupId === element.groupId && el.type === 'image' && el.src);
+                                if (groupImages.length === 0) return;
+                                const newItem: CollectorItem = {
+                                  id: `collector_${Date.now()}`,
+                                  type: 'detourage',
+                                  src: groupImages[0].src!,
+                                  name: (language === 'fr' ? 'Groupe détouré' : 'Cutout group') + ` (${groupImages.length})`,
+                                  thumbnail: groupImages[0].src!,
+                                  widthCm: groupImages[0].width,
+                                  heightCm: groupImages[0].height,
+                                  groupId: element.groupId,
+                                  groupSrcs: groupImages.map(el => el.src!),
+                                  groupNames: groupImages.map(el => el.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece')),
+                                  groupWidths: groupImages.map(el => el.width),
+                                  groupHeights: groupImages.map(el => el.height),
+                                  groupXs: groupImages.map(el => el.x),
+                                  groupYs: groupImages.map(el => el.y),
+                                };
+                                setCollectorItems(prev => [...prev, newItem]);
+                                toast.success(language === 'fr'
+                                  ? `Groupe (${groupImages.length} pièces) envoyé vers "Pièces détourées"`
+                                  : `Group (${groupImages.length} pieces) sent to "Cutout pieces"`);
+                              } else {
+                                // Élément seul — stocker les dimensions canvas
+                                const newItem: CollectorItem = {
+                                  id: `collector_${Date.now()}`,
+                                  type: 'detourage',
+                                  src: element.src!,
+                                  name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
+                                  thumbnail: element.src!,
+                                  widthCm: element.width,
+                                  heightCm: element.height,
+                                };
+                                setCollectorItems(prev => [...prev, newItem]);
+                                toast.success(language === 'fr' ? 'Pièce envoyée vers "Pièces détourées"' : 'Piece sent to "Cutout pieces"');
+                              }
                             }}
                           >
                             <span className="text-[11px] font-semibold">
@@ -7810,24 +8105,80 @@ export default function CreationsAtelierV2({
                   {collectorItems.map((item) => (
                     <div
                       key={item.id}
-                      className="relative bg-white rounded border shadow-sm transition-all duration-200 group w-16 h-auto"
+                      className={`relative bg-white rounded border shadow-sm transition-all duration-200 group w-16 h-auto ${item.groupSrcs && item.groupSrcs.length > 1 ? 'border-purple-400 ring-1 ring-purple-200' : ''}`}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        setHoveredThumbnail({ src: item.thumbnail || item.src, name: item.name, rect, type: 'collector' });
+                        setHoveredThumbnail({
+                          src: item.thumbnail || item.src,
+                          name: item.name,
+                          rect,
+                          type: 'collector',
+                          groupSrcs: item.groupSrcs,
+                          groupNames: item.groupNames,
+                          groupWidths: item.groupWidths,
+                          groupHeights: item.groupHeights,
+                          groupXs: item.groupXs,
+                          groupYs: item.groupYs,
+                        });
                       }}
                       onMouseLeave={() => setHoveredThumbnail(null)}
                     >
-                      <img
-                        src={item.thumbnail || item.src}
-                        alt={item.name}
-                        className="w-full h-auto object-contain rounded bg-[url('/images/transparent-bg.png')] bg-repeat"
-                      />
-                      {/* Bouton Utiliser — ajouter au canvas d'assemblage */}
+                      {/* Affichage : disposition fidèle au canvas (bounding box) */}
+                      {item.groupSrcs && item.groupSrcs.length > 1 ? (() => {
+                        const xs = item.groupXs || [];
+                        const ys = item.groupYs || [];
+                        const ws = item.groupWidths || [];
+                        const hs = item.groupHeights || [];
+                        const minX = Math.min(...xs.map((x, i) => x ?? 0));
+                        const minY = Math.min(...ys.map((y, i) => y ?? 0));
+                        const maxX = Math.max(...xs.map((x, i) => (x ?? 0) + (ws[i] ?? 1)));
+                        const maxY = Math.max(...ys.map((y, i) => (y ?? 0) + (hs[i] ?? 1)));
+                        const bbW = maxX - minX || 1;
+                        const bbH = maxY - minY || 1;
+                        return (
+                          <div className="relative w-full" style={{ paddingBottom: `${(bbH / bbW) * 100}%` }}>
+                            {item.groupSrcs.slice(0, 3).map((src, i) => (
+                              <img
+                                key={i}
+                                src={src}
+                                alt={item.groupNames?.[i] || item.name}
+                                className="absolute rounded bg-[url('/images/transparent-bg.png')] bg-repeat"
+                                style={{
+                                  left: `${((xs[i] ?? 0) - minX) / bbW * 100}%`,
+                                  top: `${((ys[i] ?? 0) - minY) / bbH * 100}%`,
+                                  width: `${(ws[i] ?? bbW) / bbW * 100}%`,
+                                  height: `${(hs[i] ?? bbH) / bbH * 100}%`,
+                                  objectFit: 'contain',
+                                  objectPosition: 'center center',
+                                }}
+                              />
+                            ))}
+                            <span className="absolute bottom-0 right-0 bg-purple-600 text-white text-[8px] font-bold px-1 rounded-tl z-10">
+                              {item.groupSrcs.length}
+                            </span>
+                          </div>
+                        );
+                      })() : (
+                        <img
+                          src={item.thumbnail || item.src}
+                          alt={item.name}
+                          className="w-full h-auto object-contain rounded bg-[url('/images/transparent-bg.png')] bg-repeat"
+                        />
+                      )}
+                      {/* Bouton Utiliser — ajouter au canvas d'assemblage (toutes les images du groupe) */}
                       <button
                         className="absolute -bottom-1 -right-1 bg-green-500 hover:bg-green-600 text-white rounded-full p-0.5 z-10"
                         onClick={(e) => {
                           e.stopPropagation();
-                          addToCanvas(item.src, item.name);
+                          if (item.groupSrcs && item.groupSrcs.length > 1) {
+                            // Ajouter toutes les images du groupe avec le même groupId
+                            const gId = item.groupId || `group_${Date.now()}`;
+                            item.groupSrcs.forEach((src, i) => {
+                              addToCanvas(src, item.groupNames?.[i] || item.name, gId);
+                            });
+                          } else {
+                            addToCanvas(item.src, item.name);
+                          }
                           setActiveMainTab("assemblage");
                         }}
                         title={language === "fr" ? "Utiliser sur le canvas" : "Use on canvas"}
@@ -8033,174 +8384,163 @@ export default function CreationsAtelierV2({
           </div>
         </div>
         
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500">
-              {canvasElements.length} {language === "fr" ? "éléments sur le canvas" : "elements on canvas"}
-              {" \u2022 "}
-              {collectorItems.length} {language === "fr" ? "dans le collecteur" : "in collector"}
-            </div>
-            {/* Indicateur de multi-sélection */}
-            {selectedElementIds.size > 1 && (
-              <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 animate-in fade-in">
-                <span className="font-medium">{selectedElementIds.size}</span>
-                {language === 'fr' ? 'sélectionné(s)' : 'selected'}
-                <span className="text-blue-400 ml-1">Shift+clic</span>
-              </div>
-            )}
-            {/* Boutons Grouper / Dégrouper */}
-            {selectedElementIds.size >= 2 && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-1 text-xs h-7 bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100"
-                onClick={handleGroupElements}
-              >
-                <Layers className="w-3 h-3" />
-                {language === 'fr' ? 'Grouper' : 'Group'}
-                <span className="text-purple-400 text-[10px]">(Ctrl+G)</span>
-              </Button>
-            )}
-            {selectionHasGroup && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-1 text-xs h-7 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100"
-                onClick={handleUngroupElements}
-              >
-                <Layers className="w-3 h-3" />
-                {language === 'fr' ? 'Dégrouper' : 'Ungroup'}
-                <span className="text-orange-400 text-[10px]">(Ctrl+Shift+G)</span>
-              </Button>
-            )}
-            {/* Barre d'alignement multi-sélection */}
-            {selectedElementIds.size >= 2 && (
-              <div className="flex items-center gap-1 bg-white border border-indigo-200 rounded-lg px-2 py-1 shadow-sm">
-                <span className="text-[10px] text-indigo-400 font-semibold mr-1 whitespace-nowrap">Aligner :</span>
-                {/* Groupe horizontal */}
-                <div className="flex items-center gap-0.5">
-                  <button
-                    title="Aligner à gauche"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('left')}
-                  >◧ G</button>
-                  <button
-                    title="Centrer horizontalement"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('centerH')}
-                  >↔ H</button>
-                  <button
-                    title="Aligner à droite"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('right')}
-                  >D ◦</button>
+        {/* Footer — 2 lignes */}
+        <div className="flex flex-col border-t bg-gray-50 px-4 py-2 gap-1.5">
+          {/* Ligne 1 : Revenir | Sélection | Grouper/Dégrouper | Aligner — TOUJOURS VISIBLE */}
+          <div className="flex items-center gap-2 flex-wrap min-h-[32px]">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs h-7"
+              disabled={undoCount === 0}
+              onClick={handleUndo}
+            >
+              {language === 'fr' ? '↩ Revenir' : '↩ Undo'}
+            </Button>
+
+            <div className="w-px h-5 bg-gray-300" />
+
+            {/* Indicateur sélection / Grouper / Dégrouper */}
+            {selectedElementIds.size > 1 ? (
+              <>
+                <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+                  <span className="font-medium">{selectedElementIds.size}</span>
+                  {language === 'fr' ? 'sélectionné(s)' : 'selected'}
                 </div>
-                <div className="w-px h-4 bg-gray-200" />
-                {/* Groupe vertical */}
-                <div className="flex items-center gap-0.5">
-                  <button
-                    title="Aligner en haut"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('top')}
-                  >▤ H</button>
-                  <button
-                    title="Centrer verticalement"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('centerV')}
-                  >↕ V</button>
-                  <button
-                    title="Aligner en bas"
-                    className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                    onClick={() => alignSelected('bottom')}
-                  >B ▪</button>
-                </div>
-                {/* Distribuer - visible seulement avec 3+ éléments */}
-                {selectedElementIds.size >= 3 && (
-                  <div className="flex items-center gap-1 border-l border-indigo-100 pl-2">
-                    <span className="text-[10px] text-indigo-400 font-semibold mr-1 whitespace-nowrap">Distribuer :</span>
-                    <button
-                      title="Distribuer horizontalement (espacement égal)"
-                      className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                      onClick={() => distributeSelected('horizontal')}
-                    >↔ H</button>
-                    <button
-                      title="Distribuer verticalement (espacement égal)"
-                      className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap"
-                      onClick={() => distributeSelected('vertical')}
-                    >↕ V</button>
-                  </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs h-7 bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100"
+                  onClick={handleGroupElements}
+                >
+                  <Layers className="w-3 h-3" />
+                  {language === 'fr' ? 'Grouper' : 'Group'}
+                  <span className="text-purple-400 text-[10px]">(Ctrl+G)</span>
+                </Button>
+                {selectionHasGroup && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs h-7 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100"
+                    onClick={handleUngroupElements}
+                  >
+                    <Layers className="w-3 h-3" />
+                    {language === 'fr' ? 'Dégrouper' : 'Ungroup'}
+                    <span className="text-orange-400 text-[10px]">(Ctrl+Shift+G)</span>
+                  </Button>
                 )}
-              </div>
+                <div className="w-px h-5 bg-gray-300" />
+                {/* Alignement */}
+                <div className="flex items-center gap-1 bg-white border border-indigo-200 rounded-lg px-2 py-0.5 shadow-sm">
+                  <span className="text-[10px] text-indigo-400 font-semibold mr-1 whitespace-nowrap">{language === 'fr' ? 'Aligner' : 'Align'} :</span>
+                  <div className="flex items-center gap-0.5">
+                    <button title={language === 'fr' ? 'Aligner à gauche' : 'Align left'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('left')}>◧ G</button>
+                    <button title={language === 'fr' ? 'Centrer horizontalement' : 'Center H'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('centerH')}>↔ H</button>
+                    <button title={language === 'fr' ? 'Aligner à droite' : 'Align right'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('right')}>D ◦</button>
+                  </div>
+                  <div className="w-px h-4 bg-gray-200" />
+                  <div className="flex items-center gap-0.5">
+                    <button title={language === 'fr' ? 'Aligner en haut' : 'Align top'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('top')}>▤ H</button>
+                    <button title={language === 'fr' ? 'Centrer verticalement' : 'Center V'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('centerV')}>↕ V</button>
+                    <button title={language === 'fr' ? 'Aligner en bas' : 'Align bottom'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => alignSelected('bottom')}>B ▪</button>
+                  </div>
+                  {selectedElementIds.size >= 3 && (
+                    <div className="flex items-center gap-1 border-l border-indigo-100 pl-2">
+                      <span className="text-[10px] text-indigo-400 font-semibold mr-1 whitespace-nowrap">{language === 'fr' ? 'Distribuer' : 'Distribute'} :</span>
+                      <button title={language === 'fr' ? 'Distribuer horizontalement' : 'Distribute H'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => distributeSelected('horizontal')}>↔ H</button>
+                      <button title={language === 'fr' ? 'Distribuer verticalement' : 'Distribute V'} className="px-1.5 py-0.5 text-[10px] font-medium rounded hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-transparent hover:border-indigo-200 whitespace-nowrap" onClick={() => distributeSelected('vertical')}>↕ V</button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">
+                {language === 'fr' ? 'Sélectionnez 2+ éléments pour grouper / aligner' : 'Select 2+ elements to group / align'}
+              </span>
             )}
-            {/* Indicateur de sauvegarde automatique */}
-            <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-all duration-300 ${
-              autoSaveStatus === 'saving' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-              autoSaveStatus === 'saved' ? 'bg-green-50 text-green-600 border border-green-200' :
-              autoSaveStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-200' :
-              'bg-gray-50 text-gray-400 border border-gray-200'
-            }`}>
+
+            {/* Info éléments (poussé à droite) */}
+            <div className="ml-auto text-xs text-gray-400">
+              {canvasElements.length} {language === "fr" ? "éléments" : "elements"}
+              {" \u2022 "}
+              {collectorItems.length} {language === "fr" ? "pièces" : "pieces"}
+            </div>
+          </div>
+
+          {/* Ligne 2 : Auto-save | Télécharger | Imprimer | @Mail | Sauver comme | Nouveau projet | Sauvegarder */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Auto-save toggle + status */}
+            <button
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-all duration-300 cursor-pointer ${
+                autoSaveStatus === 'saving' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                autoSaveStatus === 'saved' ? 'bg-green-50 text-green-600 border border-green-200' :
+                autoSaveStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-200' :
+                autoSaveEnabled ? 'bg-green-50 text-green-700 border border-green-300 hover:bg-green-100' :
+                'bg-gray-100 text-gray-400 border border-gray-300 hover:bg-gray-200'
+              }`}
+              onClick={() => setAutoSaveEnabled(prev => !prev)}
+              title={language === 'fr' ? 'Cliquer pour activer/désactiver la sauvegarde automatique' : 'Click to toggle auto-save'}
+            >
               {autoSaveStatus === 'saving' && (
                 <><span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />{language === 'fr' ? 'Sauvegarde...' : 'Saving...'}</>
               )}
               {autoSaveStatus === 'saved' && (
-                <><span className="text-green-500">\u2713</span>{language === 'fr' ? 'Sauvegardé' : 'Saved'}</>
+                <><span className="text-green-500">{"\u2713"}</span>{language === 'fr' ? 'Sauvegardé' : 'Saved'}</>
               )}
               {autoSaveStatus === 'error' && (
-                <><span className="text-red-500">\u2717</span>{language === 'fr' ? 'Erreur' : 'Error'}</>
+                <><span className="text-red-500">{"\u2717"}</span>{language === 'fr' ? 'Erreur' : 'Error'}</>
               )}
-              {autoSaveStatus === 'idle' && currentProjectId && (
-                <><span className="text-gray-400">\u25CB</span>{language === 'fr' ? 'Auto-save actif' : 'Auto-save on'}</>
+              {autoSaveStatus === 'idle' && (
+                autoSaveEnabled
+                  ? <>{language === 'fr' ? 'Auto-save ON' : 'Auto-save ON'}</>
+                  : <>{language === 'fr' ? 'Auto-save OFF' : 'Auto-save OFF'}</>
               )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+            </button>
+
+            <div className="w-px h-5 bg-gray-300" />
+
             {/* Nom du projet */}
-            <div className="flex items-center gap-2 bg-white border rounded-lg px-3 py-1.5 shadow-sm">
-              <Edit2 className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 shadow-sm">
+              <Edit2 className="w-3.5 h-3.5 text-gray-400" />
               <Input
                 type="text"
                 value={currentProjectName}
                 onChange={(e) => setCurrentProjectName(e.target.value)}
                 placeholder={language === "fr" ? "Nom de la création..." : "Creation name..."}
-                className="border-0 p-0 h-auto text-sm w-48 focus-visible:ring-0"
+                className="border-0 p-0 h-auto text-xs w-36 focus-visible:ring-0"
               />
             </div>
-            
-            <Button variant="outline" size="sm" className="gap-1" onClick={handleDownload} disabled={isExporting || canvasElements.length === 0}>
-              <Download className="w-4 h-4" />
-              {isExporting ? (language === "fr" ? "Export..." : "Exporting...") : (language === "fr" ? "Télécharger" : "Download")}
+
+            <div className="w-px h-5 bg-gray-300" />
+
+            {/* Actions export */}
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleDownload} disabled={isExporting || canvasElements.length === 0}>
+              <Download className="w-3.5 h-3.5" />
+              {isExporting ? (language === "fr" ? "Export..." : "Export...") : (language === "fr" ? "Télécharger" : "Download")}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1" onClick={handlePrint} disabled={isExporting || canvasElements.length === 0}>
-              <Printer className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handlePrint} disabled={isExporting || canvasElements.length === 0}>
+              <Printer className="w-3.5 h-3.5" />
               {language === "fr" ? "Imprimer" : "Print"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1" onClick={handleEmail} disabled={isExporting || canvasElements.length === 0}>
-              <Mail className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleEmail} disabled={isExporting || canvasElements.length === 0}>
+              <Mail className="w-3.5 h-3.5" />
               @Mail
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-1 border-pink-400 text-pink-600 hover:bg-pink-50 hover:text-pink-700"
-              onClick={handleSaveAs} 
-              disabled={isExporting || canvasElements.length === 0}
-            >
-              <ImagePlus className="w-4 h-4" />
+
+            <div className="w-px h-5 bg-gray-300" />
+
+            {/* Actions projet */}
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting || canvasElements.length === 0}>
+              <ImagePlus className="w-3.5 h-3.5" />
               {isExporting ? (language === "fr" ? "Sauvegarde..." : "Saving...") : (language === "fr" ? "Sauver comme" : "Save As")}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 border-blue-400 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-              onClick={handleNewProjectFromBar}
-            >
-              <Plus className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-blue-400 text-blue-600 hover:bg-blue-50" onClick={handleNewProjectFromBar}>
+              <Plus className="w-3.5 h-3.5" />
               {language === "fr" ? "Nouveau projet" : "New project"}
             </Button>
-            <Button 
-              size="sm" 
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white gap-1 hover:from-purple-600 hover:to-pink-600 shadow-md hover:shadow-lg transition-all"
+            <Button
+              size="sm"
+              className="gap-1 text-xs h-7 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md"
               onClick={() => {
                 handleSaveProject();
                 const btn = document.activeElement as HTMLButtonElement;
@@ -8210,10 +8550,10 @@ export default function CreationsAtelierV2({
                 }
               }}
             >
-              <Save className="w-4 h-4" />
-              {language === "fr" ? "Sauvegarder le projet" : "Save Project"}
+              <Save className="w-3.5 h-3.5" />
+              {language === "fr" ? "Sauvegarder" : "Save"}
             </Button>
-            <Button variant="outline" onClick={handleRequestClose}>
+            <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>
           </div>
@@ -8349,6 +8689,45 @@ export default function CreationsAtelierV2({
         </div>
       )}
       
+      {/* Modale de restauration auto-save */}
+      {showRestoreModal && pendingRestoreRef.current && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <span className="text-green-500">💾</span>
+                {language === 'fr' ? 'Sauvegarde automatique trouvée' : 'Auto-save found'}
+              </h3>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-gray-600 text-sm leading-relaxed">
+                {language === 'fr'
+                  ? `Une sauvegarde automatique du ${new Date(pendingRestoreRef.current.timestamp).toLocaleString('fr-FR')} a été trouvée${pendingRestoreRef.current.projectName ? ` (${pendingRestoreRef.current.projectName})` : ''}. Voulez-vous la restaurer ?`
+                  : `An auto-save from ${new Date(pendingRestoreRef.current.timestamp).toLocaleString()} was found${pendingRestoreRef.current.projectName ? ` (${pendingRestoreRef.current.projectName})` : ''}. Would you like to restore it?`}
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => {
+                setShowRestoreModal(false);
+                localStorage.removeItem(AUTOSAVE_LS_KEY);
+              }}>
+                {language === 'fr' ? 'Non, ignorer' : 'No, dismiss'}
+              </Button>
+              <Button size="sm" className="bg-gradient-to-r from-green-500 to-emerald-500 text-white" onClick={() => {
+                const data = pendingRestoreRef.current;
+                if (data.canvasElements) setCanvasElementsRaw(data.canvasElements);
+                if (data.collectorItems) setCollectorItems(data.collectorItems);
+                if (data.projectName) setCurrentProjectName(data.projectName);
+                setShowRestoreModal(false);
+                toast.success(language === 'fr' ? 'Sauvegarde restaurée !' : 'Auto-save restored!');
+              }}>
+                {language === 'fr' ? 'Oui, restaurer' : 'Yes, restore'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modale de sélection de projet */}
       {showProjectModal && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[2000]">
@@ -8512,11 +8891,44 @@ export default function CreationsAtelierV2({
           onMouseEnter={() => setHoveredThumbnail(null)}
         >
           <div className="bg-white rounded-lg shadow-2xl border-2 border-purple-500 ring-4 ring-purple-400/50 p-1 animate-in zoom-in-50 duration-150">
-            <img
-              src={hoveredThumbnail.src}
-              alt={hoveredThumbnail.name}
-              className="max-w-[200px] max-h-[200px] object-contain rounded"
-            />
+            {hoveredThumbnail.groupSrcs && hoveredThumbnail.groupSrcs.length > 1 ? (() => {
+              const xs = hoveredThumbnail.groupXs || [];
+              const ys = hoveredThumbnail.groupYs || [];
+              const ws = hoveredThumbnail.groupWidths || [];
+              const hs = hoveredThumbnail.groupHeights || [];
+              const minX = Math.min(...xs.map(x => x ?? 0));
+              const minY = Math.min(...ys.map(y => y ?? 0));
+              const maxX = Math.max(...xs.map((x, i) => (x ?? 0) + (ws[i] ?? 1)));
+              const maxY = Math.max(...ys.map((y, i) => (y ?? 0) + (hs[i] ?? 1)));
+              const bbW = maxX - minX || 1;
+              const bbH = maxY - minY || 1;
+              return (
+                <div style={{ width: 200, height: 200 * (bbH / bbW), position: 'relative' }}>
+                  {hoveredThumbnail.groupSrcs.map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt={hoveredThumbnail.groupNames?.[i] || hoveredThumbnail.name}
+                      className="absolute rounded"
+                      style={{
+                        left: `${((xs[i] ?? 0) - minX) / bbW * 100}%`,
+                        top: `${((ys[i] ?? 0) - minY) / bbH * 100}%`,
+                        width: `${(ws[i] ?? bbW) / bbW * 100}%`,
+                        height: `${(hs[i] ?? bbH) / bbH * 100}%`,
+                        objectFit: 'contain',
+                        objectPosition: 'center center',
+                      }}
+                    />
+                  ))}
+                </div>
+              );
+            })() : (
+              <img
+                src={hoveredThumbnail.src}
+                alt={hoveredThumbnail.name}
+                className="max-w-[200px] max-h-[200px] object-contain rounded"
+              />
+            )}
             <div className="mt-1 bg-gray-900 text-white text-xs px-2 py-1 rounded text-center truncate max-w-[200px]">
               {hoveredThumbnail.name}
             </div>

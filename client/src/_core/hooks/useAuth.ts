@@ -13,7 +13,8 @@ export function useAuth(options?: UseAuthOptions) {
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+    retry: 2,               // retry transient failures (network, slow server)
+    retryDelay: 500,        // 500ms between retries
     refetchOnWindowFocus: false,
     staleTime: 30_000, // 30s — avoid constant refetches on mount
   });
@@ -63,6 +64,10 @@ export function useAuth(options?: UseAuthOptions) {
     if (!redirectOnUnauthenticated) return;
     // Don't redirect while any fetch is in progress (initial OR background)
     if (meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending) return;
+    // Don't redirect on network/server errors — only redirect when the server
+    // explicitly confirms there is no session (query succeeded with null data).
+    // This prevents spurious logouts on transient failures (slow server, network hiccup).
+    if (meQuery.error) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
@@ -74,6 +79,7 @@ export function useAuth(options?: UseAuthOptions) {
     logoutMutation.isPending,
     meQuery.isLoading,
     meQuery.isFetching,
+    meQuery.error,
     state.user,
   ]);
 
