@@ -6003,8 +6003,10 @@ export default function CreationsAtelierV2({
                     e.stopPropagation();
                     return;
                   }
-                  // Démarrer le lasso si on clique sur la zone vide
-                  handleLassoStart(e);
+                  // Démarrer le lasso UNIQUEMENT si le clic est sur la zone vide (pas sur un élément)
+                  if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-canvas-element]')) {
+                    handleLassoStart(e);
+                  }
                 }}
                 onMouseMove={(e) => {
                   // Mode tracé libre de ligne : mettre à jour le point courant
@@ -6553,7 +6555,7 @@ export default function CreationsAtelierV2({
                         userSelect: 'none',
                         overflow: 'visible',
                         // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
-                        outline: element.type !== 'shape' ? (
+                        outline: (
                           element.groupId && isInMultiSelection
                             ? '2px dashed #a855f7'
                             : isMultiMode && isInMultiSelection && isSelected
@@ -6563,7 +6565,7 @@ export default function CreationsAtelierV2({
                                 : isSelected && !isMultiMode
                                   ? '2px solid #a855f7'
                                   : 'none'
-                        ) : 'none',
+                        ),
                         outlineOffset: isInMultiSelection || isSelected ? '2px' : undefined,
                         paddingTop: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
@@ -6571,7 +6573,7 @@ export default function CreationsAtelierV2({
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                       }}
                       draggable={false}
-                      onMouseDown={(e) => handleMouseDown(e, element.id)}
+                      onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, element.id); }}
                       onContextMenu={(e) => handleContextMenu(e, element.id)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
@@ -6822,9 +6824,11 @@ export default function CreationsAtelierV2({
                           width={w}
                           height={h}
                           viewBox={`0 0 ${w} ${h}`}
-                          className="absolute inset-0 pointer-events-none"
+                          className="absolute inset-0"
                           style={{ overflow: 'visible' }}
                         >
+                          {/* Zone de clic invisible couvrant toute la forme pour le drag */}
+                          <rect width={w} height={h} fill="transparent" />
                           {/* Couleur opaque de la découpe (transparent en mode vierge) */}
                           <path d={pathD} fill={element.puzzleTransparent ? 'none' : fillColor} />
                           {/* Contour toujours visible pour les pièces puzzle */}

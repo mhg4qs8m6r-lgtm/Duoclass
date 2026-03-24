@@ -42,7 +42,7 @@ const fr: Record<string, string> = {
   'toolbar.email': '@Mail',
   'toolbar.print': 'Imprimer',
 'toolbar.slideshow': 'Diaporama',
-   'toolbar.creations': 'Créations',
+   'toolbar.creations': 'Atelier',
    'toolbar.photoBook': 'Livre Photo',
    
    // Sidebar
@@ -68,6 +68,7 @@ const fr: Record<string, string> = {
   // Albums
   'albums.title': 'Albums',
   'albums.photosVideos': 'Photos & Vidéos',
+  'albums.creations': 'Créations',
   'albums.documents': 'Documents',
   'albums.categories': 'Catégories',
   'albums.createCategory': 'Créer catégorie/album',
@@ -787,7 +788,7 @@ const en: Record<string, string> = {
   'toolbar.email': '@Mail',
   'toolbar.print': 'Print',
 'toolbar.slideshow': 'Slideshow',
-   'toolbar.creations': 'Creations',
+   'toolbar.creations': 'Workshop',
    'toolbar.photoBook': 'Photo Book',
    
    // Sidebar
@@ -813,6 +814,7 @@ const en: Record<string, string> = {
   // Albums
   'albums.title': 'Albums',
   'albums.photosVideos': 'Photos & Videos',
+  'albums.creations': 'Creations',
   'albums.documents': 'Documents',
   'albums.categories': 'Categories',
   'albums.createCategory': 'Create category/album',

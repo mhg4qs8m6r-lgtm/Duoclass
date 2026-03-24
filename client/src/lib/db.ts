@@ -164,21 +164,21 @@ export async function initCategories(): Promise<void> {
         isDefault: true,
       },
       {
-        id: 'cat_mes_projets',
-        label: 'MES PROJETS',
-        color: '#F59E0B',
-        series: 'photoclass',
-        accessType: 'standard',
-        mediaType: 'mixed',
-        isDefault: true,
-      },
-      {
         id: 'cat_nc_docs',
         label: 'NON CLASSEE',
         color: '#9CA3AF',
         series: 'classpapiers',
         accessType: 'standard',
         mediaType: 'documents',
+        isDefault: true,
+      },
+      {
+        id: 'cat_creations',
+        label: 'CRÉATIONS',
+        color: '#8B5CF6',
+        series: 'creations' as any,
+        accessType: 'standard',
+        mediaType: 'mixed',
         isDefault: true,
       },
       {
@@ -205,6 +205,25 @@ export async function initCategories(): Promise<void> {
       const exists = await db.categories.get(cat.id);
       if (!exists) {
         await db.categories.add(cat);
+      }
+    }
+
+    // Albums fixes de la section Créations (non effaçables)
+    const creationsAlbums: AlbumMeta[] = [
+      { id: 'album_creations_cliparts', title: 'Cliparts', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_modeles_passe_partout', title: 'Modèles passe-partout', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_modeles_pele_mele', title: 'Modèles pêle-mêle', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_projets_en_cours', title: 'Projets en cours', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_collages_finis', title: 'Collages finis', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_montages_finis', title: 'Montages finis', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_stickers', title: 'Stickers', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+      { id: 'album_creations_puzzle', title: 'Puzzle', type: 'standard', series: 'photoclass', createdAt: Date.now(), categoryId: 'cat_creations' },
+    ];
+
+    for (const album of creationsAlbums) {
+      const exists = await db.album_metas.get(album.id);
+      if (!exists) {
+        await db.album_metas.put(album);
       }
     }
   } catch (err) {

@@ -25,6 +25,7 @@ export default function Albums() {
   const [creationsProjectId, setCreationsProjectId] = useState<string | undefined>(undefined);
   const [creationsProjectName, setCreationsProjectName] = useState<string>("Nouveau projet");
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState<string | null>(null);
+  const [selectedCreationsCategory, setSelectedCreationsCategory] = useState<string | null>('cat_creations');
   const [selectedDocCategory, setSelectedDocCategory] = useState<string | null>(null);
   const [unlockedCategories, setUnlockedCategories] = useState<string[]>([]);
   const [passwordInput, setPasswordInput] = useState('');
@@ -60,8 +61,6 @@ export default function Albums() {
       const upper = label.toUpperCase();
       const normalized = upper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (normalized === 'NON CLASSEE' || normalized === 'NON CLASSEES') return 'UNCATEGORIZED';
-      if (normalized.includes('MES PROJETS CREATIONS') || normalized.includes('MES PROJETS CREATIONS')) return 'MY CREATION PROJECTS';
-      if (normalized === 'MES PROJETS') return 'MY PROJECTS';
       if (normalized === 'MES COLLAGES') return 'MY COLLAGES';
       return label;
     }
@@ -77,28 +76,22 @@ export default function Albums() {
     return title;
   };
 
-  // Fonction pour trier avec "NON CLASSEE" en premier, puis "MES PROJETS" en second, puis "MES COLLAGES" en troisième
+  // Fonction pour trier avec "NON CLASSEE" en premier, puis "MES COLLAGES" en second
   const sortWithNonClasseeFirst = (items: any[], labelField: string = 'label') => {
     return [...items].sort((a, b) => {
       const aIsNonClassee = a[labelField]?.toUpperCase().includes('NON CLASSEE') || a[labelField]?.toUpperCase().includes(language === 'fr' ? 'NON CLASSÉES' : 'UNCATEGORIZED');
       const bIsNonClassee = b[labelField]?.toUpperCase().includes('NON CLASSEE') || b[labelField]?.toUpperCase().includes('NON CLASSÉES');
-      const aIsMesProjets = a[labelField]?.toUpperCase() === 'MES PROJETS' || a.id === 'cat_mes_projets';
-      const bIsMesProjets = b[labelField]?.toUpperCase() === 'MES PROJETS' || b.id === 'cat_mes_projets';
       const aIsMesCollages = a[labelField]?.toUpperCase().includes('MES COLLAGES') || a.id === 'cat_mes_collages';
       const bIsMesCollages = b[labelField]?.toUpperCase().includes('MES COLLAGES') || b.id === 'cat_mes_collages';
-      
+
       // NON CLASSEE toujours en premier
       if (aIsNonClassee && !bIsNonClassee) return -1;
       if (!aIsNonClassee && bIsNonClassee) return 1;
-      
-      // MES PROJETS en second (juste après NON CLASSEE)
-      if (aIsMesProjets && !bIsMesProjets && !bIsNonClassee) return -1;
-      if (!aIsMesProjets && bIsMesProjets && !aIsNonClassee) return 1;
-      
-      // MES COLLAGES en troisième (juste après MES PROJETS)
-      if (aIsMesCollages && !bIsMesCollages && !bIsNonClassee && !bIsMesProjets) return -1;
-      if (!aIsMesCollages && bIsMesCollages && !aIsNonClassee && !aIsMesProjets) return 1;
-      
+
+      // MES COLLAGES en second (juste après NON CLASSEE)
+      if (aIsMesCollages && !bIsMesCollages && !bIsNonClassee) return -1;
+      if (!aIsMesCollages && bIsMesCollages && !aIsNonClassee) return 1;
+
       return 0;
     });
   };
@@ -150,42 +143,6 @@ export default function Albums() {
     }
   }, [photoCategories, docCategories, selectedPhotoCategory, selectedDocCategory]);
 
-  /**
-   * Réparation automatique : synchronise les titres des entrées album_metas
-   * de la catégorie MES PROJETS CRÉATIONS avec les noms réels des projets
-   * stockés dans creations_projects.
-   *
-   * Ce mécanisme corrige les entrées créées avec un nom incorrect (ex: "Nouveau projet")
-   * avant le correctif de handleCreateNewProject.
-   */
-  useEffect(() => {
-    const repairProjectNames = async () => {
-      try {
-        const projectAlbums = await db.album_metas
-          .where('categoryId')
-          .equals('cat_mes_projets')
-          .toArray();
-
-        for (const albumMeta of projectAlbums) {
-          // Ignorer l'album système MES PROJETS CRÉATIONS lui-même
-          if (albumMeta.id === 'album_mes_projets') continue;
-
-          const project = await db.creations_projects.get(albumMeta.id);
-          if (project && project.name && project.name !== albumMeta.title) {
-            console.log(
-              `[Albums] Réparation nom : "${albumMeta.title}" → "${project.name}" (id: ${albumMeta.id})`
-            );
-            await db.album_metas.update(albumMeta.id, { title: project.name });
-          }
-        }
-      } catch (err) {
-        console.error('[Albums] Erreur réparation noms projets:', err);
-      }
-    };
-
-    repairProjectNames();
-  }, []);
-
   // Albums filtrés par catégorie sélectionnée (triés avec Non classées en premier)
   const photoAlbums = sortAlbumsWithNonClasseesFirst(
     albums?.filter(a => a.categoryId === selectedPhotoCategory) || []
@@ -194,29 +151,31 @@ export default function Albums() {
     albums?.filter(a => a.categoryId === selectedDocCategory) || []
   );
 
+  // Albums Créations filtrés par catégorie sélectionnée
+  const creationsAlbums = albums?.filter(a => a.categoryId === selectedCreationsCategory) || [];
+
+  // IDs des albums fixes Créations (non effaçables)
+  const CREATIONS_FIXED_ALBUM_IDS = [
+    'album_creations_cliparts',
+    'album_creations_modeles_passe_partout',
+    'album_creations_modeles_pele_mele',
+    'album_creations_projets_en_cours',
+    'album_creations_collages_finis',
+    'album_creations_montages_finis',
+    'album_creations_stickers',
+    'album_creations_puzzle',
+  ];
+
+  const isCreationsFixedAlbum = (album: AlbumMeta) => CREATIONS_FIXED_ALBUM_IDS.includes(album.id);
+
   // Obtenir la catégorie sélectionnée pour afficher sa couleur dans les albums
   const selectedPhotoCategoryData = categories?.find(c => c.id === selectedPhotoCategory);
   const selectedDocCategoryData = categories?.find(c => c.id === selectedDocCategory);
+  const selectedCreationsCategoryData = categories?.find(c => c.id === selectedCreationsCategory);
 
-  // Ouvrir un album - comportement différent selon la catégorie
-  // Les albums de MES PROJETS CRÉATIONS ouvrent directement l'Atelier
-  // Les autres albums ouvrent la page PhotoClass normale
+  // Ouvrir un album
   const handleOpenAlbum = (album: AlbumMeta, type: 'photo' | 'doc') => {
-    // L'album "Modèles Stickers" est un album système : ouvrir la page PhotoClass normale
-    // pour permettre d'y ajouter/gérer les images de stickers.
-    if (album.id === MODELES_STICKERS_ALBUM_ID) {
-      setLocation(`/photoclass/${album.id}`);
-      return;
-    }
-    // Les autres albums de MES PROJETS CRÉATIONS ouvrent l'Atelier Créations
-    if (album.categoryId === 'cat_mes_projets') {
-      setCreationsProjectId(album.id);
-      setCreationsProjectName(album.title);
-      setShowCreationsModal(true);
-    } else {
-      // Comportement normal : ouvrir la page PhotoClass
-      setLocation(`/photoclass/${album.id}`);
-    }
+    setLocation(`/photoclass/${album.id}`);
   };
 
   // Sélectionner une catégorie (avec vérification du mot de passe si personnelle)
@@ -252,15 +211,15 @@ export default function Albums() {
 
   // === SUPPRESSION ===
   
-  // Vérifier si une catégorie est protégée (NON CLASSEE, MES PROJETS CRÉATIONS, MES COLLAGES)
+  // Vérifier si une catégorie est protégée (NON CLASSEE, MES COLLAGES, CRÉATIONS)
   const isProtectedCategory = (category: any) => {
     const label = category.label?.toUpperCase() || '';
-    return label.includes('NON CLASSEE') || 
-           label.includes('NON CLASSÉES') || 
-           label.includes('MES PROJETS') ||
+    return label.includes('NON CLASSEE') ||
+           label.includes('NON CLASSÉES') ||
            label.includes('MES COLLAGES') ||
-           category.id === 'cat_mes_projets' ||
-           category.id === 'cat_mes_collages';
+           label.includes('CRÉATIONS') ||
+           category.id === 'cat_mes_collages' ||
+           category.id === 'cat_creations';
   };
   
   // Alias pour compatibilité
@@ -275,7 +234,8 @@ export default function Albums() {
     return album.title?.toLowerCase().includes('non classées') ||
            album.title?.toLowerCase().includes('non classee') ||
            album.id === 'album_mes_collages' ||
-           album.id === MODELES_STICKERS_ALBUM_ID;
+           album.id === MODELES_STICKERS_ALBUM_ID ||
+           album.id?.startsWith('album_creations_');
   };
 
   // Supprimer une catégorie
@@ -557,24 +517,24 @@ export default function Albums() {
             </div>
           ) : (
             // Vue avec 2 colonnes : Photos & Documents
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="flex flex-col lg:flex-row gap-4" style={{ width: '100%' }}>
               {/* Colonne Photos/Vidéos */}
-              <div className="p-4">
-                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
+              <div className="p-2 min-w-0 flex-1">
+                <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663160465265/HGNqEaMegiV5gx7a5nB5zp/icon-camera_63528184.png" alt="Photos" className="w-6 h-6 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   {t('albums.photosVideos')}
                 </h2>
                 
                 {/* En-têtes des sous-colonnes */}
-                <div className="grid grid-cols-2 gap-4 mb-2">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
                   <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.title')}</div>
                 </div>
                 
                 {/* Contenu avec catégories et albums */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2">
                   {/* Zone A - Catégories avec radio coloré (zones de drop) */}
-                  <div className="space-y-2 border-r pr-4">
+                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
                     {photoCategories.length === 0 ? (
                       <p className="text-gray-500 text-center py-4 text-sm">{t('albums.noCategory')}</p>
                     ) : (
@@ -585,7 +545,8 @@ export default function Albums() {
                           onDragOver={(e) => handleDragOver(e, category.id, 'photo')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, category.id, 'photo')}
-                          className={`rounded-lg cursor-pointer transition-all duration-200 p-3 flex items-center gap-2 ${
+                          style={{ width: '160px', minWidth: '160px' }}
+                          className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
                             selectedPhotoCategory === category.id
                               ? 'bg-blue-100 border-2 border-blue-400'
                               : dragOverCategory === category.id && draggedAlbumType === 'photo'
@@ -605,16 +566,16 @@ export default function Albums() {
                               <div className="w-2 h-2 rounded-full bg-white" />
                             )}
                           </div>
-                          <span className="font-medium text-gray-800 text-sm flex-1 truncate">
+                          <span className="font-normal text-gray-800 text-sm flex-1 break-words">
                             {translateLabel(category.label)}
                             <span className="text-gray-400 ml-1">({getAlbumCount(category.id)})</span>
                           </span>
                           {/* Icône à droite selon le type */}
                           {getCategoryIcon(category, 18)}
                           {category.isPersonal && (
-                            <Lock 
-                              size={14} 
-                              className={`flex-shrink-0 ${unlockedCategories.includes(category.id) ? 'text-green-500' : 'text-red-500'}`} 
+                            <Lock
+                              size={14}
+                              className={`flex-shrink-0 ${unlockedCategories.includes(category.id) ? 'text-green-500' : 'text-red-500'}`}
                             />
                           )}
                           {/* Bouton supprimer (sauf pour Non classée) */}
@@ -636,7 +597,7 @@ export default function Albums() {
                   </div>
                   
                   {/* Zone B - Albums de la catégorie sélectionnée (draggables) */}
-                  <div className="space-y-2 pl-2">
+                  <div className="space-y-2 pl-2 flex flex-col items-center">
                     {photoAlbums.length === 0 ? (
                       <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
                     ) : (
@@ -647,7 +608,8 @@ export default function Albums() {
                           onDragStart={(e) => handleDragStart(e, album, 'photo')}
                           onDragEnd={handleDragEnd}
                           onClick={() => handleOpenAlbum(album, 'photo')}
-                          className={`rounded-lg cursor-pointer transition-all duration-200 p-3 flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 ${
+                          style={{ width: '160px', minWidth: '160px' }}
+                          className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-blue-50 hover:bg-blue-100 border border-blue-200 ${
                             !isNonClasseesAlbum(album) ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${draggedAlbum?.id === album.id ? 'opacity-50' : ''}`}
                           title={!isNonClasseesAlbum(album) ? t('albums.dragToMove') : ''}
@@ -665,7 +627,7 @@ export default function Albums() {
                           >
                             <div className="w-1.5 h-1.5 rounded-full bg-white" />
                           </div>
-                          <span className="font-medium text-gray-800 text-sm truncate flex-1">{translateAlbumTitle(album.title)}</span>
+                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{translateAlbumTitle(album.title)}</span>
                           {/* Icône à droite selon le type de la catégorie */}
                           {selectedPhotoCategoryData && getCategoryIcon(selectedPhotoCategoryData, 16)}
                           {/* Bouton renommer (sauf pour Non classées) */}
@@ -702,23 +664,89 @@ export default function Albums() {
                 </div>
               </div>
 
+              {/* Colonne Créations */}
+              <div className="p-2 min-w-0 flex-1">
+                <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
+                  <span className="text-2xl">🎨</span>
+                  {t('albums.creations')}
+                </h2>
+
+                {/* En-têtes des sous-colonnes */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
+                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.title')}</div>
+                </div>
+
+                {/* Contenu avec catégorie unique et albums fixes */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Zone A - Catégorie Créations */}
+                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
+                    <div
+                      className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-100 border-2 border-purple-400"
+                      style={{ width: '160px', minWidth: '160px' }}
+                    >
+                      <div
+                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        style={{
+                          borderColor: '#8B5CF6',
+                          backgroundColor: '#8B5CF6'
+                        }}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      </div>
+                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
+                        {language === 'fr' ? 'CRÉATIONS' : 'CREATIONS'}
+                        <span className="text-gray-400 ml-1">({creationsAlbums.length})</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Zone B - Albums fixes Créations */}
+                  <div className="space-y-2 pl-2 flex flex-col items-center">
+                    {creationsAlbums.length === 0 ? (
+                      <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
+                    ) : (
+                      creationsAlbums.map(album => (
+                        <div
+                          key={album.id}
+                          onClick={() => handleOpenAlbum(album, 'photo')}
+                          className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+                          style={{ width: '160px', minWidth: '160px' }}
+                        >
+                          <div
+                            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                            style={{
+                              borderColor: '#8B5CF6',
+                              backgroundColor: '#8B5CF6'
+                            }}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          </div>
+                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{album.title}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Colonne Documents */}
-              <div className="p-4">
-                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
+              <div className="p-2 min-w-0 flex-1">
+                <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663160465265/HGNqEaMegiV5gx7a5nB5zp/icon-book_a3b5c06e.png" alt="Documents" className="w-6 h-6 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   {t('albums.documents')}
                 </h2>
                 
                 {/* En-têtes des sous-colonnes */}
-                <div className="grid grid-cols-2 gap-4 mb-2">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
                   <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.title')}</div>
                 </div>
                 
                 {/* Contenu avec catégories et albums */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2">
                   {/* Zone A - Catégories avec radio coloré (zones de drop) */}
-                  <div className="space-y-2 border-r pr-4">
+                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
                     {docCategories.length === 0 ? (
                       <p className="text-gray-500 text-center py-4 text-sm">{t('albums.noCategory')}</p>
                     ) : (
@@ -729,7 +757,8 @@ export default function Albums() {
                           onDragOver={(e) => handleDragOver(e, category.id, 'doc')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, category.id, 'doc')}
-                          className={`rounded-lg cursor-pointer transition-all duration-200 p-3 flex items-center gap-2 ${
+                          style={{ width: '160px', minWidth: '160px' }}
+                          className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
                             selectedDocCategory === category.id
                               ? 'bg-green-100 border-2 border-green-400'
                               : dragOverCategory === category.id && draggedAlbumType === 'doc'
@@ -749,7 +778,7 @@ export default function Albums() {
                               <div className="w-2 h-2 rounded-full bg-white" />
                             )}
                           </div>
-                          <span className="font-medium text-gray-800 text-sm flex-1 truncate">
+                          <span className="font-normal text-gray-800 text-sm flex-1 break-words">
                             {translateLabel(category.label)}
                             <span className="text-gray-400 ml-1">({getAlbumCount(category.id)})</span>
                           </span>
@@ -780,7 +809,7 @@ export default function Albums() {
                   </div>
                   
                   {/* Zone B - Albums de la catégorie sélectionnée (draggables) */}
-                  <div className="space-y-2 pl-2">
+                  <div className="space-y-2 pl-2 flex flex-col items-center">
                     {docAlbums.length === 0 ? (
                       <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
                     ) : (
@@ -791,7 +820,8 @@ export default function Albums() {
                           onDragStart={(e) => handleDragStart(e, album, 'doc')}
                           onDragEnd={handleDragEnd}
                           onClick={() => handleOpenAlbum(album, 'doc')}
-                          className={`rounded-lg cursor-pointer transition-all duration-200 p-3 flex items-center gap-2 bg-green-50 hover:bg-green-100 border border-green-200 ${
+                          style={{ width: '160px', minWidth: '160px' }}
+                          className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-green-50 hover:bg-green-100 border border-green-200 ${
                             !isNonClasseesAlbum(album) ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${draggedAlbum?.id === album.id ? 'opacity-50' : ''}`}
                           title={!isNonClasseesAlbum(album) ? t('albums.dragToMove') : ''}
@@ -809,7 +839,7 @@ export default function Albums() {
                           >
                             <div className="w-1.5 h-1.5 rounded-full bg-white" />
                           </div>
-                          <span className="font-medium text-gray-800 text-sm truncate flex-1">{translateAlbumTitle(album.title)}</span>
+                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{translateAlbumTitle(album.title)}</span>
                           {/* Icône livre à droite */}
                           {selectedDocCategoryData && getCategoryIcon(selectedDocCategoryData, 16)}
                           {/* Bouton renommer (sauf pour Non classées) */}
