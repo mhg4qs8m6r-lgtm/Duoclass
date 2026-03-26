@@ -70,6 +70,17 @@ export interface CreationsProject {
   updatedAt: number;
 }
 
+export interface CollecteurItem {
+  id: string;
+  photoUrl: string;
+  name: string;
+  thumbnail?: string;
+  albumId?: string;
+  albumName?: string;
+  projectId?: string;
+  addedAt: number;
+}
+
 export interface BibliothequeItemDB {
   id: string;
   /** Catégorie principale (ex : 'cliparts', 'cadres', 'masques', 'arriere-plans', 'mes-elements') */
@@ -104,6 +115,7 @@ class DuoClassDB extends Dexie {
   creations_basket!: Table<CreationsBasketItem, string>;
   creations_projects!: Table<CreationsProject, string>;
   bibliotheque_items!: Table<BibliothequeItemDB, string>;
+  collecteur!: Table<CollecteurItem, string>;
 
   constructor() {
     super('DuoClassDB');
@@ -127,6 +139,18 @@ class DuoClassDB extends Dexie {
       creations_basket: 'id, addedAt, dateAdded',
       creations_projects: 'id, name, createdAt, updatedAt',
       bibliotheque_items: 'id, category, addedAt',
+    });
+    // v3 : ajout de la table collecteur
+    this.version(3).stores({
+      album_metas: 'id, title, type, series, createdAt, categoryId',
+      album_data: 'id, updatedAt',
+      albums: 'id, title, type, series, createdAt, categoryId',
+      categories: 'id, label, accessType',
+      settings: 'id',
+      creations_basket: 'id, addedAt, dateAdded',
+      creations_projects: 'id, name, createdAt, updatedAt',
+      bibliotheque_items: 'id, category, addedAt',
+      collecteur: 'id, addedAt, projectId',
     });
   }
 }
@@ -286,6 +310,37 @@ export async function removeFromCreationsBasket(id: string): Promise<void> {
 
 export async function clearCreationsBasket(): Promise<void> {
   await db.creations_basket.clear();
+}
+
+// ─── Helpers Collecteur ─────────────────────────────────────────────────────────
+
+export async function addToCollecteur(
+  items: Omit<CollecteurItem, 'id' | 'addedAt'> | Omit<CollecteurItem, 'id' | 'addedAt'>[],
+): Promise<CollecteurItem[]> {
+  const rawArray = Array.isArray(items) ? items : [items];
+  const added: CollecteurItem[] = [];
+  for (const raw of rawArray) {
+    const newItem: CollecteurItem = {
+      ...raw,
+      id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      addedAt: Date.now(),
+    };
+    await db.collecteur.put(newItem);
+    added.push(newItem);
+  }
+  return added;
+}
+
+export async function removeFromCollecteur(id: string): Promise<void> {
+  await db.collecteur.delete(id);
+}
+
+export async function clearCollecteur(): Promise<void> {
+  await db.collecteur.clear();
+}
+
+export async function getCollecteur(): Promise<CollecteurItem[]> {
+  return db.collecteur.orderBy('addedAt').toArray();
 }
 
 // ─── Helpers projets créations ─────────────────────────────────────────────────

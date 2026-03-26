@@ -10,7 +10,7 @@ import PhotoFrameNew from '@/components/PhotoFrameNew';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw, Palette, ShoppingCart, X as XIcon, ShoppingBasket } from 'lucide-react';
 import { toast } from "sonner";
-import { db, addToCreationsBasket, getCreationsBasket, removeFromCreationsBasket, clearCreationsBasket, CreationsBasketItem, MODELES_STICKERS_ALBUM_ID } from '../db';
+import { db, addToCreationsBasket, getCreationsBasket, removeFromCreationsBasket, clearCreationsBasket, CreationsBasketItem, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 // DuplicateValidationModal retiré - sera implémenté dans la version Electron
@@ -183,6 +183,12 @@ export default function UniversalAlbumPage({
 
   // --- ÉTATS UI ---
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, frameId: number | null } | null>(null);
+  // Modale choix de projet pour le Collecteur
+  const [collecteurModal, setCollecteurModal] = useState<{ photoUrl: string; name: string; thumbnail: string } | null>(null);
+  const [collecteurProjects, setCollecteurProjects] = useState<CreationsProject[]>([]);
+  const [collecteurSelectedProjectId, setCollecteurSelectedProjectId] = useState<string>('');
+  const [collecteurNewProjectName, setCollecteurNewProjectName] = useState('');
+  const [collecteurMode, setCollecteurMode] = useState<'existing' | 'new'>('existing');
   const [showFrameManagementModal, setShowFrameManagementModal] = useState(false);
   const [selectedFrameForManagement, setSelectedFrameForManagement] = useState<number | null>(null);
   const [framesToAdd, setFramesToAdd] = useState<number>(1);
@@ -3179,7 +3185,36 @@ export default function UniversalAlbumPage({
                     </button>
                   );
                 })()}
-                
+
+                {/* Option Envoyer vers le Collecteur */}
+                {isPhoto && (() => {
+                  const clickedFrame = contextMenu.frameId ? frames.find(f => f.id === contextMenu.frameId) : null;
+                  const canSend = !!clickedFrame?.photoUrl;
+                  return (
+                    <button
+                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${canSend ? 'hover:bg-purple-50 hover:text-purple-600' : 'text-gray-300 cursor-not-allowed'}`}
+                      onClick={async () => {
+                        if (canSend && clickedFrame) {
+                          const projects = await getAllCreationsProjects();
+                          setCollecteurProjects(projects);
+                          setCollecteurSelectedProjectId(projects.length > 0 ? (projects[0].id ?? '') : '');
+                          setCollecteurNewProjectName('');
+                          setCollecteurMode(projects.length > 0 ? 'existing' : 'new');
+                          setCollecteurModal({
+                            photoUrl: clickedFrame.photoUrl!,
+                            name: clickedFrame.title || 'Photo',
+                            thumbnail: clickedFrame.photoUrl!,
+                          });
+                        }
+                        setContextMenu(null);
+                      }}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      {language === 'fr' ? 'Envoyer vers le Collecteur' : 'Send to Collector'}
+                    </button>
+                  );
+                })()}
+
                 {/* Option Déplacer vers - Visible uniquement en mode Admin */}
                 {isAuthenticated && (() => {
                   const selectedPhotosForMove = frames.filter(f => f.isSelected && f.photoUrl);
@@ -4463,6 +4498,122 @@ export default function UniversalAlbumPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modale choix de projet pour le Collecteur */}
+      <Dialog open={!!collecteurModal} onOpenChange={(open) => { if (!open) setCollecteurModal(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>
+              {language === 'fr' ? 'À quel projet voulez-vous relier cette image ?' : 'Which project should this image be linked to?'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2">
+            {/* Choix : Projet existant */}
+            {collecteurProjects.length > 0 && (
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="collecteur-mode"
+                  checked={collecteurMode === 'existing'}
+                  onChange={() => setCollecteurMode('existing')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">
+                    {language === 'fr' ? 'Projet existant' : 'Existing project'}
+                  </span>
+                  <select
+                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    value={collecteurSelectedProjectId}
+                    onChange={(e) => {
+                      setCollecteurSelectedProjectId(e.target.value);
+                      setCollecteurMode('existing');
+                    }}
+                    disabled={collecteurMode !== 'existing'}
+                  >
+                    {collecteurProjects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {new Date(p.updatedAt).toLocaleDateString()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+            )}
+
+            {/* Choix : Nouveau projet */}
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="collecteur-mode"
+                checked={collecteurMode === 'new'}
+                onChange={() => setCollecteurMode('new')}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-medium">
+                  {language === 'fr' ? 'Nouveau projet' : 'New project'}
+                </span>
+                <Input
+                  className="mt-1"
+                  placeholder={language === 'fr' ? 'Nom du projet...' : 'Project name...'}
+                  value={collecteurNewProjectName}
+                  onChange={(e) => {
+                    setCollecteurNewProjectName(e.target.value);
+                    setCollecteurMode('new');
+                  }}
+                  disabled={collecteurMode !== 'new'}
+                />
+              </div>
+            </label>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCollecteurModal(null)}>
+              {language === 'fr' ? 'Annuler' : 'Cancel'}
+            </Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              disabled={collecteurMode === 'new' && !collecteurNewProjectName.trim()}
+              onClick={async () => {
+                if (!collecteurModal) return;
+                let projectId = '';
+
+                if (collecteurMode === 'new') {
+                  const project = await createCreationsProject(collecteurNewProjectName.trim());
+                  projectId = project.id;
+                } else {
+                  projectId = collecteurSelectedProjectId;
+                }
+
+                console.log("[COLLECTEUR] envoi projectId:", projectId, "image:", collecteurModal.photoUrl);
+                await addToCollecteur({
+                  photoUrl: collecteurModal.photoUrl,
+                  name: collecteurModal.name,
+                  thumbnail: collecteurModal.thumbnail,
+                  albumId: currentAlbumId || 'unknown',
+                  albumName: albumName || 'Album',
+                  projectId,
+                });
+
+                const projectName = collecteurMode === 'new'
+                  ? collecteurNewProjectName.trim()
+                  : collecteurProjects.find(p => p.id === projectId)?.name || '';
+
+                toast.success(
+                  language === 'fr'
+                    ? `Image ajoutée au Collecteur (${projectName})`
+                    : `Image added to Collector (${projectName})`
+                );
+                setCollecteurModal(null);
+              }}
+            >
+              {language === 'fr' ? 'Valider' : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoFrame } from "@/types/photo";
-import { db, BibliothequeItemDB, CreationsBasketItem, CreationsProject, getCreationsBasket, clearCreationsBasket, removeFromCreationsBasket, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, addToCreationsBasket, deleteCreationsProject, saveCollageToAlbum } from "@/db";
+import { db, BibliothequeItemDB, CreationsBasketItem, CreationsProject, getCreationsBasket, clearCreationsBasket, removeFromCreationsBasket, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, addToCreationsBasket, deleteCreationsProject, saveCollageToAlbum, removeFromCollecteur, clearCollecteur } from "@/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
 import { ShoppingBasket, Trash2 as TrashIcon } from "lucide-react";
@@ -802,11 +802,34 @@ export default function CreationsAtelierV2({
   const [showProjectModal, setShowProjectModal] = useState(true); // Afficher au démarrage
   const [showNewProjectHelp, setShowNewProjectHelp] = useState(false); // Modale d'aide pour créer un projet
   const [existingProjects, setExistingProjects] = useState<CreationsProject[]>([]);
+  const [collecteurCountByProject, setCollecteurCountByProject] = useState<Record<string, number>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
   
   // Contenu du panier (réactif avec useLiveQuery)
   const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').toArray(), []) || [];
-  
+
+  // Contenu du collecteur depuis IndexedDB (réactif)
+  const collecteurDbItems = useLiveQuery(() => db.collecteur.orderBy('addedAt').toArray(), []) || [];
+
+  // Synchroniser les items IndexedDB vers le state collectorItems (filtrés par projet)
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const projectItems = collecteurDbItems.filter(i => i.projectId === currentProjectId);
+    console.log("[COLLECTEUR] items reçus:", projectItems, "projectId actuel:", currentProjectId);
+    const mapped: CollectorItem[] = projectItems.map(dbItem => ({
+      id: dbItem.id,
+      type: 'photo' as const,
+      src: dbItem.photoUrl,
+      name: dbItem.name,
+      thumbnail: dbItem.thumbnail,
+    }));
+    setCollectorItems(prev => {
+      // Remplacer uniquement si le contenu a changé
+      if (prev.length === mapped.length && prev.every((p, i) => p.id === mapped[i]?.id)) return prev;
+      return mapped;
+    });
+  }, [collecteurDbItems, currentProjectId]);
+
   // État pour la sauvegarde automatique
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true); // Toggle auto-save ON/OFF
@@ -1061,7 +1084,17 @@ export default function CreationsAtelierV2({
           .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
         
         setExistingProjects(allProjects);
-        
+
+        // Compter les items du Collecteur par projet
+        const allCollecteurItems = await db.collecteur.toArray();
+        const counts: Record<string, number> = {};
+        for (const item of allCollecteurItems) {
+          if (item.projectId) {
+            counts[item.projectId] = (counts[item.projectId] || 0) + 1;
+          }
+        }
+        setCollecteurCountByProject(counts);
+
         // Si un projectId est fourni, ne pas afficher la modale
         if (projectId) {
           setShowProjectModal(false);
@@ -8064,8 +8097,14 @@ export default function CreationsAtelierV2({
           <div className="w-56 border-l relative z-[1100] h-full">
             <Collecteur
               items={collectorItems.map(i => ({ id: i.id, src: i.src, name: i.name, thumbnail: i.thumbnail }))}
-              onRemoveItem={(id) => setCollectorItems(prev => prev.filter(i => i.id !== id))}
-              onClearAll={() => setCollectorItems([])}
+              onRemoveItem={(id) => {
+                setCollectorItems(prev => prev.filter(i => i.id !== id));
+                removeFromCollecteur(id).catch(() => {});
+              }}
+              onClearAll={() => {
+                setCollectorItems([]);
+                clearCollecteur().catch(() => {});
+              }}
             />
           </div>
         </div>
@@ -8489,6 +8528,23 @@ export default function CreationsAtelierV2({
                             setSourcePhotos([]);
                           }
 
+                          // Charger les items du Collecteur pour ce projet
+                          db.collecteur.where('projectId').equals(project.id).toArray().then(items => {
+                            console.log("[COLLECTEUR] items bruts IndexedDB:", items, "projectId:", project.id);
+                            const mapped: CollectorItem[] = items.map(ci => ({
+                              id: ci.id,
+                              type: 'photo' as const,
+                              src: ci.photoUrl,
+                              name: ci.name,
+                              thumbnail: ci.thumbnail,
+                            }));
+                            setCollectorItems(mapped);
+                            console.log("[COLLECTEUR] items chargés:", mapped);
+                          }).catch((err) => {
+                            console.error("[COLLECTEUR] erreur chargement:", err);
+                            setCollectorItems([]);
+                          });
+
                           setShowProjectModal(false);
                           toast.success(language === "fr" ? `Projet "${project.name}" ouvert` : `Project "${project.name}" opened`);
                         }}
@@ -8500,7 +8556,7 @@ export default function CreationsAtelierV2({
                               {project.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {(project.photos ?? []).length} {language === "fr" ? "photo(s)" : "photo(s)"} •
+                              {collecteurCountByProject[project.id] || 0} {language === "fr" ? "élément(s) dans le Collecteur" : "item(s) in Collector"} •
                               {language === "fr" ? " Modifié le " : " Modified "}
                               {new Date(project.updatedAt ?? project.createdAt).toLocaleDateString()}
                             </div>
