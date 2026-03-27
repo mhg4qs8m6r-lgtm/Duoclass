@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID } from '@/db';
+import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID, getAllCreationsProjects, CreationsProject } from '@/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,7 +25,6 @@ export default function Albums() {
   const [creationsProjectId, setCreationsProjectId] = useState<string | undefined>(undefined);
   const [creationsProjectName, setCreationsProjectName] = useState<string>("Nouveau projet");
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState<string | null>(null);
-  const [selectedCreationsCategory, setSelectedCreationsCategory] = useState<string | null>('cat_creations');
   const [selectedDocCategory, setSelectedDocCategory] = useState<string | null>(null);
   const [unlockedCategories, setUnlockedCategories] = useState<string[]>([]);
   const [passwordInput, setPasswordInput] = useState('');
@@ -47,12 +46,18 @@ export default function Albums() {
   const categories = useLiveQuery(() => db.categories.toArray());
   const albums = useLiveQuery(() => db.album_metas.toArray());
 
+  // Récupérer les projets créations
+  const creationsProjects = useLiveQuery(() => getAllCreationsProjects(), []) || [];
+
   // Fonction pour traduire les labels de catégories et albums par défaut
   const translateLabel = (label: string): string => {
+    const upper = label.toUpperCase();
+    const normalized = upper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // Renommer MES PROJETS → Projets finis / Finished Projects
+    if (normalized.includes('MES PROJETS')) {
+      return language === 'fr' ? 'PROJETS FINIS' : 'FINISHED PROJECTS';
+    }
     if (language === 'en') {
-      // Normaliser : supprimer les accents pour la comparaison
-      const upper = label.toUpperCase();
-      const normalized = upper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (normalized === 'NON CLASSEE' || normalized === 'NON CLASSEES') return 'UNCATEGORIZED';
       if (normalized === 'MES COLLAGES') return 'MY COLLAGES';
       return label;
@@ -136,17 +141,6 @@ export default function Albums() {
     }
   }, [photoCategories, docCategories, selectedPhotoCategory, selectedDocCategory]);
 
-  // Albums filtrés par catégorie sélectionnée (triés avec Non classées en premier)
-  const photoAlbums = sortAlbumsWithNonClasseesFirst(
-    albums?.filter(a => a.categoryId === selectedPhotoCategory) || []
-  );
-  const docAlbums = sortAlbumsWithNonClasseesFirst(
-    albums?.filter(a => a.categoryId === selectedDocCategory) || []
-  );
-
-  // Albums Créations filtrés par catégorie sélectionnée
-  const creationsAlbums = albums?.filter(a => a.categoryId === selectedCreationsCategory) || [];
-
   // IDs des albums fixes Créations (non effaçables)
   const CREATIONS_FIXED_ALBUM_IDS = [
     'album_creations_cliparts',
@@ -161,10 +155,19 @@ export default function Albums() {
 
   const isCreationsFixedAlbum = (album: AlbumMeta) => CREATIONS_FIXED_ALBUM_IDS.includes(album.id);
 
+  // Albums filtrés par catégorie sélectionnée (triés avec Non classées en premier)
+  // + albums fixes Créations ajoutés à la fin de la liste Photos
+  const creationsFixedAlbums = albums?.filter(a => CREATIONS_FIXED_ALBUM_IDS.includes(a.id) && a.id !== 'album_creations_projets_en_cours') || [];
+  const photoAlbums = sortAlbumsWithNonClasseesFirst(
+    [...(albums?.filter(a => a.categoryId === selectedPhotoCategory) || []), ...creationsFixedAlbums]
+  );
+  const docAlbums = sortAlbumsWithNonClasseesFirst(
+    albums?.filter(a => a.categoryId === selectedDocCategory) || []
+  );
+
   // Obtenir la catégorie sélectionnée pour afficher sa couleur dans les albums
   const selectedPhotoCategoryData = categories?.find(c => c.id === selectedPhotoCategory);
   const selectedDocCategoryData = categories?.find(c => c.id === selectedDocCategory);
-  const selectedCreationsCategoryData = categories?.find(c => c.id === selectedCreationsCategory);
 
   // Ouvrir un album
   const handleOpenAlbum = (album: AlbumMeta, type: 'photo' | 'doc') => {
@@ -651,69 +654,44 @@ export default function Albums() {
                 </div>
               </div>
 
-              {/* Colonne Créations */}
+              {/* Colonne Projets en cours */}
               <div className="p-2 min-w-0 flex-1">
                 <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
                   <span className="text-2xl">🎨</span>
-                  {t('albums.creations')}
+                  {language === 'fr' ? 'Projets en cours' : 'Current Projects'}
                 </h2>
 
-                {/* En-têtes des sous-colonnes */}
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
-                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.title')}</div>
-                </div>
-
-                {/* Contenu avec catégorie unique et albums fixes */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Zone A - Catégorie Créations */}
-                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
-                    <div
-                      className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-100 border-2 border-purple-400"
-                      style={{ width: '160px', minWidth: '160px' }}
-                    >
+                {/* Liste des projets */}
+                <div className="space-y-2 flex flex-col items-center">
+                  {creationsProjects.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4 text-sm">
+                      {language === 'fr' ? 'Aucun projet créé' : 'No project created'}
+                    </p>
+                  ) : (
+                    creationsProjects.map(project => (
                       <div
-                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        style={{
-                          borderColor: '#8B5CF6',
-                          backgroundColor: '#8B5CF6'
+                        key={project.id}
+                        onClick={() => {
+                          setCreationsProjectId(project.id);
+                          setCreationsProjectName(project.name);
+                          setShowCreationsModal(true);
                         }}
+                        className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+                        style={{ width: '160px', minWidth: '160px' }}
                       >
-                        <div className="w-2 h-2 rounded-full bg-white" />
-                      </div>
-                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
-                        {language === 'fr' ? 'CRÉATIONS' : 'CREATIONS'}
-                        <span className="text-gray-400 ml-1">({creationsAlbums.length})</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Zone B - Albums fixes Créations */}
-                  <div className="space-y-2 pl-2 flex flex-col items-center">
-                    {creationsAlbums.length === 0 ? (
-                      <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
-                    ) : (
-                      creationsAlbums.map(album => (
                         <div
-                          key={album.id}
-                          onClick={() => handleOpenAlbum(album, 'photo')}
-                          className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
-                          style={{ width: '160px', minWidth: '160px' }}
+                          className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                          style={{
+                            borderColor: '#8B5CF6',
+                            backgroundColor: '#8B5CF6'
+                          }}
                         >
-                          <div
-                            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                            style={{
-                              borderColor: '#8B5CF6',
-                              backgroundColor: '#8B5CF6'
-                            }}
-                          >
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                          </div>
-                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{album.title}</span>
+                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
                         </div>
-                      ))
-                    )}
-                  </div>
+                        <span className="font-normal text-gray-800 text-sm break-words flex-1">{project.name}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
