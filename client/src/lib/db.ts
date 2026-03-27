@@ -328,6 +328,7 @@ export async function addToCollecteur(
     await db.collecteur.put(newItem);
     added.push(newItem);
   }
+  console.log("[DB] collecteur après ajout:", await db.collecteur.toArray());
   return added;
 }
 

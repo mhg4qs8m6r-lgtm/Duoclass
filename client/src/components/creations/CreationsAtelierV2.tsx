@@ -721,6 +721,7 @@ export default function CreationsAtelierV2({
   // Nom et ID du projet
   const [currentProjectName, setCurrentProjectName] = useState(projectName);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(projectId || null);
+  console.log("[ATELIER] projet actif:", currentProjectId, "projectId prop:", projectId);
   
   // Photo active pour le travail sur le canvas
   const [activeCanvasPhoto, setActiveCanvasPhoto] = useState<string | null>(null);
