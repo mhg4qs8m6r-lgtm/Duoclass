@@ -1983,8 +1983,8 @@ function StickerPlannerSection({
         {/* Zone album Modèles Stickers — compacte */}
         <div className="rounded border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-800 leading-snug">
           {fr
-            ? <><strong>Album Modèles Stickers</strong> → sélectionnez un sticker, ajoutez-le au panier, puis glissez-le sur le canvas.</>
-            : <><strong>Sticker Models album</strong> → select a sticker, add to basket, then drag onto canvas.</>}
+            ? <><strong>Album Modèles Stickers</strong> → sélectionnez un sticker, ajoutez-le au collecteur, puis glissez-le sur le canvas.</>
+            : <><strong>Sticker Models album</strong> → select a sticker, add to collector, then drag onto canvas.</>}
         </div>
       </div>
 

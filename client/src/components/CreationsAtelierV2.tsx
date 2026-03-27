@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoFrame } from "@/types/photo";
-import { db, BibliothequeItemDB, CreationsBasketItem, CreationsProject, getCreationsBasket, clearCreationsBasket, removeFromCreationsBasket, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, addToCreationsBasket, deleteCreationsProject, saveCollageToAlbum } from "@/db";
+import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, deleteCreationsProject, saveCollageToAlbum } from "@/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
-import { ShoppingBasket, Trash2 as TrashIcon } from "lucide-react";
+import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
@@ -610,9 +610,6 @@ export default function CreationsAtelierV2({
   const [lassoEnd, setLassoEnd] = useState<{ x: number; y: number } | null>(null);
   const [lassoAdditive, setLassoAdditive] = useState(false); // Ctrl/Shift pour ajouter à la sélection
   
-  // État pour afficher le panier
-  const [showBasket, setShowBasket] = useState(false);
-  
   // États pour les dimensions de l'image
   const [lockAspectRatio, setLockAspectRatio] = useState(true); // Verrouillage des proportions
   const [showDimensionsInCm, setShowDimensionsInCm] = useState(false); // Afficher en cm au lieu de px
@@ -643,8 +640,6 @@ export default function CreationsAtelierV2({
   const [existingProjects, setExistingProjects] = useState<CreationsProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
   
-  // Contenu du panier (réactif avec useLiveQuery)
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').toArray(), []) || [];
   
   // État pour la sauvegarde automatique
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -773,7 +768,7 @@ export default function CreationsAtelierV2({
     src: string;
     name: string;
     rect: DOMRect;
-    type: 'collector' | 'basket';
+    type: 'collector';
   } | null>(null);
   
   // Fermer automatiquement le survol après 3 secondes ou au scroll/clic
@@ -5848,17 +5843,13 @@ export default function CreationsAtelierV2({
                     }
                     if (files.length > 0) return;
                   }
-                  // 2) Données internes (panier, bibliothèque)
+                  // 2) Données internes (bibliothèque)
                   const data = e.dataTransfer.getData("text/plain");
                   if (data) {
                     try {
                       const item = JSON.parse(data);
                       if (item.src) {
                         addToCanvas(item.src, item.name);
-                        const basketItem = basketItems.find(b => b.photoUrl === item.src);
-                        if (basketItem) {
-                          if (basketItem.id !== undefined) if (basketItem.id !== undefined) await removeFromCreationsBasket(basketItem.id);
-                        }
                       }
                     } catch {
                       if (data.startsWith("data:") || data.startsWith("http")) {
@@ -8245,31 +8236,6 @@ export default function CreationsAtelierV2({
                     </button>
                   )}
                   
-                  {/* Envoyer vers le panier */}
-                  {element.src && (
-                    <button
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-amber-50 flex items-center gap-3"
-                      onClick={async () => {
-                        try {
-                          await addToCreationsBasket([{
-                            photoUrl: element.src!,
-                            thumbnail: element.src!,
-                            albumId: currentProjectId || 'atelier',
-                            albumName: currentProjectName || (language === 'fr' ? 'Atelier Créations' : 'Creations Workshop'),
-                            photoTitle: element.name || 'Photo'
-                          }]);
-                          toast.success(language === "fr" ? "Ajouté au panier" : "Added to basket");
-                        } catch (error) {
-                          console.error('Erreur ajout au panier:', error);
-                          toast.error(language === "fr" ? "Erreur lors de l'ajout" : "Error adding to basket");
-                        }
-                        closeContextMenu();
-                      }}
-                    >
-                      <ShoppingBasket className="w-4 h-4 text-amber-500" />
-                      <span>{language === "fr" ? "Envoyer vers le panier" : "Send to basket"}</span>
-                    </button>
-                  )}
                   
                   <div className="border-t border-gray-100 my-1" />
                   
@@ -8430,28 +8396,6 @@ export default function CreationsAtelierV2({
             
             <div className="border-t border-gray-100 my-1" />
             
-            {/* Importer depuis le panier directement sur le canvas */}
-            <button
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
-              onClick={async () => {
-                // Importer les photos du panier DIRECTEMENT sur le canvas
-                const basket = await getCreationsBasket();
-                if (basket.length > 0) {
-                  for (const item of basket) {
-                    addToCanvas(item.photoUrl, item.photoTitle || 'Photo');
-                  }
-                  toast.success(language === "fr" ? `${basket.length} photo(s) ajoutée(s) au canvas` : `${basket.length} photo(s) added to canvas`);
-                } else {
-                  toast.info(language === "fr" ? "Le panier est vide" : "Basket is empty");
-                }
-                setCanvasContextMenu(null);
-              }}
-            >
-              <ShoppingBasket className="w-4 h-4 text-blue-500" />
-              <span>{language === "fr" ? "Importer depuis le panier" : "Import from basket"}</span>
-            </button>
-            
-            <div className="border-t border-gray-100 my-1" />
             
             {/* Coller une image directement sur le canvas */}
             <button

@@ -5,7 +5,7 @@ import MainLayout from "@/components/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Lock, Unlock, HelpCircle, Plus, X, Trash2, Camera, Video, Layers, ShoppingBasket, Upload } from "lucide-react";
+import { Lock, Unlock, HelpCircle, Plus, X, Trash2, Camera, Video, Layers } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { db, AlbumMeta, Category, addToCreationsBasket, removeFromCreationsBasket, clearCreationsBasket, CreationsBasketItem } from "../db";
+import { db, AlbumMeta, Category } from "../db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -299,20 +299,9 @@ export default function Home() {
     }
   };
   
-  // États pour la modale panier
-  const [showBasketModal, setShowBasketModal] = useState(false);
-  const [basketDragOver, setBasketDragOver] = useState(false);
-
-  // Items du panier
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').reverse().toArray(), []) || [];
-
-  // Handler pour les actions toolbar (panier)
+  // Handler pour les actions toolbar
   const handleToolbarAction = (action: string | null) => {
     if (!action) return;
-    if (action === 'panier') {
-      setShowBasketModal(true);
-      return;
-    }
   };
 
   // État pour la suppression d'album
@@ -1082,149 +1071,6 @@ export default function Home() {
         </AlertDialog>
 
       </div>
-
-      {/* MODALE PANIER - Persistante avec croix de fermeture + drag-drop depuis le bureau */}
-      <Dialog open={showBasketModal} onOpenChange={(open) => { if (!open) setShowBasketModal(false); }}>
-        <DialogContent
-          className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          showCloseButton={false}
-        >
-          {/* Header avec croix de fermeture */}
-          <div className="flex items-center justify-between pb-3 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <ShoppingBasket className="w-5 h-5 text-amber-600" />
-              {language === 'fr' ? `Panier Créations (${basketItems.length})` : `Creations Basket (${basketItems.length})`}
-            </DialogTitle>
-            <button
-              onClick={() => setShowBasketModal(false)}
-              className="rounded-full p-1.5 hover:bg-gray-100 transition-colors"
-              title={language === 'fr' ? 'Fermer' : 'Close'}
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-
-          {/* Zone de contenu avec drag-drop */}
-          <div
-            className={`flex-1 overflow-y-auto py-4 relative ${
-              basketDragOver ? 'ring-2 ring-amber-400 ring-dashed rounded-lg bg-amber-50/50' : ''
-            }`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (e.dataTransfer.types.includes('Files')) {
-                e.dataTransfer.dropEffect = 'copy';
-                setBasketDragOver(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
-                setBasketDragOver(false);
-              }
-            }}
-            onDrop={async (e) => {
-              e.preventDefault();
-              setBasketDragOver(false);
-              const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-              if (files.length === 0) {
-                toast.error(language === 'fr' ? 'Aucune image trouvée' : 'No images found');
-                return;
-              }
-              // Lire tous les fichiers en dataURL
-              const photosToAdd: Omit<CreationsBasketItem, 'id' | 'dateAdded'>[] = [];
-              for (const file of files) {
-                const dataUrl = await new Promise<string>((resolve) => {
-                  const reader = new FileReader();
-                  reader.onload = (ev) => resolve(ev.target?.result as string);
-                  reader.readAsDataURL(file);
-                });
-                photosToAdd.push({
-                  photoUrl: dataUrl,
-                  thumbnail: dataUrl,
-                  photoTitle: file.name,
-                  albumId: 'desktop-import',
-                  albumName: language === 'fr' ? 'Import Bureau' : 'Desktop Import',
-                });
-              }
-              const { added, duplicates } = await addToCreationsBasket(photosToAdd);
-              if (added.length > 0) {
-                toast.success(language === 'fr' ? `${added.length} photo(s) ajoutée(s) au panier` : `${added.length} photo(s) added to basket`);
-              }
-              if (duplicates.length > 0) {
-                toast.info(language === 'fr' ? `${duplicates.length} doublon(s) ignoré(s)` : `${duplicates.length} duplicate(s) skipped`);
-              }
-            }}
-          >
-            {/* Overlay drag-drop */}
-            {basketDragOver && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-amber-50/80 z-10 rounded-lg border-2 border-dashed border-amber-400">
-                <Upload className="w-10 h-10 text-amber-500 mb-2" />
-                <p className="text-amber-700 font-medium">
-                  {language === 'fr' ? 'Déposez vos photos ici' : 'Drop your photos here'}
-                </p>
-              </div>
-            )}
-
-            {basketItems.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <ShoppingBasket className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>{language === 'fr' ? 'Le panier est vide' : 'Basket is empty'}</p>
-                <p className="text-sm mt-1">{language === 'fr' ? 'Glissez des photos depuis le bureau ou ajoutez-les depuis un album' : 'Drag photos from desktop or add them from an album'}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 gap-3">
-                {basketItems.map((item) => (
-                  <div key={item.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                      <img
-                        src={item.thumbnail || item.photoUrl}
-                        alt={item.photoTitle || 'Photo'}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (item.id) {
-                          await removeFromCreationsBasket(item.id);
-                          toast.info(language === 'fr' ? 'Photo retirée du panier' : 'Photo removed from basket');
-                        }
-                      }}
-                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-600"
-                      title={language === 'fr' ? 'Retirer' : 'Remove'}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <p className="text-[10px] text-gray-500 truncate mt-1 text-center">{item.photoTitle}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer avec actions */}
-          {basketItems.length > 0 && (
-            <div className="flex justify-between items-center pt-3 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  await clearCreationsBasket();
-                  toast.info(language === 'fr' ? 'Panier vidé' : 'Basket cleared');
-                }}
-                className="text-red-500 hover:text-red-600 hover:bg-red-50"
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                {language === 'fr' ? 'Vider' : 'Clear'}
-              </Button>
-              <span className="text-sm text-gray-500">
-                {basketItems.length} {language === 'fr' ? 'photo(s)' : 'photo(s)'}
-              </span>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
     </MainLayout>
   );

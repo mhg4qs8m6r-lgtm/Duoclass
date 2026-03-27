@@ -1,6 +1,6 @@
 /**
  * Base de données IndexedDB (Dexie) côté client.
- * Toutes les photos, albums, catégories, panier et projets créations sont stockés ici.
+ * Toutes les photos, albums, catégories et projets créations sont stockés ici.
  */
 import Dexie, { type Table } from 'dexie';
 import type { PhotoFrame, AlbumMeta, Category, CategoryMediaType, Album } from '@/types/photo';
@@ -36,22 +36,6 @@ export interface AlbumSettings {
   detectDuplicates?: boolean;
   readExifData?: boolean;
   [key: string]: unknown;
-}
-
-export interface CreationsBasketItem {
-  id: string;
-  photoUrl: string;
-  title?: string;
-  /** Titre de la photo (alias pour compatibilité) */
-  photoTitle?: string;
-  albumId?: string;
-  /** Nom de l'album source */
-  albumName?: string;
-  /** Vignette de la photo */
-  thumbnail?: string;
-  addedAt?: number;
-  /** Alias pour addedAt (compatibilité) */
-  dateAdded?: number;
 }
 
 export interface CreationsProject {
@@ -112,7 +96,6 @@ class DuoClassDB extends Dexie {
   albums!: Table<Album, string>;
   categories!: Table<Category, string>;
   settings!: Table<AlbumSettings, string>;
-  creations_basket!: Table<CreationsBasketItem, string>;
   creations_projects!: Table<CreationsProject, string>;
   bibliotheque_items!: Table<BibliothequeItemDB, string>;
   collecteur!: Table<CollecteurItem, string>;
@@ -253,63 +236,6 @@ export async function initCategories(): Promise<void> {
   } catch (err) {
     console.warn('[DB] initCategories error:', err);
   }
-}
-
-// ─── Helpers panier créations ──────────────────────────────────────────────────
-
-export async function getCreationsBasket(): Promise<CreationsBasketItem[]> {
-  return db.creations_basket.orderBy('addedAt').toArray();
-}
-
-export interface AddToBasketResult {
-  added: CreationsBasketItem[];
-  duplicates: CreationsBasketItem[];
-}
-
-/** Type accepté par addToCreationsBasket : objet partiel avec au moins photoUrl */
-export type BasketInput = Omit<CreationsBasketItem, 'id' | 'addedAt' | 'dateAdded'> & {
-  id?: string;
-  addedAt?: number;
-  dateAdded?: number;
-};
-
-export async function addToCreationsBasket(
-  items:
-    | Omit<CreationsBasketItem, 'id' | 'addedAt' | 'dateAdded'>
-    | Omit<CreationsBasketItem, 'id' | 'addedAt' | 'dateAdded'>[]
-    | Omit<CreationsBasketItem, 'id' | 'dateAdded'>
-    | Omit<CreationsBasketItem, 'id' | 'dateAdded'>[]
-    | Record<string, unknown>
-    | Record<string, unknown>[],
-): Promise<AddToBasketResult> {
-  const rawArray = Array.isArray(items) ? items : [items];
-  const added: CreationsBasketItem[] = [];
-  const duplicates: CreationsBasketItem[] = [];
-  for (const raw of rawArray) {
-    const item = raw as Partial<CreationsBasketItem> & { photoUrl: string };
-    const id = (item as CreationsBasketItem).id ?? `basket_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const existing = await db.creations_basket.get(id);
-    if (existing) {
-      duplicates.push(existing);
-    } else {
-      const newItem: CreationsBasketItem = {
-        ...item,
-        id,
-        addedAt: (item as CreationsBasketItem).addedAt ?? Date.now(),
-      } as CreationsBasketItem;
-      await db.creations_basket.put(newItem);
-      added.push(newItem);
-    }
-  }
-  return { added, duplicates };
-}
-
-export async function removeFromCreationsBasket(id: string): Promise<void> {
-  await db.creations_basket.delete(id);
-}
-
-export async function clearCreationsBasket(): Promise<void> {
-  await db.creations_basket.clear();
 }
 
 // ─── Helpers Collecteur ─────────────────────────────────────────────────────────

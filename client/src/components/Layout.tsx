@@ -3,24 +3,19 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { 
-  Search, 
-  Home, 
-  Image as ImageIcon, 
-  FileText, 
-  Settings, 
+import {
+  Search,
+  Home,
+  Image as ImageIcon,
+  FileText,
+  Settings,
   Wrench,
   Camera,
   Smartphone,
   Lock,
   Unlock,
-  LogOut,
-  ShoppingBasket,
-  Upload
+  LogOut
 } from "lucide-react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, addToCreationsBasket, CreationsBasketItem } from "@/db";
-import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSelector from "@/components/LanguageSelector";
@@ -106,62 +101,6 @@ export default function Layout(props: LayoutProps) {
   
   // État pour le panneau d'aide contextuelle
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  
-  // Compteur du panier Créations (réactif avec useLiveQuery)
-  // Toujours compter TOUTES les photos du panier (pas de filtre par album)
-  const basketCount = useLiveQuery(
-    () => db.creations_basket.count(), 
-    []
-  ) || 0;
-  
-  // Items du panier pour l'aperçu (limité à 6 pour la popup)
-  // Toujours montrer les dernières photos ajoutées, tous albums confondus
-  const basketItems = useLiveQuery(
-    () => db.creations_basket.orderBy('addedAt').reverse().limit(6).toArray(), 
-    []
-  ) || [];
-  
-  // État pour afficher/masquer l'aperçu du panier
-  const [showBasketPreview, setShowBasketPreview] = useState(false);
-  
-  // État pour le drag-and-drop sur le bouton Basket de la toolbar
-  const [basketBtnDragOver, setBasketBtnDragOver] = useState(false);
-  
-  // Handler de drop sur le bouton Basket (drag depuis le bureau)
-  const handleBasketDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setBasketBtnDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length === 0) {
-      toast.error(language === 'fr' ? 'Aucune image trouvée' : 'No images found');
-      return;
-    }
-    const photosToAdd: Omit<CreationsBasketItem, 'id' | 'dateAdded'>[] = [];
-    for (const file of files) {
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => resolve(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      });
-      photosToAdd.push({
-        photoUrl: dataUrl,
-        thumbnail: dataUrl,
-        photoTitle: file.name,
-        albumId: 'desktop-import',
-        albumName: language === 'fr' ? 'Import Bureau' : 'Desktop Import',
-      });
-    }
-    const { added, duplicates } = await addToCreationsBasket(photosToAdd);
-    if (added.length > 0) {
-      toast.success(language === 'fr' ? `${added.length} photo(s) ajoutée(s) au panier` : `${added.length} photo(s) added to basket`);
-    }
-    if (duplicates.length > 0) {
-      toast.info(language === 'fr' ? `${duplicates.length} doublon(s) ignoré(s)` : `${duplicates.length} duplicate(s) skipped`);
-    }
-    // Ouvrir la modale panier après le drop
-    if (onToolbarAction) onToolbarAction('panier');
-  };
   
   // States pour les couleurs personnalisées (réactifs aux changements)
   const [customColors, setCustomColors] = useState({
@@ -521,92 +460,6 @@ export default function Layout(props: LayoutProps) {
             return <div key={item.id}>{buttonContent}</div>;
           })}
           
-          {/* Bouton Panier Créations avec badge, aperçu au survol et drag-drop depuis le bureau */}
-          <div 
-            className={`relative ${basketBtnDragOver ? 'ring-2 ring-amber-400 ring-dashed rounded-lg bg-amber-50 scale-110' : ''}`}
-            onMouseEnter={() => !basketBtnDragOver && basketCount > 0 && setShowBasketPreview(true)}
-            onMouseLeave={() => setShowBasketPreview(false)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.dataTransfer.types.includes('Files')) {
-                e.dataTransfer.dropEffect = 'copy';
-                setBasketBtnDragOver(true);
-                setShowBasketPreview(false);
-              }
-            }}
-            onDragLeave={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
-                setBasketBtnDragOver(false);
-              }
-            }}
-            onDrop={handleBasketDrop}
-          >
-            {/* Overlay drag-drop sur le bouton */}
-            {basketBtnDragOver && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-amber-100/90 z-10 rounded-lg pointer-events-none">
-                <Upload className="w-5 h-5 text-amber-600 animate-bounce" />
-              </div>
-            )}
-            <button 
-              onClick={() => onToolbarAction && onToolbarAction('panier')}
-              className="relative flex flex-col items-center justify-center px-4 py-3 transition-all min-w-[80px] min-h-[48px] touch-manipulation hover:bg-amber-50 hover:text-amber-700 rounded-md active:translate-y-[1px]"
-            >
-              <ShoppingBasket className={`w-5 h-5 ${basketCount > 0 ? 'text-amber-600' : 'text-gray-500'}`} />
-              <span className={`text-xs font-semibold text-center leading-tight mt-0.5 ${basketCount > 0 ? 'text-amber-700' : 'text-gray-700'}`}>
-                {language === 'fr' ? 'Panier' : 'Basket'}
-              </span>
-              {/* Badge de comptage */}
-              {basketCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-sm">
-                  {basketCount > 99 ? '99+' : basketCount}
-                </span>
-              )}
-            </button>
-            
-            {/* Aperçu du panier au survol - avec pont invisible pour éviter la fermeture */}
-            {showBasketPreview && basketCount > 0 && (
-              <>
-                {/* Pont invisible entre le bouton et la popup */}
-                <div className="absolute top-full left-0 right-0 h-2 bg-transparent" />
-                <div 
-                  className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-50 min-w-[280px] max-w-[320px]"
-                  onMouseEnter={() => setShowBasketPreview(true)}
-                  onMouseLeave={() => setShowBasketPreview(false)}
-                >
-                  <div className="flex items-center justify-end mb-2 pb-2 border-b border-gray-100">
-                    <span className="text-xs text-amber-600 font-medium">
-                      {basketCount} {language === 'fr' ? 'photo(s)' : 'photo(s)'}
-                    </span>
-                  </div>
-                  
-                  {/* Grille de miniatures */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    {basketItems.map((item, index) => (
-                      <div 
-                        key={item.id || index} 
-                        className="aspect-square rounded-md overflow-hidden bg-gray-100 border border-gray-200"
-                      >
-                        <img 
-                          src={item.thumbnail || item.photoUrl} 
-                          alt={item.photoTitle || 'Photo'}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                    {/* Placeholder si plus de photos */}
-                    {basketCount > 6 && (
-                      <div className="aspect-square rounded-md bg-gray-100 border border-gray-200 flex items-center justify-center">
-                        <span className="text-xs text-gray-500 font-medium">+{basketCount - 6}</span>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </>
-            )}
-          </div>
         </div>
 
         {/* Main Content Container */}

@@ -8,9 +8,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoClassProps, PhotoFrame } from '@/types/photo';
 import PhotoFrameNew from '@/components/PhotoFrameNew';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw, Palette, ShoppingCart, X as XIcon, ShoppingBasket } from 'lucide-react';
+import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw } from 'lucide-react';
 import { toast } from "sonner";
-import { db, addToCreationsBasket, getCreationsBasket, removeFromCreationsBasket, clearCreationsBasket, CreationsBasketItem, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
+import { db, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 // DuplicateValidationModal retiré - sera implémenté dans la version Electron
@@ -212,8 +212,6 @@ export default function UniversalAlbumPage({
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showCreationsModal, setShowCreationsModal] = useState(false);
-  const [showBasketModal, setShowBasketModal] = useState(false);
-  const [basketDragOver, setBasketDragOver] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [sendMode, setSendMode] = useState<'pdf' | 'images'>('pdf');
   const [convertMode, setConvertMode] = useState<'pdf' | 'images'>('pdf');
@@ -441,9 +439,6 @@ export default function UniversalAlbumPage({
   }, { enabled: !isModalOpen });
 
   // --- CATÉGORIES ---
-  // Contenu du panier (réactif)
-  const basketItems = useLiveQuery(() => db.creations_basket.orderBy('addedAt').toArray(), []) || [];
-
   const allCategories = useLiveQuery(() => db.categories.toArray()) || [];
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
   const [currentAlbumCategory, setCurrentAlbumCategory] = useState<any | null>(null);
@@ -599,10 +594,6 @@ export default function UniversalAlbumPage({
         break;
       case 'creations':
         setShowCreationsModal(true);
-        break;
-      case 'panier':
-        // Afficher le contenu du panier (ne PAS ouvrir l'Atelier)
-        setShowBasketModal(true);
         break;
       default:
         console.log("Action non gérée:", toolbarAction);
@@ -3109,82 +3100,6 @@ export default function UniversalAlbumPage({
                   Voir {isPhoto ? "la photo" : "le document"}
                 </button>
 
-                
-                {/* Option Ajouter au panier Créations */}
-                {isPhoto && (() => {
-                  // Calculer combien de photos seront ajoutées au clic
-                  // CORRECTION: Si des photos sont sélectionnées, on n'ajoute QUE les photos sélectionnées
-                  // Si aucune photo n'est sélectionnée, on ajoute la photo sur laquelle on a cliqué
-                  const selectedPhotosForBasket = frames.filter(f => f.isSelected && f.photoUrl);
-                  const hasSelectedForBasket = selectedPhotosForBasket.length > 0;
-                  
-                  // Compter les photos à ajouter
-                  let totalToAdd = 0;
-                  const clickedFrame = contextMenu.frameId ? frames.find(f => f.id === contextMenu.frameId) : null;
-                  const clickedHasPhoto = clickedFrame?.photoUrl;
-                  
-                  if (hasSelectedForBasket) {
-                    // Si des photos sont sélectionnées, on ajoute UNIQUEMENT les photos sélectionnées
-                    totalToAdd = selectedPhotosForBasket.length;
-                  } else if (clickedHasPhoto) {
-                    // Sinon, seulement la photo cliquée
-                    totalToAdd = 1;
-                  }
-                  
-                  const canAdd = clickedHasPhoto || hasSelectedForBasket;
-                  
-                  return (
-                    <button 
-                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${canAdd ? 'hover:bg-orange-50 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'}`}
-                      onClick={async () => {
-                        if (canAdd) {
-                          // Collecter les photos à ajouter au panier
-                          const photosToAdd: typeof frames = [];
-                          
-                          if (hasSelectedForBasket) {
-                            // Si des photos sont sélectionnées, on ajoute UNIQUEMENT les photos sélectionnées
-                            selectedPhotosForBasket.forEach(f => {
-                              photosToAdd.push(f);
-                            });
-                          } else if (clickedHasPhoto && clickedFrame) {
-                            // Sinon, on ajoute la photo sur laquelle on a cliqué
-                            photosToAdd.push(clickedFrame);
-                          }
-                          
-                          // Ajouter au panier (avec vérification des doublons)
-                          const photosData = photosToAdd
-                            .filter(photo => photo.photoUrl)
-                            .map(photo => ({
-                              photoUrl: photo.photoUrl!,
-                              thumbnail: photo.photoUrl!,
-                              albumId: currentAlbumId || 'unknown',
-                              albumName: albumName || 'Album',
-                              photoTitle: photo.title
-                            }));
-                          
-                          const result = await addToCreationsBasket(photosData);
-                          const addedCount = result.added.length;
-                          const duplicateCount = result.duplicates.length;
-                          
-                          if (addedCount > 0 && duplicateCount > 0) {
-                            toast.success(language === 'fr' ? `${addedCount} photo${addedCount > 1 ? 's ajoutées' : ' ajoutée'} au panier` : `${addedCount} photo${addedCount > 1 ? 's' : ''} added to basket`);
-                            toast.warning(`${duplicateCount} photo${duplicateCount > 1 ? (language === 'fr' ? 's déjà présentes' : 's already in basket') : (language === 'fr' ? ' déjà présente' : ' already in basket')} dans le panier`);
-                          } else if (addedCount > 0) {
-                            toast.success(language === 'fr' ? `${addedCount} photo${addedCount > 1 ? 's ajoutées' : ' ajoutée'} au panier` : `${addedCount} photo${addedCount > 1 ? 's' : ''} added to basket`);
-                          } else if (duplicateCount > 0) {
-                            toast.warning(language === 'fr' ? `${duplicateCount > 1 ? 'Ces photos sont' : 'Cette photo est'} déjà dans le panier` : `${duplicateCount > 1 ? 'These photos are' : 'This photo is'} already in the cart`);
-                          }
-                        } else {
-                          toast.info(language === "fr" ? "Sélectionnez une photo pour l'ajouter au panier" : "Select a photo to add to basket");
-                        }
-                        setContextMenu(null);
-                      }}
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      Ajouter au panier
-                    </button>
-                  );
-                })()}
 
                 {/* Option Envoyer vers le Collecteur */}
                 {isPhoto && (() => {
@@ -3988,179 +3903,6 @@ export default function UniversalAlbumPage({
           onClose={handleRetouchClose}
         />
       )}
-
-      {/* MODALE PANIER - Persistante avec croix de fermeture + drag-drop depuis le bureau */}
-      <Dialog open={showBasketModal} onOpenChange={(open) => { if (!open) { /* Ne pas fermer automatiquement - uniquement via la croix ou le bouton Fermer */ } }}>
-        <DialogContent 
-          className="sm:max-w-[600px] max-h-[80vh]" 
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          showCloseButton={false}
-        >
-          <DialogHeader className="relative">
-            <DialogTitle className="flex items-center gap-2 text-amber-700">
-              <ShoppingBasket className="w-5 h-5" />
-              {language === 'fr' ? 'Panier Créations' : 'Creations Basket'}
-              {basketItems.length > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
-                  {basketItems.length}
-                </span>
-              )}
-            </DialogTitle>
-            {/* Croix de fermeture bien visible */}
-            <button
-              onClick={() => setShowBasketModal(false)}
-              className="absolute top-0 right-0 p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
-              title={language === 'fr' ? 'Fermer le panier' : 'Close basket'}
-            >
-              <XIcon className="w-5 h-5" />
-            </button>
-          </DialogHeader>
-          <div 
-            className={`py-4 relative ${basketDragOver ? 'ring-2 ring-amber-400 ring-dashed rounded-lg bg-amber-50/50' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (e.dataTransfer.types.includes('Files')) {
-                e.dataTransfer.dropEffect = 'copy';
-                setBasketDragOver(true);
-              }
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setBasketDragOver(false);
-            }}
-            onDrop={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setBasketDragOver(false);
-              const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-              if (files.length === 0) {
-                toast.error(language === 'fr' ? 'Aucune image détectée' : 'No image detected');
-                return;
-              }
-              const photosToAdd: Omit<CreationsBasketItem, 'id' | 'dateAdded'>[] = [];
-              for (const file of files) {
-                const dataUrl = await new Promise<string>((resolve) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.readAsDataURL(file);
-                });
-                photosToAdd.push({
-                  photoUrl: dataUrl,
-                  thumbnail: dataUrl,
-                  albumId: currentAlbumId || 'desktop-import',
-                  albumName: language === 'fr' ? 'Import bureau' : 'Desktop import',
-                  photoTitle: file.name,
-                });
-              }
-              const result = await addToCreationsBasket(photosToAdd);
-              if (result.added.length > 0) {
-                toast.success(language === 'fr' 
-                  ? `${result.added.length} photo${result.added.length > 1 ? 's ajoutées' : ' ajoutée'} au panier` 
-                  : `${result.added.length} photo${result.added.length > 1 ? 's' : ''} added to basket`);
-              }
-              if (result.duplicates.length > 0) {
-                toast.warning(language === 'fr' 
-                  ? `${result.duplicates.length} photo${result.duplicates.length > 1 ? 's déjà présentes' : ' déjà présente'} dans le panier` 
-                  : `${result.duplicates.length} photo${result.duplicates.length > 1 ? 's already in' : ' already in'} basket`);
-              }
-            }}
-          >
-            {/* Zone de drag-drop overlay */}
-            {basketDragOver && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-amber-50/80 border-2 border-dashed border-amber-400 rounded-lg pointer-events-none">
-                <div className="text-center">
-                  <ShoppingBasket className="w-10 h-10 text-amber-500 mx-auto mb-2" />
-                  <p className="text-amber-700 font-medium">
-                    {language === 'fr' ? 'Déposez vos photos ici' : 'Drop your photos here'}
-                  </p>
-                </div>
-              </div>
-            )}
-            {basketItems.length > 0 ? (
-              <>
-                <p className="text-sm text-gray-500 mb-3">
-                  {language === 'fr' 
-                    ? 'Photos collectées depuis vos albums. Glissez des photos depuis le bureau pour en ajouter.' 
-                    : 'Photos collected from your albums. Drag photos from desktop to add more.'}
-                </p>
-                <div className="grid grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
-                  {basketItems.map((item) => (
-                    <div key={item.id} className="relative group rounded-lg border border-amber-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                      <img
-                        src={item.thumbnail || item.photoUrl}
-                        alt={item.photoTitle || 'Photo'}
-                        className="w-full h-24 object-cover"
-                      />
-                      <div className="p-1.5 bg-white">
-                        <p className="text-[10px] text-gray-600 truncate">{item.photoTitle || 'Photo'}</p>
-                        <p className="text-[9px] text-gray-400 truncate">{item.albumName}</p>
-                      </div>
-                      <button
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow"
-                        onClick={async () => {
-                          if (item.id !== undefined) await removeFromCreationsBasket(item.id);
-                          toast.success(language === 'fr' ? 'Photo retirée du panier' : 'Photo removed from basket');
-                        }}
-                      >
-                        <XIcon className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <ShoppingBasket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">
-                  {language === 'fr' ? 'Le panier est vide' : 'The basket is empty'}
-                </p>
-                <p className="text-sm text-gray-400 mt-1">
-                  {language === 'fr' 
-                    ? 'Glissez des photos depuis le bureau ou ajoutez-en depuis vos albums (clic droit \u2192 Ajouter au panier)' 
-                    : 'Drag photos from desktop or add from your albums (right-click \u2192 Add to basket)'}
-                </p>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex justify-between sm:justify-between">
-            {basketItems.length > 0 && (
-              <Button
-                variant="outline"
-                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                onClick={async () => {
-                  if (window.confirm(language === 'fr' ? 'Vider le panier ?' : 'Empty basket?')) {
-                    await clearCreationsBasket();
-                    toast.success(language === 'fr' ? 'Panier vidé' : 'Basket emptied');
-                  }
-                }}
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                {language === 'fr' ? 'Vider le panier' : 'Empty basket'}
-              </Button>
-            )}
-            <div className="flex gap-2">
-              {basketItems.length > 0 && (
-                <Button
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
-                  onClick={() => {
-                    setShowBasketModal(false);
-                    setShowCreationsModal(true);
-                  }}
-                >
-                  <Palette className="w-4 h-4 mr-1" />
-                  {language === 'fr' ? 'Ouvrir dans Créations' : 'Open in Creations'}
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setShowBasketModal(false)}>
-                {language === 'fr' ? 'Fermer' : 'Close'}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* MODALE CRÉATIONS / ATELIER - Nouvelle version avec 4 zones */}
       <CreationsAtelierV2
