@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { db, Category, AlbumData, AlbumMeta } from "../db";
+import { db, Category, AlbumData, AlbumMeta, createCreationsProject } from "../db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v4 as uuidv4 } from 'uuid';
 import { Trash2, Lock, Camera, Video, Layers, FileText } from "lucide-react";
@@ -45,7 +45,11 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
-  
+
+  // États pour le nouveau projet
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectType, setNewProjectType] = useState("Projet libre");
+
   // Get all categories
   const allCategories = useLiveQuery(() => db.categories.toArray()) || [];
   
@@ -245,10 +249,38 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
     }
   };
 
+  // Créer un nouveau projet
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) {
+      toast.error(language === "fr" ? "Veuillez entrer un nom pour le projet" : "Please enter a project name");
+      return;
+    }
+    try {
+      await createCreationsProject(newProjectName.trim());
+      toast.success(language === "fr" ? "Projet créé avec succès" : "Project created successfully");
+      setNewProjectName("");
+      setNewProjectType("Projet libre");
+      onAlbumCreated();
+    } catch (error) {
+      console.error("Erreur création projet:", error);
+      toast.error(language === "fr" ? "Erreur lors de la création du projet" : "Error creating project");
+    }
+  };
+
+  // Traduire le label de catégorie (MES PROJETS → Projets finis)
+  const translateCategoryLabel = (label: string): string => {
+    const upper = label.toUpperCase();
+    const normalized = upper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalized.includes('MES PROJETS')) {
+      return language === 'fr' ? 'PROJETS FINIS' : 'FINISHED PROJECTS';
+    }
+    return label;
+  };
+
   return (
     <div className="flex gap-4 h-full">
-      {/* LEFT SIDE - 40% - CATEGORY MANAGEMENT (FILTERED) */}
-      <div className="w-2/5 flex flex-col gap-3 overflow-y-auto pr-2">
+      {/* LEFT SIDE - 1/3 - CATEGORY MANAGEMENT (FILTERED) */}
+      <div className="w-1/3 flex flex-col gap-3 overflow-y-auto pr-2">
         {/* QUICK CREATE NEW CATEGORY */}
         <div className="bg-white p-3 rounded-lg border-2 border-dashed border-blue-300">
           <h2 className="text-lg font-bold text-gray-800 mb-2">{language === "fr" ? "Création nouvelle catégorie" : "Create new category"}</h2>
@@ -374,7 +406,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
                         className="w-3.5 h-3.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: cat.color }}
                       />
-                      <span className="flex-1 truncate text-xs font-medium">{cat.label}</span>
+                      <span className="flex-1 truncate text-xs font-medium">{translateCategoryLabel(cat.label)}</span>
                       <span className="text-[10px] text-gray-400">({categoryAlbums.length})</span>
                       {cat.mediaType === 'videos' && (
                         <span title={language === 'fr' ? 'Catégorie vidéos' : 'Video category'}>🎥</span>
@@ -447,7 +479,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
       </div>
 
       {/* CENTER - ALBUM CREATION FORM */}
-      <div className="w-2/5 flex flex-col gap-3 overflow-y-auto">
+      <div className="w-1/3 flex flex-col gap-3 overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-800">{language === "fr" ? "Créer un nouvel album" : "Create a new album"}</h2>
 
         {/* a) Type de contenu - Icônes visuelles */}
@@ -544,38 +576,59 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
         </div>
       </div>
 
-      {/* RIGHT SIDE - EXISTING ALBUMS IN SELECTED CATEGORY */}
-      <div className="w-1/5 flex flex-col gap-3 overflow-y-auto pl-2 border-l border-gray-200">
-        <h3 className="text-sm font-bold text-gray-700">{language === "fr" ? "Albums existants" : "Existing albums"}</h3>
-        {selectedCategory ? (
-          <div className="space-y-1">
-            {(() => {
-              const albumsInCategory = getAlbumsForCategory(selectedCategory.id);
-              if (albumsInCategory.length === 0) {
-                return (
-                  <p className="text-xs text-gray-500 italic">{language === "fr" ? "Aucun album dans cette catégorie" : "No album in this category"}</p>
-                );
-              }
-              return albumsInCategory.map(album => (
-                <div 
-                  key={album.id}
-                  className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200 text-xs"
-                >
-                  <div 
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: selectedCategory.color }}
-                  />
-                  <span className="truncate text-gray-700" title={album.title}>{album.title}</span>
-                </div>
-              ));
-            })()}
-            <p className="text-xs text-gray-400 mt-2">
-              {getAlbumsForCategory(selectedCategory.id).length} album(s)
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-gray-400 italic">{language === "fr" ? "Sélectionnez une catégorie pour voir ses albums" : "Select a category to see its albums"}</p>
-        )}
+      {/* DIVIDER 2 */}
+      <div className="flex items-stretch justify-center px-3 py-2">
+        <img
+          src="/images/separator-decorative.png"
+          alt=""
+          className="w-8 object-cover"
+          style={{ height: '100%', minHeight: '450px' }}
+        />
+      </div>
+
+      {/* RIGHT SIDE - NOUVEAU PROJET */}
+      <div className="w-1/3 flex flex-col gap-3 overflow-y-auto pl-2">
+        <h2 className="text-lg font-bold text-gray-800">{language === "fr" ? "Nouveau Projet" : "New Project"}</h2>
+
+        {/* Nom du projet */}
+        <div>
+          <Label className="text-sm font-semibold text-gray-700">{language === "fr" ? "Nom :" : "Name:"}</Label>
+          <Input
+            value={newProjectName}
+            onChange={(e) => setNewProjectName(e.target.value)}
+            placeholder={language === "fr" ? "Mon projet..." : "My project..."}
+            className="mt-1 h-8 text-sm border border-gray-300 rounded-md"
+          />
+        </div>
+
+        {/* Type de projet */}
+        <div>
+          <Label className="text-sm font-semibold text-gray-700">{language === "fr" ? "Que voulez-vous faire ?" : "What do you want to do?"}</Label>
+          <select
+            value={newProjectType}
+            onChange={(e) => setNewProjectType(e.target.value)}
+            className="mt-1 w-full h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="Projet libre">{language === "fr" ? "Projet libre" : "Free project"}</option>
+            <option value="Collage">{language === "fr" ? "Collage" : "Collage"}</option>
+            <option value="Passe-partout">{language === "fr" ? "Passe-partout" : "Mat frame"}</option>
+            <option value="Pêle-mêle">{language === "fr" ? "Pêle-mêle" : "Photo montage"}</option>
+            <option value="Montage photos/Pêle-mêle">{language === "fr" ? "Montage photos/Pêle-mêle" : "Photo montage/Collage"}</option>
+            <option value="Montage photos/Passe-partout">{language === "fr" ? "Montage photos/Passe-partout" : "Photo montage/Mat frame"}</option>
+            <option value="Page de stickers">{language === "fr" ? "Page de stickers" : "Sticker page"}</option>
+            <option value="Puzzle">{language === "fr" ? "Puzzle" : "Puzzle"}</option>
+          </select>
+        </div>
+
+        {/* Bouton créer le projet */}
+        <div className="mt-4">
+          <Button
+            onClick={handleCreateProject}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold h-9 w-full"
+          >
+            {language === "fr" ? "Créer le projet" : "Create project"}
+          </Button>
+        </div>
       </div>
 
       {/* DELETE CONFIRMATION DIALOG */}
