@@ -800,18 +800,44 @@ export default function CreationsAtelierV2({
   const [showProjectModal, setShowProjectModal] = useState(true); // Afficher au démarrage
   const [showNewProjectHelp, setShowNewProjectHelp] = useState(false); // Modale d'aide pour créer un projet
   const [existingProjects, setExistingProjects] = useState<CreationsProject[]>([]);
-  const [collecteurCountByProject, setCollecteurCountByProject] = useState<Record<string, number>>({});
+  // collecteurCountByProject est maintenant dérivé de collecteurDbItems (réactif)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
   
 
-  // Contenu du collecteur depuis IndexedDB (réactif)
-  const collecteurDbItems = useLiveQuery(() => db.collecteur.orderBy('addedAt').toArray(), []) || [];
+  // Contenu du collecteur depuis IndexedDB (réactif) — sans filtre, sans limite
+  const collecteurDbItems = useLiveQuery(() => db.collecteur.toArray(), []) || [];
 
   // Synchroniser les items IndexedDB vers le state collectorItems (filtrés par projet)
+  // + vérification de liaison projet
+  const prevCollecteurCountRef = useRef<number>(0);
   useEffect(() => {
     if (!currentProjectId) return;
+
+    console.log("[COLLECTEUR] items en DB:", collecteurDbItems.length);
+    console.log("[COLLECTEUR] currentProjectId:", currentProjectId);
+
+    // Filtrer par projectId — sans limite
     const projectItems = collecteurDbItems.filter(i => i.projectId === currentProjectId);
-    console.log("[COLLECTEUR] items reçus:", projectItems, "projectId actuel:", currentProjectId);
+
+    console.log("[COLLECTEUR] items en DB pour ce projet:", projectItems.length);
+
+    // Détecter les nouveaux items ajoutés (tous projets confondus)
+    if (collecteurDbItems.length > prevCollecteurCountRef.current) {
+      const newItems = collecteurDbItems.slice(prevCollecteurCountRef.current);
+      for (const item of newItems) {
+        console.log("[COLLECTEUR] image ajoutée au projet:", item.projectId);
+        console.log("[COLLECTEUR] projet actif dans Atelier:", currentProjectId);
+        if (item.projectId && item.projectId !== currentProjectId) {
+          toast.warning(
+            language === "fr"
+              ? `Image ajoutée au projet "${item.name || '?'}" mais le projet ouvert dans l'Atelier est différent.`
+              : `Image added to project "${item.name || '?'}" but the open project in Studio is different.`
+          );
+        }
+      }
+    }
+    prevCollecteurCountRef.current = collecteurDbItems.length;
+
     const mapped: CollectorItem[] = projectItems.map(dbItem => ({
       id: dbItem.id,
       type: 'photo' as const,
@@ -819,12 +845,44 @@ export default function CreationsAtelierV2({
       name: dbItem.name,
       thumbnail: dbItem.thumbnail,
     }));
-    setCollectorItems(prev => {
-      // Remplacer uniquement si le contenu a changé
-      if (prev.length === mapped.length && prev.every((p, i) => p.id === mapped[i]?.id)) return prev;
-      return mapped;
-    });
-  }, [collecteurDbItems, currentProjectId]);
+
+    // Toujours forcer la mise à jour — pas d'optimisation qui pourrait bloquer
+    setCollectorItems(mapped);
+    console.log("[COLLECTEUR] items affichés:", mapped.length);
+  }, [collecteurDbItems, currentProjectId, language]);
+
+  // Compteur réactif des items du Collecteur par projet
+  // Recalculé à chaque changement de collecteurDbItems (live query)
+  const [collecteurCountByProject, setCollecteurCountByProject] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const updateCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const project of existingProjects) {
+        counts[project.id] = await db.collecteur.where('projectId').equals(project.id).count();
+      }
+      console.log("[COLLECTEUR] compteurs par projet:", counts);
+      setCollecteurCountByProject(counts);
+    };
+    updateCounts();
+  }, [collecteurDbItems, existingProjects]);
+
+  // Purger les items orphelins au montage (projectId inexistant ou vide)
+  useEffect(() => {
+    if (!isOpen) return;
+    const purge = async () => {
+      const allItems = await db.collecteur.toArray();
+      const allProjects = await db.creations_projects.toArray();
+      const projectIds = new Set(allProjects.map(p => p.id));
+      const albumMetas = await db.album_metas.where('categoryId').equals('cat_mes_projets').toArray();
+      for (const a of albumMetas) projectIds.add(a.id);
+      const orphans = allItems.filter(i => !i.projectId || !projectIds.has(i.projectId));
+      if (orphans.length > 0) {
+        console.log("[COLLECTEUR] purge items orphelins:", orphans.length);
+        await db.collecteur.bulkDelete(orphans.map(o => o.id));
+      }
+    };
+    purge();
+  }, [isOpen]);
 
   // État pour la sauvegarde automatique
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -1080,16 +1138,6 @@ export default function CreationsAtelierV2({
           .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
         
         setExistingProjects(allProjects);
-
-        // Compter les items du Collecteur par projet
-        const allCollecteurItems = await db.collecteur.toArray();
-        const counts: Record<string, number> = {};
-        for (const item of allCollecteurItems) {
-          if (item.projectId) {
-            counts[item.projectId] = (counts[item.projectId] || 0) + 1;
-          }
-        }
-        setCollecteurCountByProject(counts);
 
         // Si un projectId est fourni, ne pas afficher la modale
         if (projectId) {
@@ -8095,7 +8143,14 @@ export default function CreationsAtelierV2({
               }}
               onClearAll={() => {
                 setCollectorItems([]);
-                clearCollecteur().catch(() => {});
+                // Supprimer uniquement les items du projet actif en IndexedDB
+                if (currentProjectId) {
+                  db.collecteur.where('projectId').equals(currentProjectId).delete().then(count => {
+                    console.log("[COLLECTEUR] vidé", count, "items pour le projet", currentProjectId);
+                  }).catch(() => {});
+                } else {
+                  clearCollecteur().catch(() => {});
+                }
               }}
             />
           </div>
@@ -8216,16 +8271,24 @@ export default function CreationsAtelierV2({
 
             <div className="w-px h-5 bg-gray-300" />
 
-            {/* Nom du projet */}
-            <div className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 shadow-sm">
-              <Edit2 className="w-3.5 h-3.5 text-gray-400" />
-              <Input
-                type="text"
-                value={currentProjectName}
-                onChange={(e) => setCurrentProjectName(e.target.value)}
-                placeholder={language === "fr" ? "Nom de la création..." : "Creation name..."}
-                className="border-0 p-0 h-auto text-xs w-36 focus-visible:ring-0"
-              />
+            {/* Ouvrir un projet + Nom du projet */}
+            <div className="flex flex-col items-center gap-0.5">
+              <span
+                className="text-[10px] text-purple-600 hover:text-purple-800 cursor-pointer hover:underline"
+                onClick={() => setShowProjectModal(true)}
+              >
+                {language === "fr" ? "Ouvrir un projet" : "Open a project"}
+              </span>
+              <div
+                className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 shadow-sm cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                onClick={() => setShowProjectModal(true)}
+                title={language === "fr" ? "Cliquez pour changer de projet" : "Click to switch project"}
+              >
+                <Edit2 className="w-3.5 h-3.5 text-purple-500" />
+                <span className="text-xs w-36 truncate text-gray-700">
+                  {currentProjectName || (language === "fr" ? "Nom de la création..." : "Creation name...")}
+                </span>
+              </div>
             </div>
 
             <div className="w-px h-5 bg-gray-300" />
@@ -8451,44 +8514,19 @@ export default function CreationsAtelierV2({
           <div className="bg-white rounded-xl shadow-2xl w-[500px] max-h-[80vh] overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4">
-              <h3 className="text-xl font-bold text-white">
+              <h3 className="text-xl font-bold text-white text-center">
                 {language === "fr" ? "Atelier Créations" : "Creations Studio"}
               </h3>
-              <p className="text-white/80 text-sm">
-                {language === "fr" 
-                  ? "Démarrez un nouveau projet ou reprenez un projet existant" 
-                  : "Start a new project or resume an existing one"}
-              </p>
             </div>
-            
+
             {/* Contenu */}
             <div className="p-6">
-              {/* Bouton principal : Nouveau projet vide (toujours en premier) */}
-              <Button
-                className="w-full py-5 mb-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-md"
-                onClick={() => {
-                  setShowNewProjectHelp(true);
-                }}
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                <span className="font-semibold">
-                  {language === "fr" ? "Nouveau projet vide" : "New empty project"}
-                </span>
-              </Button>
-
-              {/* Séparateur */}
-              {existingProjects.length > 0 && (
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">
-                      {language === "fr" ? "ou ouvrir un projet existant" : "or open an existing project"}
-                    </span>
-                  </div>
-                </div>
-              )}
+              {/* Indication pour créer un projet */}
+              <p className="text-sm text-gray-500 text-center mb-4">
+                {language === "fr"
+                  ? "Pour créer un projet \u2192 Albums \u2192 Créer catégorie/album"
+                  : "To create a project \u2192 Albums \u2192 Create category/album"}
+              </p>
 
               {/* Liste des projets existants */}
               <div className="max-h-[280px] overflow-y-auto">

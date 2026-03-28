@@ -4284,31 +4284,12 @@ export default function UniversalAlbumPage({
               </label>
             )}
 
-            {/* Choix : Nouveau projet */}
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="collecteur-mode"
-                checked={collecteurMode === 'new'}
-                onChange={() => setCollecteurMode('new')}
-                className="mt-1"
-              />
-              <div className="flex-1">
-                <span className="text-sm font-medium">
-                  {language === 'fr' ? 'Nouveau projet' : 'New project'}
-                </span>
-                <Input
-                  className="mt-1"
-                  placeholder={language === 'fr' ? 'Nom du projet...' : 'Project name...'}
-                  value={collecteurNewProjectName}
-                  onChange={(e) => {
-                    setCollecteurNewProjectName(e.target.value);
-                    setCollecteurMode('new');
-                  }}
-                  disabled={collecteurMode !== 'new'}
-                />
-              </div>
-            </label>
+            {/* Indication pour créer un nouveau projet */}
+            <p className="text-xs text-gray-500 italic">
+              {language === 'fr'
+                ? 'Pour créer un nouveau projet, allez dans Albums \u2192 Créer catégorie/album'
+                : 'To create a new project, go to Albums \u2192 Create category/album'}
+            </p>
           </div>
 
           <DialogFooter className="gap-2">
@@ -4317,17 +4298,10 @@ export default function UniversalAlbumPage({
             </Button>
             <Button
               className="bg-purple-600 hover:bg-purple-700 text-white"
-              disabled={collecteurMode === 'new' && !collecteurNewProjectName.trim()}
+              disabled={!collecteurSelectedProjectId}
               onClick={async () => {
                 if (!collecteurModal) return;
-                let projectId = '';
-
-                if (collecteurMode === 'new') {
-                  const project = await createCreationsProject(collecteurNewProjectName.trim());
-                  projectId = project.id;
-                } else {
-                  projectId = collecteurSelectedProjectId;
-                }
+                const projectId = collecteurSelectedProjectId;
 
                 console.log("[COLLECTEUR] envoi projectId:", projectId, "image:", collecteurModal.photoUrl);
                 await addToCollecteur({
@@ -4339,9 +4313,7 @@ export default function UniversalAlbumPage({
                   projectId,
                 });
 
-                const projectName = collecteurMode === 'new'
-                  ? collecteurNewProjectName.trim()
-                  : collecteurProjects.find(p => p.id === projectId)?.name || '';
+                const projectName = collecteurProjects.find(p => p.id === projectId)?.name || '';
 
                 toast.success(
                   language === 'fr'
