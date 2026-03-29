@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID, getAllCreationsProjects, CreationsProject } from '@/db';
+import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID, getAllCreationsProjects, deleteCreationsProject, CreationsProject } from '@/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -36,7 +36,10 @@ export default function Albums() {
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
 
   // États pour la suppression
-  const [itemToDelete, setItemToDelete] = useState<{ type: 'category' | 'album'; item: any; categoryType: 'photo' | 'doc' } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'category' | 'album' | 'project'; item: any; categoryType?: 'photo' | 'doc' } | null>(null);
+
+  // État pour la catégorie projet sélectionnée
+  const [selectedProjectCategory, setSelectedProjectCategory] = useState<'en_cours' | 'finis' | null>(null);
 
   // États pour renommer un album
   const [albumToRename, setAlbumToRename] = useState<AlbumMeta | null>(null);
@@ -53,9 +56,9 @@ export default function Albums() {
   const translateLabel = (label: string): string => {
     const upper = label.toUpperCase();
     const normalized = upper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    // Renommer MES PROJETS → Projets finis / Finished Projects
+    // Renommer MES PROJETS → Images projets / Project Images
     if (normalized.includes('MES PROJETS')) {
-      return language === 'fr' ? 'PROJETS FINIS' : 'FINISHED PROJECTS';
+      return language === 'fr' ? 'Images projets' : 'Project Images';
     }
     if (language === 'en') {
       if (normalized === 'NON CLASSEE' || normalized === 'NON CLASSEES') return 'UNCATEGORIZED';
@@ -74,23 +77,26 @@ export default function Albums() {
     return title;
   };
 
-  // Fonction pour trier avec "NON CLASSEE" en premier, puis "MES COLLAGES" en second
+  // Fonction pour trier avec "NON CLASSEE" en premier, "MES PROJETS" en second, puis "MES COLLAGES"
   const sortWithNonClasseeFirst = (items: any[], labelField: string = 'label') => {
     return [...items].sort((a, b) => {
-      const aIsNonClassee = a[labelField]?.toUpperCase().includes('NON CLASSEE') || a[labelField]?.toUpperCase().includes(language === 'fr' ? 'NON CLASSÉES' : 'UNCATEGORIZED');
-      const bIsNonClassee = b[labelField]?.toUpperCase().includes('NON CLASSEE') || b[labelField]?.toUpperCase().includes('NON CLASSÉES');
-      const aIsMesCollages = a[labelField]?.toUpperCase().includes('MES COLLAGES') || a.id === 'cat_mes_collages';
-      const bIsMesCollages = b[labelField]?.toUpperCase().includes('MES COLLAGES') || b.id === 'cat_mes_collages';
+      const normalize = (val: string) => val.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const aLabel = normalize(a[labelField] || '');
+      const bLabel = normalize(b[labelField] || '');
 
-      // NON CLASSEE toujours en premier
-      if (aIsNonClassee && !bIsNonClassee) return -1;
-      if (!aIsNonClassee && bIsNonClassee) return 1;
+      const aIsNonClassee = aLabel.includes('NON CLASSEE') || aLabel.includes('UNCATEGORIZED');
+      const bIsNonClassee = bLabel.includes('NON CLASSEE') || bLabel.includes('UNCATEGORIZED');
+      const aIsMesProjets = aLabel.includes('MES PROJETS') || a.id === 'cat_mes_projets';
+      const bIsMesProjets = bLabel.includes('MES PROJETS') || b.id === 'cat_mes_projets';
+      const aIsMesCollages = aLabel.includes('MES COLLAGES') || a.id === 'cat_mes_collages';
+      const bIsMesCollages = bLabel.includes('MES COLLAGES') || b.id === 'cat_mes_collages';
 
-      // MES COLLAGES en second (juste après NON CLASSEE)
-      if (aIsMesCollages && !bIsMesCollages && !bIsNonClassee) return -1;
-      if (!aIsMesCollages && bIsMesCollages && !aIsNonClassee) return 1;
+      // Attribuer un rang de tri : NON CLASSEE=0, MES PROJETS=1, MES COLLAGES=2, autres=3
+      const rank = (nc: boolean, mp: boolean, mc: boolean) => nc ? 0 : mp ? 1 : mc ? 2 : 3;
+      const aRank = rank(aIsNonClassee, aIsMesProjets, aIsMesCollages);
+      const bRank = rank(bIsNonClassee, bIsMesProjets, bIsMesCollages);
 
-      return 0;
+      return aRank - bRank;
     });
   };
 
@@ -131,15 +137,7 @@ export default function Albums() {
     ) || []
   );
 
-  // Sélectionner automatiquement la première catégorie si aucune n'est sélectionnée
-  useEffect(() => {
-    if (photoCategories.length > 0 && !selectedPhotoCategory) {
-      setSelectedPhotoCategory(photoCategories[0].id);
-    }
-    if (docCategories.length > 0 && !selectedDocCategory) {
-      setSelectedDocCategory(docCategories[0].id);
-    }
-  }, [photoCategories, docCategories, selectedPhotoCategory, selectedDocCategory]);
+  // Plus d'auto-sélection : les colonnes Albums restent vides tant qu'on ne clique pas sur une catégorie
 
   // IDs des albums fixes Créations (non effaçables)
   const CREATIONS_FIXED_ALBUM_IDS = [
@@ -155,15 +153,33 @@ export default function Albums() {
 
   const isCreationsFixedAlbum = (album: AlbumMeta) => CREATIONS_FIXED_ALBUM_IDS.includes(album.id);
 
-  // Albums filtrés par catégorie sélectionnée (triés avec Non classées en premier)
-  // + albums fixes Créations ajoutés à la fin de la liste Photos
+  // Albums filtrés strictement par categoryId de la catégorie sélectionnée
   const creationsFixedAlbums = albums?.filter(a => CREATIONS_FIXED_ALBUM_IDS.includes(a.id) && a.id !== 'album_creations_projets_en_cours') || [];
-  const photoAlbums = sortAlbumsWithNonClasseesFirst(
-    [...(albums?.filter(a => a.categoryId === selectedPhotoCategory) || []), ...creationsFixedAlbums]
-  );
-  const docAlbums = sortAlbumsWithNonClasseesFirst(
-    albums?.filter(a => a.categoryId === selectedDocCategory) || []
-  );
+
+  // Détecter si la catégorie photo sélectionnée est "Images projets" (MES PROJETS)
+  const selectedPhotoIsMesProjets = (() => {
+    if (!selectedPhotoCategory) return false;
+    if (selectedPhotoCategory === 'cat_mes_projets') return true;
+    const cat = categories?.find(c => c.id === selectedPhotoCategory);
+    if (!cat) return false;
+    const normalized = cat.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normalized.includes('MES PROJETS');
+  })();
+
+  const photoAlbums = selectedPhotoCategory
+    ? sortAlbumsWithNonClasseesFirst(
+        selectedPhotoIsMesProjets
+          // "Images projets" : albums de cette catégorie + albums fixes Créations (categoryId: cat_creations)
+          ? [...(albums?.filter(a => a.categoryId === selectedPhotoCategory) || []), ...creationsFixedAlbums]
+          // Autres catégories : filtrage strict par categoryId
+          : albums?.filter(a => a.categoryId === selectedPhotoCategory) || []
+      )
+    : [];
+  const docAlbums = selectedDocCategory
+    ? sortAlbumsWithNonClasseesFirst(
+        albums?.filter(a => a.categoryId === selectedDocCategory) || []
+      )
+    : [];
 
   // Obtenir la catégorie sélectionnée pour afficher sa couleur dans les albums
   const selectedPhotoCategoryData = categories?.find(c => c.id === selectedPhotoCategory);
@@ -210,11 +226,14 @@ export default function Albums() {
   // Vérifier si une catégorie est protégée (NON CLASSEE, MES COLLAGES, CRÉATIONS)
   const isProtectedCategory = (category: any) => {
     const label = category.label?.toUpperCase() || '';
+    const normalized = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     return label.includes('NON CLASSEE') ||
            label.includes('NON CLASSÉES') ||
            label.includes('MES COLLAGES') ||
+           normalized.includes('MES PROJETS') ||
            label.includes('CRÉATIONS') ||
            category.id === 'cat_mes_collages' ||
+           category.id === 'cat_mes_projets' ||
            category.id === 'cat_creations';
   };
   
@@ -283,6 +302,19 @@ export default function Albums() {
       toast.error(t('toast.deleteError'));
     }
     
+    setItemToDelete(null);
+  };
+
+  // Supprimer un projet créations
+  const handleDeleteProject = async () => {
+    if (!itemToDelete || itemToDelete.type !== 'project') return;
+    try {
+      await deleteCreationsProject(itemToDelete.item.id);
+      toast.success(language === 'fr' ? 'Projet supprimé' : 'Project deleted');
+    } catch (error) {
+      console.error('Erreur lors de la suppression du projet:', error);
+      toast.error(language === 'fr' ? 'Erreur lors de la suppression' : 'Delete error');
+    }
     setItemToDelete(null);
   };
 
@@ -405,7 +437,16 @@ export default function Albums() {
 
   // Compter les albums par catégorie
   const getAlbumCount = (categoryId: string) => {
-    return albums?.filter(a => a.categoryId === categoryId).length || 0;
+    const count = (albums?.filter(a => a.categoryId === categoryId) || []).length;
+    // Pour "Images projets" : ajouter les albums fixes Créations
+    const cat = categories?.find(c => c.id === categoryId);
+    if (cat) {
+      const normalized = cat.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normalized.includes('MES PROJETS') || categoryId === 'cat_mes_projets') {
+        return count + creationsFixedAlbums.length;
+      }
+    }
+    return count;
   };
 
   // Obtenir l'icône appropriée pour une catégorie (images PNG comme dans le formulaire de création)
@@ -588,7 +629,11 @@ export default function Albums() {
                   
                   {/* Zone B - Albums de la catégorie sélectionnée (draggables) */}
                   <div className="space-y-2 pl-2 flex flex-col items-center">
-                    {photoAlbums.length === 0 ? (
+                    {!selectedPhotoCategory ? (
+                      <p className="text-gray-400 text-center py-4 text-sm">
+                        {language === 'fr' ? 'Sélectionnez une catégorie' : 'Select a category'}
+                      </p>
+                    ) : photoAlbums.length === 0 ? (
                       <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
                     ) : (
                       photoAlbums.map(album => (
@@ -654,44 +699,125 @@ export default function Albums() {
                 </div>
               </div>
 
-              {/* Colonne Projets en cours */}
+              {/* Colonne Projets */}
               <div className="p-2 min-w-0 flex-1">
                 <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
                   <span className="text-2xl">🎨</span>
-                  {language === 'fr' ? 'Projets en cours' : 'Current Projects'}
+                  {language === 'fr' ? 'Projets' : 'Projects'}
                 </h2>
 
-                {/* Liste des projets */}
-                <div className="space-y-2 flex flex-col items-center">
-                  {creationsProjects.length === 0 ? (
-                    <p className="text-gray-400 text-center py-4 text-sm">
-                      {language === 'fr' ? 'Aucun projet créé' : 'No project created'}
-                    </p>
-                  ) : (
-                    creationsProjects.map(project => (
+                {/* En-têtes des sous-colonnes */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
+                  <div className="text-sm font-semibold text-gray-500 text-center">{language === 'fr' ? 'Projets' : 'Projects'}</div>
+                </div>
+
+                {/* Contenu avec catégories et projets */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Zone A - Catégories fixes (non effaçables) */}
+                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
+                    <div
+                      onClick={() => setSelectedProjectCategory('en_cours')}
+                      style={{ width: '160px', minWidth: '160px' }}
+                      className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
+                        selectedProjectCategory === 'en_cours'
+                          ? 'bg-purple-100 border-2 border-purple-400'
+                          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
                       <div
-                        key={project.id}
-                        onClick={() => {
-                          setCreationsProjectId(project.id);
-                          setCreationsProjectName(project.name);
-                          setShowCreationsModal(true);
+                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        style={{
+                          borderColor: '#8B5CF6',
+                          backgroundColor: selectedProjectCategory === 'en_cours' ? '#8B5CF6' : 'transparent'
                         }}
-                        className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
-                        style={{ width: '160px', minWidth: '160px' }}
                       >
-                        <div
-                          className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                          style={{
-                            borderColor: '#8B5CF6',
-                            backgroundColor: '#8B5CF6'
-                          }}
-                        >
-                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                        </div>
-                        <span className="font-normal text-gray-800 text-sm break-words flex-1">{project.name}</span>
+                        {selectedProjectCategory === 'en_cours' && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
                       </div>
-                    ))
-                  )}
+                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
+                        {language === 'fr' ? 'Projets en cours' : 'Current projects'}
+                        <span className="text-gray-400 ml-1">({creationsProjects.filter(p => ((p as any).projectCategory || 'en_cours') === 'en_cours').length})</span>
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setSelectedProjectCategory('finis')}
+                      style={{ width: '160px', minWidth: '160px' }}
+                      className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
+                        selectedProjectCategory === 'finis'
+                          ? 'bg-purple-100 border-2 border-purple-400'
+                          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      <div
+                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        style={{
+                          borderColor: '#8B5CF6',
+                          backgroundColor: selectedProjectCategory === 'finis' ? '#8B5CF6' : 'transparent'
+                        }}
+                      >
+                        {selectedProjectCategory === 'finis' && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
+                        {language === 'fr' ? 'Projets finis' : 'Finished projects'}
+                        <span className="text-gray-400 ml-1">({creationsProjects.filter(p => ((p as any).projectCategory) === 'finis').length})</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Zone B - Projets de la catégorie sélectionnée */}
+                  <div className="space-y-2 pl-2 flex flex-col items-center">
+                    {!selectedProjectCategory ? (
+                      <p className="text-gray-400 text-center py-4 text-sm">
+                        {language === 'fr' ? 'Sélectionnez une catégorie' : 'Select a category'}
+                      </p>
+                    ) : (() => {
+                      // Filtrer les projets par catégorie sélectionnée
+                      // Les projets sans projectCategory sont considérés comme "en_cours"
+                      const filteredProjects = creationsProjects.filter(p =>
+                        ((p as any).projectCategory || 'en_cours') === selectedProjectCategory
+                      );
+                      return filteredProjects.length === 0 ? (
+                        <p className="text-gray-400 text-center py-4 text-sm">
+                          {language === 'fr' ? 'Aucun projet' : 'No project'}
+                        </p>
+                      ) : (
+                        filteredProjects.map(project => (
+                        <div
+                          key={project.id}
+                          onClick={() => {
+                            setCreationsProjectId(project.id);
+                            setCreationsProjectName(project.name);
+                            setShowCreationsModal(true);
+                          }}
+                          style={{ width: '160px', minWidth: '160px' }}
+                          className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+                        >
+                          <div
+                            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                            style={{ borderColor: '#8B5CF6', backgroundColor: '#8B5CF6' }}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          </div>
+                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{project.name}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setItemToDelete({ type: 'project', item: project });
+                            }}
+                            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                            title={language === 'fr' ? 'Supprimer le projet' : 'Delete project'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 
@@ -775,7 +901,11 @@ export default function Albums() {
                   
                   {/* Zone B - Albums de la catégorie sélectionnée (draggables) */}
                   <div className="space-y-2 pl-2 flex flex-col items-center">
-                    {docAlbums.length === 0 ? (
+                    {!selectedDocCategory ? (
+                      <p className="text-gray-400 text-center py-4 text-sm">
+                        {language === 'fr' ? 'Sélectionnez une catégorie' : 'Select a category'}
+                      </p>
+                    ) : docAlbums.length === 0 ? (
                       <p className="text-gray-400 text-center py-4 text-sm">{t('albums.noAlbum')}</p>
                     ) : (
                       docAlbums.map(album => (
@@ -900,6 +1030,12 @@ export default function Albums() {
                     ⚠️ {t('albums.allAlbumsWillBeDeleted')}
                   </p>
                 </>
+              ) : itemToDelete?.type === 'project' ? (
+                <p className="text-gray-600">
+                  {language === 'fr'
+                    ? `Supprimer le projet « ${itemToDelete.item.name} » ?`
+                    : `Delete project "${itemToDelete.item.name}"?`}
+                </p>
               ) : (
                 <p className="text-gray-600">
                   {t('albums.confirmDeleteAlbum').replace('{album}', itemToDelete?.item.title || '')}
@@ -909,8 +1045,8 @@ export default function Albums() {
                 <Button variant="outline" onClick={() => setItemToDelete(null)} className="flex-1">
                   {t('common.cancel')}
                 </Button>
-                <Button 
-                  onClick={itemToDelete?.type === 'category' ? handleDeleteCategory : handleDeleteAlbum} 
+                <Button
+                  onClick={itemToDelete?.type === 'category' ? handleDeleteCategory : itemToDelete?.type === 'project' ? handleDeleteProject : handleDeleteAlbum}
                   className="flex-1 bg-red-500 hover:bg-red-600"
                 >
                   {t('common.delete')}

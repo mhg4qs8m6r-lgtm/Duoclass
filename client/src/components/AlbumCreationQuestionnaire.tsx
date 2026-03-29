@@ -48,6 +48,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
 
   // États pour le nouveau projet
   const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectCategory, setNewProjectCategory] = useState<'en_cours' | 'finis'>('en_cours');
   const [newProjectType, setNewProjectType] = useState("Projet libre");
 
   // Get all categories
@@ -256,9 +257,12 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
       return;
     }
     try {
-      await createCreationsProject(newProjectName.trim());
+      const project = await createCreationsProject(newProjectName.trim());
+      // Stocker la catégorie du projet (en_cours / finis)
+      await db.creations_projects.update(project.id, { projectCategory: newProjectCategory } as any);
       toast.success(language === "fr" ? "Projet créé avec succès" : "Project created successfully");
       setNewProjectName("");
+      setNewProjectCategory('en_cours');
       setNewProjectType("Projet libre");
       onAlbumCreated();
     } catch (error) {
@@ -599,6 +603,47 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
             placeholder={language === "fr" ? "Mon projet..." : "My project..."}
             className="mt-1 h-8 text-sm border border-gray-300 rounded-md"
           />
+        </div>
+
+        {/* Catégorie du projet */}
+        <div>
+          <Label className="text-sm font-semibold text-gray-700">{language === "fr" ? "Catégorie :" : "Category:"}</Label>
+          <div className="mt-1 flex flex-col gap-1.5">
+            <label
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
+                newProjectCategory === 'en_cours' ? 'bg-purple-100 border border-purple-400' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+              }`}
+              onClick={() => setNewProjectCategory('en_cours')}
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                style={{
+                  borderColor: '#8B5CF6',
+                  backgroundColor: newProjectCategory === 'en_cours' ? '#8B5CF6' : 'transparent'
+                }}
+              >
+                {newProjectCategory === 'en_cours' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+              <span className="text-sm text-gray-700">{language === "fr" ? "Projets en cours" : "Current projects"}</span>
+            </label>
+            <label
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
+                newProjectCategory === 'finis' ? 'bg-purple-100 border border-purple-400' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+              }`}
+              onClick={() => setNewProjectCategory('finis')}
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                style={{
+                  borderColor: '#8B5CF6',
+                  backgroundColor: newProjectCategory === 'finis' ? '#8B5CF6' : 'transparent'
+                }}
+              >
+                {newProjectCategory === 'finis' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+              <span className="text-sm text-gray-700">{language === "fr" ? "Projets finis" : "Finished projects"}</span>
+            </label>
+          </div>
         </div>
 
         {/* Type de projet */}

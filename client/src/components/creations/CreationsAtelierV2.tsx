@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoFrame } from "@/types/photo";
-import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, deleteCreationsProject, saveCollageToAlbum, removeFromCollecteur, clearCollecteur } from "@/db";
+import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, deleteCreationsProject, saveCollageToAlbum, addToCollecteur, removeFromCollecteur, clearCollecteur } from "@/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
 import { Trash2 as TrashIcon } from "lucide-react";
@@ -1139,11 +1139,18 @@ export default function CreationsAtelierV2({
         
         setExistingProjects(allProjects);
 
-        // Si un projectId est fourni, ne pas afficher la modale
+        // Si un projectId est fourni, charger le projet directement
         if (projectId) {
           setShowProjectModal(false);
           setSelectedProjectId(projectId);
           setCurrentProjectId(projectId);
+          // Restaurer le nom depuis le projet chargé ou depuis la prop
+          const matchedProject = allProjects.find(p => p.id === projectId);
+          if (matchedProject) {
+            setCurrentProjectName(matchedProject.name);
+          } else if (projectName && projectName !== 'Nouveau projet' && projectName !== 'New project') {
+            setCurrentProjectName(projectName);
+          }
         } else {
           setShowProjectModal(true);
         }
@@ -1517,10 +1524,9 @@ export default function CreationsAtelierV2({
       const raw = localStorage.getItem(AUTOSAVE_LS_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      // Proposer la restauration si la sauvegarde a moins de 24h
+      // Auto-save détectée mais on ne propose plus la popup de restauration
       if (data.timestamp && Date.now() - data.timestamp < 86_400_000) {
         pendingRestoreRef.current = data;
-        setShowRestoreModal(true);
       }
     } catch { /* JSON invalide */ }
   }, [isOpen]);
@@ -2606,21 +2612,8 @@ export default function CreationsAtelierV2({
     try {
       const created = await createCreationsProject(name, newId);
 
-      // Créer immédiatement l'entrée album_metas pour que le projet
-      // apparaisse dans MES PROJETS CRÉATIONS dès la création.
-      const existingMeta = await db.album_metas.get(newId);
-      if (!existingMeta) {
-        await db.album_metas.add({
-          id: newId,
-          title: name,
-          type: 'standard' as const,
-          series: 'photoclass' as const,
-          createdAt: Date.now(),
-          categoryId: 'cat_mes_projets',
-        });
-        await db.albums.put({ id: newId, frames: [] });
-        console.log('[CreationsAtelier] Album créé dans MES PROJETS CRÉATIONS:', name);
-      }
+      // Le projet est sauvegardé dans creations_projects (colonne Projets)
+      console.log('[CreationsAtelier] Projet créé dans creations_projects:', name);
 
       setCurrentProjectId(newId);
       setCurrentProjectName(name);
@@ -2643,6 +2636,10 @@ export default function CreationsAtelierV2({
       toast.error(language === 'fr' ? 'Erreur lors de la création du projet' : 'Error creating project');
     }
   };
+
+  // === MODALE SAUVEGARDE avec choix de catégorie ===
+  const [showSaveCategoryModal, setShowSaveCategoryModal] = useState(false);
+  const [saveCategoryChoice, setSaveCategoryChoice] = useState<'en_cours' | 'finis'>('en_cours');
 
   // === SAUVER COMME : modale de saisie du nom puis capture et sauvegarde dans l'album ===
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
@@ -2992,16 +2989,27 @@ export default function CreationsAtelierV2({
     img.src = src;
   };
   
-  // Ajouter au collecteur (pièces détourées / éléments)
-  const addToCollector = (src: string, name: string, type: CollectorItem["type"] = "detourage") => {
-    const newItem: CollectorItem = {
-      id: `collector-${Date.now()}`,
-      type,
-      src,
-      name,
-      thumbnail: src
-    };
-    setCollectorItems(prev => [...prev, newItem]);
+  // Ajouter au collecteur (pièces détourées / éléments) — persiste dans IndexedDB
+  const addToCollector = async (src: string, name: string, type: CollectorItem["type"] = "detourage") => {
+    if (currentProjectId) {
+      await addToCollecteur({
+        photoUrl: src,
+        name,
+        thumbnail: src,
+        projectId: currentProjectId,
+      });
+      // Le useLiveQuery sur collecteurDbItems mettra à jour collectorItems automatiquement
+    } else {
+      // Pas de projet courant : ajout local uniquement
+      const newItem: CollectorItem = {
+        id: `collector-${Date.now()}`,
+        type,
+        src,
+        name,
+        thumbnail: src
+      };
+      setCollectorItems(prev => [...prev, newItem]);
+    }
     toast.success(language === "fr" ? `"${name}" ajouté au collecteur` : `"${name}" added to collector`);
   };
   
@@ -3294,7 +3302,7 @@ export default function CreationsAtelierV2({
   };
   
   // Sauvegarder le projet
-  const handleSaveProject = async () => {
+  const handleSaveProject = async (projectCategory?: 'en_cours' | 'finis') => {
     try {
       const targetProjectId = currentProjectId || projectId;
       
@@ -3343,19 +3351,8 @@ export default function CreationsAtelierV2({
           await updateCreationsProject(existingProject);
           console.log('[CreationsAtelier] Projet mis à jour:', targetProjectId, 'avec', sourcePhotos.length, 'photos');
           
-          // Synchroniser ou cr\u00e9er l'entr\u00e9e album_metas pour que le projet apparaisse dans Albums
-          const albumMeta = await db.album_metas.get(targetProjectId);
-          if (albumMeta) {
-            if (albumMeta.title !== currentProjectName) {
-              albumMeta.title = currentProjectName;
-              await db.album_metas.put(albumMeta);
-              console.log('[CreationsAtelier] Nom de l\'album synchronis\u00e9:', currentProjectName);
-            }
-          } else {
-            await db.album_metas.add({ id: targetProjectId, title: currentProjectName, type: 'standard' as const, series: 'photoclass' as const, createdAt: Date.now(), categoryId: 'cat_mes_projets' });
-            await db.albums.put({ id: targetProjectId, frames: [], updatedAt: Date.now() });
-            console.log('[CreationsAtelier] Album cr\u00e9\u00e9 dans MES PROJETS CR\u00c9ATIONS:', currentProjectName);
-          }
+          // Le projet est sauvegardé dans creations_projects (colonne Projets)
+          console.log('[CreationsAtelier] Projet sauvegardé dans creations_projects:', targetProjectId);
         } else {
           // Cr\u00e9er un nouveau projet avec cet ID
           const newProject = await createCreationsProject(currentProjectName, targetProjectId);
@@ -3364,18 +3361,8 @@ export default function CreationsAtelierV2({
           await updateCreationsProject(newProject);
           console.log('[CreationsAtelier] Nouveau projet cr\u00e9\u00e9:', targetProjectId, 'avec', sourcePhotos.length, 'photos');
           
-          // Cr\u00e9er ou synchroniser l'entr\u00e9e album_metas
-          const albumMeta2 = await db.album_metas.get(targetProjectId);
-          if (albumMeta2) {
-            if (albumMeta2.title !== currentProjectName) {
-              albumMeta2.title = currentProjectName;
-              await db.album_metas.put(albumMeta2);
-            }
-          } else {
-            await db.album_metas.add({ id: targetProjectId, title: currentProjectName, type: 'standard' as const, series: 'photoclass' as const, createdAt: Date.now(), categoryId: 'cat_mes_projets' });
-            await db.albums.put({ id: targetProjectId, frames: [], updatedAt: Date.now() });
-            console.log('[CreationsAtelier] Album cr\u00e9\u00e9 dans MES PROJETS CR\u00c9ATIONS:', currentProjectName);
-          }
+          // Le projet est sauvegardé dans creations_projects (colonne Projets)
+          console.log('[CreationsAtelier] Nouveau projet sauvegardé dans creations_projects:', targetProjectId);
         }
       } else {
         // Pas d'ID de projet - créer un nouveau projet avec un ID généré
@@ -3387,21 +3374,18 @@ export default function CreationsAtelierV2({
         setCurrentProjectId(newId); // Mettre à jour l'ID du projet courant
         console.log('[CreationsAtelier] Nouveau projet créé sans ID:', newId, 'avec', sourcePhotos.length, 'photos');
         
-        // Créer aussi l'album dans albums_meta pour qu'il apparaisse dans MES PROJETS CRÉATIONS
-        const newAlbumMeta = {
-          id: newId,
-          title: currentProjectName,
-          type: 'standard' as const,
-          series: 'photoclass' as const,
-          createdAt: Date.now(),
-          categoryId: 'cat_mes_projets'
-        };
-        await db.album_metas.add(newAlbumMeta);
-        // Créer aussi l'entrée dans albums
-        await db.albums.add({ id: newId, frames: [], updatedAt: Date.now() });
-        console.log('[CreationsAtelier] Album créé dans MES PROJETS CRÉATIONS:', currentProjectName);
+        // Le projet est sauvegardé dans creations_projects (colonne Projets)
+        console.log('[CreationsAtelier] Nouveau projet créé dans creations_projects:', newId);
       }
       
+      // Stocker la catégorie du projet (en_cours / finis) si fournie
+      if (projectCategory) {
+        const finalId = targetProjectId || currentProjectId;
+        if (finalId) {
+          await db.creations_projects.update(finalId, { projectCategory } as any);
+        }
+      }
+
       // Appeler le callback si fourni
       if (onSaveProject) {
         onSaveProject({
@@ -7138,7 +7122,7 @@ export default function CreationsAtelierV2({
                             className="absolute -top-9 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 hover:bg-purple-50 text-purple-700 rounded-full px-3 py-1 shadow-lg cursor-pointer z-[120] flex items-center gap-1.5 whitespace-nowrap"
                             draggable={false}
                             onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
                               if (element.groupId) {
                                 // Groupe → fusionner en UNE seule entrée collecteur avec dimensions canvas
@@ -7160,7 +7144,11 @@ export default function CreationsAtelierV2({
                                   groupXs: groupImages.map(el => el.x),
                                   groupYs: groupImages.map(el => el.y),
                                 };
-                                setCollectorItems(prev => [...prev, newItem]);
+                                if (currentProjectId) {
+                                  await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
+                                } else {
+                                  setCollectorItems(prev => [...prev, newItem]);
+                                }
                                 toast.success(language === 'fr'
                                   ? `Groupe (${groupImages.length} pièces) envoyé vers "Pièces détourées"`
                                   : `Group (${groupImages.length} pieces) sent to "Cutout pieces"`);
@@ -7175,7 +7163,11 @@ export default function CreationsAtelierV2({
                                   widthCm: element.width,
                                   heightCm: element.height,
                                 };
-                                setCollectorItems(prev => [...prev, newItem]);
+                                if (currentProjectId) {
+                                  await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
+                                } else {
+                                  setCollectorItems(prev => [...prev, newItem]);
+                                }
                                 toast.success(language === 'fr' ? 'Pièce envoyée vers "Pièces détourées"' : 'Piece sent to "Cutout pieces"');
                               }
                             }}
@@ -8322,12 +8314,8 @@ export default function CreationsAtelierV2({
               size="sm"
               className="gap-1 text-xs h-7 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md"
               onClick={() => {
-                handleSaveProject();
-                const btn = document.activeElement as HTMLButtonElement;
-                if (btn) {
-                  btn.classList.add('animate-pulse');
-                  setTimeout(() => btn.classList.remove('animate-pulse'), 500);
-                }
+                setSaveCategoryChoice('en_cours');
+                setShowSaveCategoryModal(true);
               }}
             >
               <Save className="w-3.5 h-3.5" />
@@ -8382,6 +8370,70 @@ export default function CreationsAtelierV2({
               >
                 <Save className="w-4 h-4 mr-1" />
                 {language === 'fr' ? 'Sauvegarder' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale : Choix de catégorie avant sauvegarde */}
+      {showSaveCategoryModal && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
+          <div className="bg-white rounded-xl shadow-2xl w-[380px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-purple-50 to-pink-50">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Save className="w-5 h-5 text-purple-500" />
+                {language === 'fr' ? 'Sauvegarder le projet' : 'Save project'}
+              </h3>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <label
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                  saveCategoryChoice === 'en_cours' ? 'bg-purple-100 border-2 border-purple-400' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                }`}
+                onClick={() => setSaveCategoryChoice('en_cours')}
+              >
+                <div
+                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                  style={{ borderColor: '#8B5CF6', backgroundColor: saveCategoryChoice === 'en_cours' ? '#8B5CF6' : 'transparent' }}
+                >
+                  {saveCategoryChoice === 'en_cours' && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <span className="text-sm font-medium text-gray-700">{language === 'fr' ? 'Projets en cours' : 'Current projects'}</span>
+              </label>
+              <label
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                  saveCategoryChoice === 'finis' ? 'bg-purple-100 border-2 border-purple-400' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                }`}
+                onClick={() => setSaveCategoryChoice('finis')}
+              >
+                <div
+                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                  style={{ borderColor: '#8B5CF6', backgroundColor: saveCategoryChoice === 'finis' ? '#8B5CF6' : 'transparent' }}
+                >
+                  {saveCategoryChoice === 'finis' && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <span className="text-sm font-medium text-gray-700">{language === 'fr' ? 'Projets finis' : 'Finished projects'}</span>
+              </label>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveCategoryModal(false)}>
+                {language === 'fr' ? 'Annuler' : 'Cancel'}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                onClick={async () => {
+                  setShowSaveCategoryModal(false);
+                  await handleSaveProject(saveCategoryChoice);
+                  const btn = document.activeElement as HTMLButtonElement;
+                  if (btn) {
+                    btn.classList.add('animate-pulse');
+                    setTimeout(() => btn.classList.remove('animate-pulse'), 500);
+                  }
+                }}
+              >
+                OK
               </Button>
             </div>
           </div>
@@ -8928,15 +8980,24 @@ export default function CreationsAtelierV2({
                   {element.src && (
                     <button
                       className="w-full px-4 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-3"
-                      onClick={() => {
-                        const newItem: CollectorItem = {
-                          id: `collector_${Date.now()}`,
-                          type: 'detourage',
-                          src: element.src!,
-                          name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
-                          thumbnail: element.src!
-                        };
-                        setCollectorItems(prev => [...prev, newItem]);
+                      onClick={async () => {
+                        if (currentProjectId) {
+                          await addToCollecteur({
+                            photoUrl: element.src!,
+                            name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
+                            thumbnail: element.src!,
+                            projectId: currentProjectId,
+                          });
+                        } else {
+                          const newItem: CollectorItem = {
+                            id: `collector_${Date.now()}`,
+                            type: 'detourage',
+                            src: element.src!,
+                            name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
+                            thumbnail: element.src!
+                          };
+                          setCollectorItems(prev => [...prev, newItem]);
+                        }
                         toast.success(language === "fr" ? "Ajouté au collecteur" : "Added to collector");
                         closeContextMenu();
                       }}
