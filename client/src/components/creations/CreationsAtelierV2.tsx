@@ -718,9 +718,10 @@ export default function CreationsAtelierV2({
   // Collecteur (pièces détourées et éléments de montage)
   const [collectorItems, setCollectorItems] = useState<CollectorItem[]>([]);
   
-  // Nom et ID du projet
+  // Nom, ID et type du projet
   const [currentProjectName, setCurrentProjectName] = useState(projectName);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(projectId || null);
+  const [currentProjectType, setCurrentProjectType] = useState<string>('Projet libre');
   console.log("[ATELIER] projet actif:", currentProjectId, "projectId prop:", projectId);
   
   // Photo active pour le travail sur le canvas
@@ -1075,10 +1076,14 @@ export default function CreationsAtelierV2({
   // Combine les projets de creations_projects ET les albums de la catégorie "MES PROJETS CRÉATIONS"
   useEffect(() => {
     if (isOpen) {
-      // Réinitialiser le canvas à chaque ouverture : l'utilisateur choisit
-      // explicitement dans la modale (nouveau projet vide ou projet existant)
-      setCurrentProjectId(null);
-      setCurrentProjectName(language === 'fr' ? 'Nouveau projet' : 'New project');
+      // Réinitialiser le canvas à chaque ouverture
+      // Si un projectId est fourni, le conserver pour que le collecteur se charge correctement
+      if (!projectId) {
+        setCurrentProjectId(null);
+        setCurrentProjectName(language === 'fr' ? 'Nouveau projet' : 'New project');
+      } else {
+        setCurrentProjectId(projectId);
+      }
       setCanvasElements([]);
       setCollectorItems([]);
       setSourcePhotos([]);
@@ -1148,8 +1153,16 @@ export default function CreationsAtelierV2({
           const matchedProject = allProjects.find(p => p.id === projectId);
           if (matchedProject) {
             setCurrentProjectName(matchedProject.name);
+            setCurrentProjectType((matchedProject as any).projectType || 'Projet libre');
           } else if (projectName && projectName !== 'Nouveau projet' && projectName !== 'New project') {
             setCurrentProjectName(projectName);
+          }
+          // Charger le type depuis IndexedDB si pas trouvé dans allProjects
+          if (!matchedProject) {
+            const dbProject = await getCreationsProject(projectId);
+            if (dbProject) {
+              setCurrentProjectType((dbProject as any).projectType || 'Projet libre');
+            }
           }
         } else {
           setShowProjectModal(true);
@@ -2645,18 +2658,40 @@ export default function CreationsAtelierV2({
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
 
-  // Ouvre la modale de saisie du nom
-  const handleSaveAs = () => {
-    setSaveAsName(currentProjectName || (language === 'fr' ? 'Mon Collage' : 'My Collage'));
-    setShowSaveAsModal(true);
+  // Mapper le type de projet vers l'album de destination
+  const getDestinationAlbumId = (projectType: string): string => {
+    const typeMap: Record<string, string> = {
+      'Collage': 'album_creations_collages_finis',
+      'Passe-partout': 'album_creations_modeles_passe_partout',
+      'Pêle-mêle': 'album_creations_modeles_pele_mele',
+      'Montage photos/Pêle-mêle': 'album_creations_montages_finis',
+      'Montage photos/Passe-partout': 'album_creations_montages_finis',
+      'Page de stickers': 'album_creations_stickers',
+      'Puzzle': 'album_creations_puzzle',
+    };
+    return typeMap[projectType] || 'album_creations_collages_finis';
   };
 
-  // Effectue la capture et la sauvegarde après confirmation
-  const handleSaveAsConfirm = async () => {
-    const collageName = saveAsName.trim() || (language === 'fr' ? 'Mon Collage' : 'My Collage');
-    setShowSaveAsModal(false);
+  const getDestinationAlbumName = (projectType: string): string => {
+    const nameMap: Record<string, string> = {
+      'Collage': 'Collages finis',
+      'Passe-partout': 'Modèles passe-partout',
+      'Pêle-mêle': 'Modèles pêle-mêle',
+      'Montage photos/Pêle-mêle': 'Montages finis',
+      'Montage photos/Passe-partout': 'Montages finis',
+      'Page de stickers': 'Stickers',
+      'Puzzle': 'Puzzle',
+    };
+    return nameMap[projectType] || 'Collages finis';
+  };
+
+  // Sauver comme : capture l'image et la sauvegarde dans l'album de destination selon le type du projet
+  const handleSaveAs = async () => {
     if (isExporting) return;
     setIsExporting(true);
+    const collageName = currentProjectName || (language === 'fr' ? 'Mon Collage' : 'My Collage');
+    const destAlbumId = getDestinationAlbumId(currentProjectType);
+    const destAlbumName = getDestinationAlbumName(currentProjectType);
     toast.info(language === 'fr' ? 'Capture du collage en cours...' : 'Capturing collage...');
     try {
       const canvas = await captureCanvas(3); // Haute résolution
@@ -2671,12 +2706,55 @@ export default function CreationsAtelierV2({
         reader.readAsDataURL(saveBlob);
       });
 
-      // Correction de l'ordre des arguments : saveCollageToAlbum(imageDataUrl, collageName)
-      await saveCollageToAlbum(dataUrl, collageName);
+      // Calculer le suffixe numéroté pour éviter les doublons
+      const existingAlbum = await db.albums.get(destAlbumId);
+      const existingFrames = existingAlbum?.frames ?? [];
+      const baseName = collageName;
+      // Compter les images existantes avec le même nom de base (baseName_01, baseName_02, etc.)
+      let maxNum = 0;
+      for (const f of existingFrames) {
+        const title = f.title || '';
+        if (title === baseName || title.startsWith(`${baseName}_`)) {
+          const match = title.match(/_(\d+)$/);
+          if (match) {
+            maxNum = Math.max(maxNum, parseInt(match[1], 10));
+          } else if (title === baseName) {
+            maxNum = Math.max(maxNum, 0);
+          }
+        }
+      }
+      const nextNum = String(maxNum + 1).padStart(2, '0');
+      const numberedName = `${baseName}_${nextNum}`;
+
+      // Sauvegarder dans l'album de destination (table albums/frames, pas album_data)
+      const newFrame: PhotoFrame = {
+        id: Date.now(),
+        title: numberedName,
+        isSelected: false,
+        format: 'png',
+        photoUrl: dataUrl,
+        originalName: `${numberedName}.png`,
+      };
+      if (existingAlbum) {
+        await db.albums.update(destAlbumId, {
+          frames: [...(existingAlbum.frames ?? []), newFrame],
+          updatedAt: Date.now(),
+        });
+      } else {
+        await db.albums.put({
+          id: destAlbumId,
+          title: destAlbumName,
+          type: 'standard',
+          series: 'photoclass',
+          createdAt: Date.now(),
+          frames: [newFrame],
+          updatedAt: Date.now(),
+        } as any);
+      }
       toast.success(
         language === 'fr'
-          ? `Collage "${collageName}_collage" sauvegardé dans l'album Mes Collages !`
-          : `Collage "${collageName}_collage" saved to My Collages album!`
+          ? `"${numberedName}" sauvegardée dans "${destAlbumName}" !`
+          : `"${numberedName}" saved to "${destAlbumName}"!`
       );
     } catch (err) {
       console.error('Erreur sauver comme:', err);
@@ -4007,20 +4085,20 @@ export default function CreationsAtelierV2({
                   {language === "fr" ? "Créations / Atelier" : "Creations / Workshop"}
                 </h2>
                 <span className="text-gray-400">•</span>
-                <input
-                  type="text"
-                  value={currentProjectName}
-                  onChange={(e) => setCurrentProjectName(e.target.value)}
-                  placeholder={language === 'fr' ? 'Nom du collage...' : 'Collage name...'}
-                  className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
-                  title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
-                />
+                <div className="flex flex-col">
+                  <input
+                    type="text"
+                    value={currentProjectName}
+                    onChange={(e) => setCurrentProjectName(e.target.value)}
+                    placeholder={language === 'fr' ? 'Nom du collage...' : 'Collage name...'}
+                    className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
+                    title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
+                  />
+                  <p className="text-sm text-purple-500 font-medium ml-3 mt-0.5">
+                    {currentProjectType || 'Projet libre'}
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-gray-500">
-                {language === "fr" 
-                  ? "Détourage, collage, effets artistiques et mise en page" 
-                  : "Cutout, collage, artistic effects and layout"}
-              </p>
             </div>
           </div>
           
@@ -8329,52 +8407,6 @@ export default function CreationsAtelierV2({
       </div>
       
       {/* Modale de confirmation avant de quitter */}
-      {/* Modale Sauver comme : saisie du nom avant sauvegarde */}
-      {showSaveAsModal && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3100]">
-          <div className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b bg-gradient-to-r from-blue-50 to-purple-50">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                <Save className="w-5 h-5 text-blue-500" />
-                {language === 'fr' ? 'Sauver comme' : 'Save As'}
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {language === 'fr'
-                  ? 'Le collage sera sauvegardé dans l\'album "Mes Collages"'
-                  : 'The collage will be saved in the "My Collages" album'}
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <Label htmlFor="saveAsNameInput" className="text-sm font-medium text-gray-700 mb-2 block">
-                {language === 'fr' ? 'Nom du collage' : 'Collage name'}
-              </Label>
-              <Input
-                id="saveAsNameInput"
-                value={saveAsName}
-                onChange={(e) => setSaveAsName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAsConfirm(); if (e.key === 'Escape') setShowSaveAsModal(false); }}
-                placeholder={language === 'fr' ? 'Nom du collage...' : 'Collage name...'}
-                className="w-full"
-                autoFocus
-              />
-            </div>
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowSaveAsModal(false)}>
-                {language === 'fr' ? 'Annuler' : 'Cancel'}
-              </Button>
-              <Button
-                size="sm"
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                onClick={handleSaveAsConfirm}
-                disabled={!saveAsName.trim()}
-              >
-                <Save className="w-4 h-4 mr-1" />
-                {language === 'fr' ? 'Sauvegarder' : 'Save'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modale : Choix de catégorie avant sauvegarde */}
       {showSaveCategoryModal && (
@@ -8594,6 +8626,7 @@ export default function CreationsAtelierV2({
                           setSelectedProjectId(project.id ?? null);
                           setCurrentProjectId(project.id ?? null);
                           setCurrentProjectName(project.name);
+                          setCurrentProjectType((project as any).projectType || 'Projet libre');
 
                           // Charger les photos du projet dans sourcePhotos
                           if ((project.photos ?? []).length > 0) {
