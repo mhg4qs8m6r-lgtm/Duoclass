@@ -656,10 +656,10 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
           >
             <option value="Projet libre">{language === "fr" ? "Projet libre" : "Free project"}</option>
             <option value="Collage">{language === "fr" ? "Collage" : "Collage"}</option>
-            <option value="Passe-partout">{language === "fr" ? "Passe-partout" : "Mat frame"}</option>
-            <option value="Pêle-mêle">{language === "fr" ? "Pêle-mêle" : "Photo montage"}</option>
-            <option value="Montage photos/Pêle-mêle">{language === "fr" ? "Montage photos/Pêle-mêle" : "Photo montage/Collage"}</option>
+            <option value="Passe-partout modèle">{language === "fr" ? "Passe-partout modèle" : "Mat frame template"}</option>
             <option value="Montage photos/Passe-partout">{language === "fr" ? "Montage photos/Passe-partout" : "Photo montage/Mat frame"}</option>
+            <option value="Pêle-mêle modèle">{language === "fr" ? "Pêle-mêle modèle" : "Photo montage template"}</option>
+            <option value="Montage photos/Pêle-mêle">{language === "fr" ? "Montage photos/Pêle-mêle" : "Photo montage/Collage"}</option>
             <option value="Page de stickers">{language === "fr" ? "Page de stickers" : "Sticker page"}</option>
             <option value="Puzzle">{language === "fr" ? "Puzzle" : "Puzzle"}</option>
           </select>

@@ -476,7 +476,8 @@ function PassePartoutSection({
   // --- Section active : accordéon exclusif ---
   const [activeSection, setActiveSection] = useState<"shape" | "pattern" | "template" | null>(null);
   const [filetsOpen, setFiletsOpen] = useState(false);
-  const [formatOpen, setFormatOpen] = useState(false);
+
+
   const toggleSection = (section: "shape" | "pattern" | "template") => {
     // Si on clique sur la section déjà active → la fermer (toggle)
     // Si on clique sur une autre section → l'ouvrir directement (sans passer par null)
@@ -1382,45 +1383,8 @@ function PassePartoutSection({
         )}
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Section F - Format                                                    */}
-      {/* ------------------------------------------------------------------ */}
-      <div className={`border rounded-lg overflow-hidden transition-all ${
-        formatOpen ? "border-slate-400 shadow-sm" : "border-gray-200"
-      }`}>
-        <button
-          type="button"
-          className={`relative z-10 w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
-            formatOpen
-              ? "bg-slate-600 text-white"
-              : "bg-gray-50 text-gray-700 hover:bg-slate-50"
-          }`}
-          onClick={() => setFormatOpen(v => !v)}
-        >
-          <span className="text-xs font-bold">
-            {fr ? `F - Format (${canvasFormat.label})` : `F - Format (${canvasFormat.label})`}
-          </span>
-          <span className="text-xs opacity-70">{formatOpen ? "▲" : "▼"}</span>
-        </button>
 
-        {formatOpen && (
-          <div className="p-3 space-y-2 bg-white">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-500">{fr ? "Format actif" : "Active format"}</span>
-              <span className="text-xs font-semibold text-slate-700">{canvasFormat.label}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-500">{fr ? "Dimensions" : "Dimensions"}</span>
-              <span className="text-xs font-mono text-slate-600">{canvasFormat.width} × {canvasFormat.height} cm</span>
-            </div>
-            <p className="text-[10px] text-gray-400 italic">
-              {fr
-                ? "Pour changer le format ou l'orientation, utilisez les contrôles en haut de la barre d'outils."
-                : "To change the format or orientation, use the controls at the top of the toolbar."}
-            </p>
-          </div>
-        )}
-      </div>
+
     </div>
   );
 }

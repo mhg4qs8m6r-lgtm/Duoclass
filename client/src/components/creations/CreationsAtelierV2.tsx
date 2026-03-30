@@ -742,6 +742,12 @@ export default function CreationsAtelierV2({
   const [rotationStartAngle, setRotationStartAngle] = useState<number>(0); // angle initial du curseur
   const [rotationStartValue, setRotationStartValue] = useState<number>(0); // rotation initiale de l'élément
   const [rotationCenterRef, setRotationCenterRef] = useState<{ x: number; y: number } | null>(null);
+  // Refs synchrones pour la rotation (évite les closures stales dans les listeners window)
+  const isRotatingRef = useRef(false);
+  const rotationStartAngleRef = useRef(0);
+  const rotationStartValueRef = useRef(0);
+  const rotationCenterSyncRef = useRef<{ x: number; y: number } | null>(null);
+  const rotatingElementIdRef = useRef<string | null>(null);
 
   // États pour le lasso de sélection (rectangle de sélection)
   const [isLassoing, setIsLassoing] = useState(false);
@@ -896,6 +902,8 @@ export default function CreationsAtelierV2({
   const justDidRightClickRef = useRef(false); // Flag pour empêcher onClick de désélectionner après un clic droit
   const justFinishedLassoRef = useRef(false); // Flag pour empêcher onClick de désélectionner après un lasso
   
+  // État pour la confirmation "Envoyer dans le Collecteur"
+  const [confirmCollectorSend, setConfirmCollectorSend] = useState<string | null>(null); // elementId à envoyer
   // État pour la confirmation avant de quitter
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -3754,6 +3762,9 @@ export default function CreationsAtelierV2({
     setIsDragging(false);
     setIsResizing(false);
     setIsRotating(false);
+    isRotatingRef.current = false;
+    rotationCenterSyncRef.current = null;
+    rotatingElementIdRef.current = null;
     setDragStart(null);
     setElementStartPos(null);
     setElementStartSize(null);
@@ -3769,23 +3780,56 @@ export default function CreationsAtelierV2({
     undoBatchStart();
     e.preventDefault();
     e.stopPropagation();
-    // Centre de l'élément en coordonnées écran
+    // Centre de l'élément en coordonnées écran (utiliser pageRef pour la robustesse au scroll)
     const pxPerCm = canvasDimensions.pxPerCm;
-    const pageLeft = canvasDimensions.pageOffsetX;
-    const pageTop  = canvasDimensions.pageOffsetY;
-    const canvasRect = canvasRef.current?.getBoundingClientRect();
-    if (!canvasRect) return;
-    const cx = canvasRect.left + pageLeft + (element.x + element.width  / 2) * pxPerCm;
-    const cy = canvasRect.top  + pageTop  + (element.y + element.height / 2) * pxPerCm;
+    const pageEl = pageRef.current;
+    if (!pageEl) return;
+    const pageRect = pageEl.getBoundingClientRect();
+    const cx = pageRect.left + (element.x + element.width  / 2) * pxPerCm;
+    const cy = pageRect.top  + (element.y + element.height / 2) * pxPerCm;
     const startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
+    // Mettre à jour les refs synchrones ET les states React
+    isRotatingRef.current = true;
+    rotationStartAngleRef.current = startAngle;
+    rotationStartValueRef.current = element.rotation;
+    rotationCenterSyncRef.current = { x: cx, y: cy };
+    rotatingElementIdRef.current = elementId;
     setIsRotating(true);
     setRotationStartAngle(startAngle);
     setRotationStartValue(element.rotation);
     setRotationCenterRef({ x: cx, y: cy });
     setSelectedElementId(elementId);
+
+    // Listeners window pour garantir le suivi même hors du canvas
+    const onMove = (ev: MouseEvent) => {
+      if (!isRotatingRef.current || !rotationCenterSyncRef.current || !rotatingElementIdRef.current) return;
+      const center = rotationCenterSyncRef.current;
+      const currentAngle = Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * (180 / Math.PI);
+      let newRotation = rotationStartValueRef.current + (currentAngle - rotationStartAngleRef.current);
+      // Snap à 0°, 90°, 180°, 270° si proche (±5°)
+      const snaps = [0, 90, 180, 270, -90, -180, -270, 360, -360];
+      for (const snap of snaps) {
+        if (Math.abs(newRotation - snap) < 5) { newRotation = snap; break; }
+      }
+      setCanvasElements(prev => prev.map(el =>
+        el.id === rotatingElementIdRef.current ? { ...el, rotation: newRotation % 360 } : el
+      ));
+    };
+    const onUp = () => {
+      isRotatingRef.current = false;
+      rotationCenterSyncRef.current = null;
+      rotatingElementIdRef.current = null;
+      setIsRotating(false);
+      setRotationCenterRef(null);
+      undoBatchEnd();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   };
 
-  // Appliquer la rotation libre pendant le drag
+  // Appliquer la rotation libre pendant le drag (fallback pour les événements React du canvas)
   const handleRotateMove = useCallback((e: React.MouseEvent) => {
     if (!isRotating || !rotationCenterRef || !selectedElementId) return;
     const currentAngle = Math.atan2(e.clientY - rotationCenterRef.y, e.clientX - rotationCenterRef.x) * (180 / Math.PI);
@@ -6648,7 +6692,7 @@ export default function CreationsAtelierV2({
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
                         zIndex: element.zIndex,
                         opacity: element.opacity,
-                        transition: (isDragging || isResizing) ? 'none' : 'all 0.1s ease',
+                        transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
                         // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
@@ -7155,66 +7199,87 @@ export default function CreationsAtelierV2({
                             <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
                           </div>
                         )}
-                        {/* Bouton "Valider le détourage" — envoie l'image dans le collecteur (éléments image uniquement) */}
+                        {/* Bouton "Envoyer dans le Collecteur" — avec confirmation */}
                         {selectedElementId === element.id && element.type === 'image' && element.src && (
-                          <div
-                            className="absolute -top-9 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 hover:bg-purple-50 text-purple-700 rounded-full px-3 py-1 shadow-lg cursor-pointer z-[120] flex items-center gap-1.5 whitespace-nowrap"
-                            draggable={false}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (element.groupId) {
-                                // Groupe → fusionner en UNE seule entrée collecteur avec dimensions canvas
-                                const groupImages = canvasElements.filter(el => el.groupId === element.groupId && el.type === 'image' && el.src);
-                                if (groupImages.length === 0) return;
-                                const newItem: CollectorItem = {
-                                  id: `collector_${Date.now()}`,
-                                  type: 'detourage',
-                                  src: groupImages[0].src!,
-                                  name: (language === 'fr' ? 'Groupe détouré' : 'Cutout group') + ` (${groupImages.length})`,
-                                  thumbnail: groupImages[0].src!,
-                                  widthCm: groupImages[0].width,
-                                  heightCm: groupImages[0].height,
-                                  groupId: element.groupId,
-                                  groupSrcs: groupImages.map(el => el.src!),
-                                  groupNames: groupImages.map(el => el.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece')),
-                                  groupWidths: groupImages.map(el => el.width),
-                                  groupHeights: groupImages.map(el => el.height),
-                                  groupXs: groupImages.map(el => el.x),
-                                  groupYs: groupImages.map(el => el.y),
-                                };
-                                if (currentProjectId) {
-                                  await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
-                                } else {
-                                  setCollectorItems(prev => [...prev, newItem]);
-                                }
-                                toast.success(language === 'fr'
-                                  ? `Groupe (${groupImages.length} pièces) envoyé vers "Pièces détourées"`
-                                  : `Group (${groupImages.length} pieces) sent to "Cutout pieces"`);
-                              } else {
-                                // Élément seul — stocker les dimensions canvas
-                                const newItem: CollectorItem = {
-                                  id: `collector_${Date.now()}`,
-                                  type: 'detourage',
-                                  src: element.src!,
-                                  name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
-                                  thumbnail: element.src!,
-                                  widthCm: element.width,
-                                  heightCm: element.height,
-                                };
-                                if (currentProjectId) {
-                                  await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
-                                } else {
-                                  setCollectorItems(prev => [...prev, newItem]);
-                                }
-                                toast.success(language === 'fr' ? 'Pièce envoyée vers "Pièces détourées"' : 'Piece sent to "Cutout pieces"');
-                              }
-                            }}
-                          >
-                            <span className="text-[11px] font-semibold">
-                              {language === 'fr' ? '→ Envoyer vers Pièces détourées' : '→ Send to Cutout pieces'}
-                            </span>
-                          </div>
+                          confirmCollectorSend === element.id ? (
+                            <div
+                              className="absolute -top-10 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 rounded-lg px-3 py-1.5 shadow-lg z-[120] flex items-center gap-2 whitespace-nowrap"
+                              draggable={false}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <span className="text-[11px] text-gray-700">{language === 'fr' ? 'Envoyer dans le Collecteur ?' : 'Send to Collector?'}</span>
+                              <button
+                                className="text-[11px] font-semibold bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 rounded"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setConfirmCollectorSend(null);
+                                  if (element.groupId) {
+                                    const groupImages = canvasElements.filter(el => el.groupId === element.groupId && el.type === 'image' && el.src);
+                                    if (groupImages.length === 0) return;
+                                    const newItem: CollectorItem = {
+                                      id: `collector_${Date.now()}`,
+                                      type: 'photo',
+                                      src: groupImages[0].src!,
+                                      name: (language === 'fr' ? 'Groupe' : 'Group') + ` (${groupImages.length})`,
+                                      thumbnail: groupImages[0].src!,
+                                      widthCm: groupImages[0].width,
+                                      heightCm: groupImages[0].height,
+                                      groupId: element.groupId,
+                                      groupSrcs: groupImages.map(el => el.src!),
+                                      groupNames: groupImages.map(el => el.name || (language === 'fr' ? 'Image' : 'Image')),
+                                      groupWidths: groupImages.map(el => el.width),
+                                      groupHeights: groupImages.map(el => el.height),
+                                      groupXs: groupImages.map(el => el.x),
+                                      groupYs: groupImages.map(el => el.y),
+                                    };
+                                    if (currentProjectId) {
+                                      await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
+                                    } else {
+                                      setCollectorItems(prev => [...prev, newItem]);
+                                    }
+                                    toast.success(language === 'fr'
+                                      ? `Groupe (${groupImages.length} images) envoyé dans le Collecteur`
+                                      : `Group (${groupImages.length} images) sent to Collector`);
+                                  } else {
+                                    const newItem: CollectorItem = {
+                                      id: `collector_${Date.now()}`,
+                                      type: 'photo',
+                                      src: element.src!,
+                                      name: element.name || (language === 'fr' ? 'Image' : 'Image'),
+                                      thumbnail: element.src!,
+                                      widthCm: element.width,
+                                      heightCm: element.height,
+                                    };
+                                    if (currentProjectId) {
+                                      await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
+                                    } else {
+                                      setCollectorItems(prev => [...prev, newItem]);
+                                    }
+                                    toast.success(language === 'fr' ? 'Image envoyée dans le Collecteur' : 'Image sent to Collector');
+                                  }
+                                }}
+                              >
+                                {language === 'fr' ? 'Oui' : 'Yes'}
+                              </button>
+                              <button
+                                className="text-[11px] font-semibold bg-gray-300 hover:bg-gray-400 text-gray-700 px-2 py-0.5 rounded"
+                                onClick={(e) => { e.stopPropagation(); setConfirmCollectorSend(null); }}
+                              >
+                                {language === 'fr' ? 'Non' : 'No'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div
+                              className="absolute -top-9 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 hover:bg-purple-50 text-purple-700 rounded-full px-3 py-1 shadow-lg cursor-pointer z-[120] flex items-center gap-1.5 whitespace-nowrap"
+                              draggable={false}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => { e.stopPropagation(); setConfirmCollectorSend(element.id); }}
+                            >
+                              <span className="text-[11px] font-semibold">
+                                {language === 'fr' ? '→ Envoyer dans le Collecteur' : '→ Send to Collector'}
+                              </span>
+                            </div>
+                          )
                         )}
                         {/* Bouton menu contextuel ⋮ (en haut à droite de l'élément sélectionné) */}
                         {selectedElementId === element.id && (
