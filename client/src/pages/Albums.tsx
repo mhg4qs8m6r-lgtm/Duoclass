@@ -513,13 +513,10 @@ export default function Albums() {
             {!showCreationForm && (
               <Button
                 onClick={() => setShowCreationForm(true)}
-                className="flex flex-col items-center justify-start gap-1 bg-orange-400 hover:bg-orange-500 text-white font-semibold pt-4 pb-3 px-6 min-w-[200px]"
+                className="flex items-center gap-2 bg-orange-400 hover:bg-orange-500 text-white font-semibold py-3 px-6 min-w-[200px]"
               >
-                <div className="flex items-center justify-center gap-2">
-                  <Plus size={18} />
-                  <span>{t('albums.createCategory')}</span>
-                </div>
-                <span className="text-xs font-normal">{language === "fr" ? "projet création" : "creation project"}</span>
+                <Plus size={18} />
+                <span>{t('albums.createCategory')}</span>
               </Button>
             )}
             {showCreationForm && (
@@ -535,11 +532,19 @@ export default function Albums() {
         </div>
 
         {/* Bandeau aide Atelier */}
-        <div
-          className="bg-emerald-500 hover:bg-emerald-600 text-white text-center py-2 px-4 cursor-pointer transition-colors text-sm font-medium"
-          onClick={() => setShowAtelierHelp(true)}
-        >
-          {"\uD83D\uDCCB"} {language === 'fr' ? "Comment utiliser l'Atelier Créations ? Cliquez ici" : "How to use the Creations Workshop? Click here"}
+        <div className="bg-emerald-500 text-white flex items-center justify-center py-2 px-4 text-sm font-medium">
+          <span
+            className="cursor-pointer hover:underline"
+            onClick={() => setShowAtelierHelp(true)}
+          >
+            {"\uD83D\uDCCB"} {language === 'fr' ? "Comment utiliser l'Atelier Créations ? Cliquez ici" : "How to use the Creations Workshop? Click here"}
+          </span>
+          <button
+            className="ml-4 bg-white/20 hover:bg-white/30 text-white font-semibold py-1 px-3 rounded transition-colors text-sm"
+            onClick={() => setShowCreationForm(true)}
+          >
+            {"\u2728"} {language === 'fr' ? "Créer un nouveau projet" : "Create a new project"}
+          </button>
         </div>
 
         {/* Main Content */}
