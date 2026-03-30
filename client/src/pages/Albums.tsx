@@ -24,6 +24,7 @@ export default function Albums() {
   const [showCreationsModal, setShowCreationsModal] = useState(false);
   const [creationsProjectId, setCreationsProjectId] = useState<string | undefined>(undefined);
   const [creationsProjectName, setCreationsProjectName] = useState<string>("Nouveau projet");
+  const [showAtelierHelp, setShowAtelierHelp] = useState(false);
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState<string | null>(null);
   const [selectedDocCategory, setSelectedDocCategory] = useState<string | null>(null);
   const [unlockedCategories, setUnlockedCategories] = useState<string[]>([]);
@@ -493,12 +494,6 @@ export default function Albums() {
   const handleToolbarAction = (action: string | null) => {
     if (!action) return;
     
-    // Créations est accessible directement depuis la page Albums
-    if (action === 'creations') {
-      setShowCreationsModal(true);
-      return;
-    }
-    
     // Les autres actions nécessitent d'être dans un album
     toast.info(t('toast.selectAlbumFirst'), {
       description: t('toast.selectAlbumFirstDesc')
@@ -537,6 +532,14 @@ export default function Albums() {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Bandeau aide Atelier */}
+        <div
+          className="bg-emerald-500 hover:bg-emerald-600 text-white text-center py-2 px-4 cursor-pointer transition-colors text-sm font-medium"
+          onClick={() => setShowAtelierHelp(true)}
+        >
+          {"\uD83D\uDCCB"} {language === 'fr' ? "Comment utiliser l'Atelier Créations ? Cliquez ici" : "How to use the Creations Workshop? Click here"}
         </div>
 
         {/* Main Content */}
@@ -1098,6 +1101,47 @@ export default function Albums() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Modale aide Atelier Créations */}
+      {showAtelierHelp && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setShowAtelierHelp(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5 rounded-t-xl">
+              <h3 className="text-xl font-bold text-white">{"\uD83C\uDFA8"} {language === 'fr' ? "Bienvenue dans l'Atelier Créations !" : "Welcome to the Creations Workshop!"}</h3>
+            </div>
+            <div className="px-6 py-5 space-y-5 text-sm text-gray-700">
+              <div>
+                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 1 — Créez votre projet" : "Step 1 — Create your project"}</h4>
+                <p>{"\u2192"} {language === 'fr' ? 'Cliquez sur "Créer catégorie/album" en haut à droite' : 'Click "Create category/album" at the top right'}</p>
+                <p>{"\u2192"} {language === 'fr' ? "Donnez un nom à votre projet et choisissez son type" : "Give your project a name and choose its type"}</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 2 — Préparez vos images" : "Step 2 — Prepare your images"}</h4>
+                <p>{"\u2192"} {language === 'fr' ? "Sélectionnez vos images dans Albums" : "Select your images in Albums"}</p>
+                <p>{"\u2192"} {language === 'fr' ? 'Clic droit sur l\'image \u2192 "Envoyer dans le Collecteur"' : 'Right-click on the image \u2192 "Send to Collector"'}</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 3 — Ouvrez l'Atelier" : "Step 3 — Open the Workshop"}</h4>
+                <p>{"\u2192"} {language === 'fr' ? "Cliquez sur le nom de votre projet dans la liste" : "Click on your project name in the list"}</p>
+                <p>{"\u2192"} {language === 'fr' ? "Une fois ouvert, vous pouvez aussi glisser une image directement depuis votre bureau" : "Once open, you can also drag an image directly from your desktop"}</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 4 — Réalisez votre création" : "Step 4 — Create your design"}</h4>
+                <p>{"\u2192"} {language === 'fr' ? "Vous avez choisi un type de création lors de la création de votre projet" : "You chose a creation type when creating your project"}</p>
+                <p className="font-medium text-gray-800 mt-2">{language === 'fr' ? "Une fois votre projet élaboré :" : "Once your project is ready:"}</p>
+                <p>{"\u2192"} <strong>{language === 'fr' ? '"Exporter l\'image"' : '"Export image"'}</strong> : {language === 'fr' ? "enregistre l'image finale dans votre album" : "saves the final image to your album"}</p>
+                <p>{"\u2192"} <strong>{language === 'fr' ? '"Sauvegarder le projet"' : '"Save project"'}</strong> : {language === 'fr' ? "conserve votre projet pour le reprendre plus tard" : "keeps your project to resume later"}</p>
+                <p>{"\u2192"} <strong>{language === 'fr' ? '"Fermer"' : '"Close"'}</strong> : {language === 'fr' ? "retour à Albums" : "back to Albums"}</p>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end rounded-b-xl">
+              <Button onClick={() => setShowAtelierHelp(false)}>
+                {language === 'fr' ? "J'ai compris !" : "Got it!"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODALE CRÉATIONS / ATELIER - Nouvelle version avec 4 zones */}
       <CreationsAtelierV2

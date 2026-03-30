@@ -36,7 +36,7 @@ import { VideoParentalWarningModal } from '@/components/VideoParentalWarningModa
 import VideoPlaylistModal from '@/components/VideoPlaylistModal';
 import SendModal from '@/components/SendModal';
 import QuitConfirmModal from '@/components/QuitConfirmModal';
-import CreationsAtelierV2 from '@/components/creations/CreationsAtelierV2';
+
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import CustomScrollbar from '@/components/CustomScrollbar';
 
@@ -211,7 +211,7 @@ export default function UniversalAlbumPage({
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showCreationsModal, setShowCreationsModal] = useState(false);
+
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [sendMode, setSendMode] = useState<'pdf' | 'images'>('pdf');
   const [convertMode, setConvertMode] = useState<'pdf' | 'images'>('pdf');
@@ -592,9 +592,8 @@ export default function UniversalAlbumPage({
       case 'retouches':
         handleRetouchesClick();
         break;
-      case 'creations':
-        setShowCreationsModal(true);
-        break;
+
+
       default:
         console.log("Action non gérée:", toolbarAction);
     }
@@ -3904,19 +3903,8 @@ export default function UniversalAlbumPage({
         />
       )}
 
-      {/* MODALE CRÉATIONS / ATELIER - Nouvelle version avec 4 zones */}
-      <CreationsAtelierV2
-        isOpen={showCreationsModal}
-        onClose={() => setShowCreationsModal(false)}
-        projectName={albumName || (language === 'fr' ? "Nouveau projet" : "New project")}
-        albumPhotos={frames.filter(f => f.photoUrl).map(f => ({ ...f, src: f.photoUrl }))}
-        selectedPhotos={frames.filter(f => f.isSelected && f.photoUrl).map(f => ({ ...f, src: f.photoUrl }))}
-        onSaveProject={(projectData) => {
-          // Sauvegarde silencieuse : ne PAS fermer l'Atelier
-          // L'utilisateur reste sur sa création et peut continuer à travailler
-          console.log('[UniversalAlbumPage] Projet sauvegardé (silencieux):', projectData?.name);
-        }}
-      />
+
+
 
       {/* MODALE ENVOI PAR EMAIL */}
       <SendModal

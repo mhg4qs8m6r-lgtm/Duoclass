@@ -33,8 +33,7 @@ export type ToolbarAction =
   | "convertir" 
   | "exporter" 
   | "imprimer"
-  | "diaporama"
-  | "creations";
+  | "diaporama";
 
 // Mode d'affichage des vignettes
 export type DisplayMode = "normal" | "half" | "twothirds";
@@ -210,7 +209,7 @@ export default function Layout(props: LayoutProps) {
     { id: "importer", label: t('toolbar.import'), sublabel: t('toolbar.add') },
     { id: "supprimer", label: t('toolbar.delete') },
     { id: "retouches", label: t('toolbar.photoEdit') },
-    { id: "creations", label: t('toolbar.creations') },
+
     { id: "convertir", label: t('toolbar.convert') },
     { id: "exporter", label: t('toolbar.email') },
     { id: "imprimer", label: t('toolbar.print') },

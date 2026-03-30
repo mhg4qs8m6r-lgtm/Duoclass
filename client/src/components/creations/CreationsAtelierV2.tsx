@@ -798,8 +798,9 @@ export default function CreationsAtelierV2({
   } | null>(null);
   
   // États pour la modale de sélection/création de projet
-  const [showProjectModal, setShowProjectModal] = useState(true); // Afficher au démarrage
-  const [showNewProjectHelp, setShowNewProjectHelp] = useState(false); // Modale d'aide pour créer un projet
+
+
+
   const [existingProjects, setExistingProjects] = useState<CreationsProject[]>([]);
   // collecteurCountByProject est maintenant dérivé de collecteurDbItems (réactif)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null);
@@ -898,8 +899,7 @@ export default function CreationsAtelierV2({
   // État pour la confirmation avant de quitter
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  // État pour le flux "Nouveau projet depuis la barre du bas"
-  const [showSaveBeforeNew, setShowSaveBeforeNew] = useState(false);
+
   const lastSavedDataRef = useRef<string>(''); // Snapshot des données au dernier save
 
   // ID de l'élément passe-partout à remplacer lors du prochain ajout
@@ -1146,7 +1146,6 @@ export default function CreationsAtelierV2({
 
         // Si un projectId est fourni, charger le projet directement
         if (projectId) {
-          setShowProjectModal(false);
           setSelectedProjectId(projectId);
           setCurrentProjectId(projectId);
           // Restaurer le nom depuis le projet chargé ou depuis la prop
@@ -1164,8 +1163,6 @@ export default function CreationsAtelierV2({
               setCurrentProjectType((dbProject as any).projectType || 'Projet libre');
             }
           }
-        } else {
-          setShowProjectModal(true);
         }
       };
       
@@ -1399,7 +1396,7 @@ export default function CreationsAtelierV2({
   // Sauvegarde automatique (debounced) - se déclenche à chaque modification du canvas
   useEffect(() => {
     // Ne pas sauvegarder pendant le chargement initial ou si pas de projet
-    if (isInitialLoadRef.current || !currentProjectId || !isOpen || showProjectModal) {
+    if (isInitialLoadRef.current || !currentProjectId || !isOpen) {
       return;
     }
     
@@ -1480,7 +1477,7 @@ export default function CreationsAtelierV2({
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [canvasElements, collectorItems, sourcePhotos, paperFormat, orientation, imageZoom, currentProjectId, isOpen, showProjectModal, currentProjectName]);
+  }, [canvasElements, collectorItems, sourcePhotos, paperFormat, orientation, imageZoom, currentProjectId, isOpen, currentProjectName]);
   
   // Détecter les modifications non sauvegardées
   useEffect(() => {
@@ -2009,11 +2006,7 @@ export default function CreationsAtelierV2({
     }
   };
 
-  // Lancer le flux "Nouveau projet depuis la barre du bas"
-  const handleNewProjectFromBar = () => {
-    // Demander si l'utilisateur veut sauvegarder avant de créer un nouveau projet
-    setShowSaveBeforeNew(true);
-  };
+
   
   // Sauvegarder et quitter
   const handleSaveAndClose = async () => {
@@ -2615,40 +2608,8 @@ export default function CreationsAtelierV2({
     }
   };
 
-  // === NOUVEAU PROJET : modale de saisie du nom et création directe dans IndexedDB ===
-  const [newProjectName, setNewProjectName] = useState('');
 
-  const handleCreateNewProject = async () => {
-    const name = newProjectName.trim();
-    if (!name) return;
-    const newId = `project_${Date.now()}`;
-    try {
-      const created = await createCreationsProject(name, newId);
 
-      // Le projet est sauvegardé dans creations_projects (colonne Projets)
-      console.log('[CreationsAtelier] Projet créé dans creations_projects:', name);
-
-      setCurrentProjectId(newId);
-      setCurrentProjectName(name);
-      setSelectedProjectId(newId);
-      setSourcePhotos([]);
-      setCanvasElements([]);
-      setCollectorItems([]);
-      // Ajouter le nouveau projet à la liste locale pour qu'il apparaisse immédiatement
-      setExistingProjects(prev => [created, ...prev]);
-      setShowNewProjectHelp(false);
-      setNewProjectName('');
-      setShowProjectModal(false);
-      toast.success(
-        language === 'fr'
-          ? `Projet "${name}" créé avec succès !`
-          : `Project "${name}" created successfully!`
-      );
-    } catch (err) {
-      console.error('Erreur création projet:', err);
-      toast.error(language === 'fr' ? 'Erreur lors de la création du projet' : 'Error creating project');
-    }
-  };
 
   // === MODALE SAUVEGARDE avec choix de catégorie ===
   const [showSaveCategoryModal, setShowSaveCategoryModal] = useState(false);
@@ -8309,7 +8270,7 @@ export default function CreationsAtelierV2({
             </div>
           </div>
 
-          {/* Ligne 2 : Auto-save | Télécharger | Imprimer | @Mail | Sauver comme | Nouveau projet | Sauvegarder */}
+          {/* Ligne 2 : Auto-save | Télécharger | Imprimer | @Mail | Exporter l'image | Sauvegarder le projet */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Auto-save toggle + status */}
             <button
@@ -8341,27 +8302,8 @@ export default function CreationsAtelierV2({
 
             <div className="w-px h-5 bg-gray-300" />
 
-            {/* Ouvrir un projet + Nom du projet */}
-            <div className="flex flex-col items-center gap-0.5">
-              <span
-                className="text-[10px] text-purple-600 hover:text-purple-800 cursor-pointer hover:underline"
-                onClick={() => setShowProjectModal(true)}
-              >
-                {language === "fr" ? "Ouvrir un projet" : "Open a project"}
-              </span>
-              <div
-                className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 shadow-sm cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
-                onClick={() => setShowProjectModal(true)}
-                title={language === "fr" ? "Cliquez pour changer de projet" : "Click to switch project"}
-              >
-                <Edit2 className="w-3.5 h-3.5 text-purple-500" />
-                <span className="text-xs w-36 truncate text-gray-700">
-                  {currentProjectName || (language === "fr" ? "Nom de la création..." : "Creation name...")}
-                </span>
-              </div>
-            </div>
 
-            <div className="w-px h-5 bg-gray-300" />
+
 
             {/* Actions export */}
             <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleDownload} disabled={isExporting || canvasElements.length === 0}>
@@ -8382,12 +8324,9 @@ export default function CreationsAtelierV2({
             {/* Actions projet */}
             <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting || canvasElements.length === 0}>
               <ImagePlus className="w-3.5 h-3.5" />
-              {isExporting ? (language === "fr" ? "Sauvegarde..." : "Saving...") : (language === "fr" ? "Sauver comme" : "Save As")}
+              {isExporting ? (language === "fr" ? "Export..." : "Exporting...") : (language === "fr" ? "Exporter l'image" : "Export image")}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-blue-400 text-blue-600 hover:bg-blue-50" onClick={handleNewProjectFromBar}>
-              <Plus className="w-3.5 h-3.5" />
-              {language === "fr" ? "Nouveau projet" : "New project"}
-            </Button>
+
             <Button
               size="sm"
               className="gap-1 text-xs h-7 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md"
@@ -8397,7 +8336,7 @@ export default function CreationsAtelierV2({
               }}
             >
               <Save className="w-3.5 h-3.5" />
-              {language === "fr" ? "Sauvegarder" : "Save"}
+              {language === "fr" ? "Sauvegarder le projet" : "Save project"}
             </Button>
             <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
@@ -8472,54 +8411,8 @@ export default function CreationsAtelierV2({
         </div>
       )}
 
-      {/* Modale : Sauvegarder avant de créer un nouveau projet */}
-      {showSaveBeforeNew && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
-          <div className="bg-white rounded-xl shadow-2xl w-[440px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b bg-gradient-to-r from-blue-50 to-purple-50">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-blue-500" />
-                {language === 'fr' ? 'Nouveau projet' : 'New project'}
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {language === 'fr'
-                  ? `Voulez-vous sauvegarder "${currentProjectName}" avant de créer un nouveau projet ?`
-                  : `Do you want to save "${currentProjectName}" before creating a new project?`}
-              </p>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowSaveBeforeNew(false)}>
-                {language === 'fr' ? 'Annuler' : 'Cancel'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-orange-600 border-orange-300 hover:bg-orange-50"
-                onClick={() => {
-                  setShowSaveBeforeNew(false);
-                  setNewProjectName('');
-                  setShowNewProjectHelp(true);
-                }}
-              >
-                {language === 'fr' ? 'Créer sans sauvegarder' : 'Create without saving'}
-              </Button>
-              <Button
-                size="sm"
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                onClick={async () => {
-                  setShowSaveBeforeNew(false);
-                  await handleSaveProject();
-                  setNewProjectName('');
-                  setShowNewProjectHelp(true);
-                }}
-              >
-                <Save className="w-4 h-4 mr-1" />
-                {language === 'fr' ? 'Sauvegarder puis créer' : 'Save then create'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
 
       {showExitConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
@@ -8592,150 +8485,8 @@ export default function CreationsAtelierV2({
         </div>
       )}
 
-      {/* Modale de sélection de projet */}
-      {showProjectModal && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[2000]">
-          <div className="bg-white rounded-xl shadow-2xl w-[500px] max-h-[80vh] overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4">
-              <h3 className="text-xl font-bold text-white text-center">
-                {language === "fr" ? "Atelier Créations" : "Creations Studio"}
-              </h3>
-            </div>
 
-            {/* Contenu */}
-            <div className="p-6">
-              {/* Indication pour créer un projet */}
-              <p className="text-sm text-gray-500 text-center mb-4">
-                {language === "fr"
-                  ? "Pour créer un projet \u2192 Albums \u2192 Créer catégorie/album"
-                  : "To create a project \u2192 Albums \u2192 Create category/album"}
-              </p>
 
-              {/* Liste des projets existants */}
-              <div className="max-h-[280px] overflow-y-auto">
-                {existingProjects.length > 0 ? (
-                  <div className="space-y-2">
-                    {existingProjects.map((project) => (
-                      <div
-                        key={project.id}
-                        role="button"
-                        tabIndex={0}
-                        className="w-full p-4 text-left border rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors group cursor-pointer"
-                        onClick={() => {
-                          setSelectedProjectId(project.id ?? null);
-                          setCurrentProjectId(project.id ?? null);
-                          setCurrentProjectName(project.name);
-                          setCurrentProjectType((project as any).projectType || 'Projet libre');
-
-                          // Charger les photos du projet dans sourcePhotos
-                          if ((project.photos ?? []).length > 0) {
-                            const projectPhotos: CollectorItem[] = (project.photos ?? []).map(photo => ({
-                              id: String(photo.id ?? Date.now()),
-                              type: 'photo' as const,
-                              src: String(photo.photoUrl ?? ''),
-                              name: photo.photoTitle || 'Photo',
-                              thumbnail: photo.thumbnail ?? undefined
-                            }));
-                            setSourcePhotos(projectPhotos);
-                            console.log(`[Créations] ${projectPhotos.length} photos chargées pour le projet ${project.name}`);
-                          } else {
-                            setSourcePhotos([]);
-                          }
-
-                          // Charger les items du Collecteur pour ce projet
-                          db.collecteur.where('projectId').equals(project.id).toArray().then(items => {
-                            console.log("[COLLECTEUR] items bruts IndexedDB:", items, "projectId:", project.id);
-                            const mapped: CollectorItem[] = items.map(ci => ({
-                              id: ci.id,
-                              type: 'photo' as const,
-                              src: ci.photoUrl,
-                              name: ci.name,
-                              thumbnail: ci.thumbnail,
-                            }));
-                            setCollectorItems(mapped);
-                            console.log("[COLLECTEUR] items chargés:", mapped);
-                          }).catch((err) => {
-                            console.error("[COLLECTEUR] erreur chargement:", err);
-                            setCollectorItems([]);
-                          });
-
-                          setShowProjectModal(false);
-                          toast.success(language === "fr" ? `Projet "${project.name}" ouvert` : `Project "${project.name}" opened`);
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-800 group-hover:text-purple-700">
-                              {project.name}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {collecteurCountByProject[project.id] || 0} {language === "fr" ? "élément(s) dans le Collecteur" : "item(s) in Collector"} •
-                              {language === "fr" ? " Modifié le " : " Modified "}
-                              {new Date(project.updatedAt ?? project.createdAt).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                              title={language === "fr" ? "Supprimer ce projet" : "Delete this project"}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (window.confirm(language === "fr" ? `Supprimer le projet "${project.name}" ?` : `Delete project "${project.name}"?`)) {
-                                  try {
-                                    // Supprimer dans creations_projects (si présent)
-                                    await deleteCreationsProject(project.id);
-                                    // Supprimer aussi dans album_metas et albums
-                                    // (les projets issus de cat_mes_projets sont stockés là)
-                                    if (project.id) {
-                                      await db.album_metas.delete(project.id);
-                                      await db.albums.delete(project.id);
-                                    }
-                                    setExistingProjects(prev => prev.filter(p => p.id !== project.id));
-                                    toast.success(language === "fr" ? "Projet supprimé" : "Project deleted");
-                                  } catch (err) {
-                                    console.error('Erreur suppression projet:', err);
-                                    toast.error(language === "fr" ? "Erreur lors de la suppression" : "Error deleting project");
-                                  }
-                                }
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                            <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-500" />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Library className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                    <p className="font-medium">{language === "fr" ? "Aucun projet existant" : "No existing projects"}</p>
-                    <p className="text-sm mt-1">
-                      {language === "fr" 
-                        ? "Créez d'abord un projet dans la section Albums" 
-                        : "First create a project in the Albums section"}
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-
-            </div>
-            
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
-              <Button variant="outline" onClick={onClose}>
-                {language === "fr" ? "Annuler" : "Cancel"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Modale d'aide pour créer un nouveau projet */}
       {/* Portail pour l'aperçu agrandi des vignettes — positionné à gauche de la colonne */}
       {hoveredThumbnail && createPortal(
         <div
@@ -9243,63 +8994,8 @@ export default function CreationsAtelierV2({
         document.body
       )}
       
-      {showNewProjectHelp && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3200]">
-          <div className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-5">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                {language === "fr" ? "Nouveau projet" : "New project"}
-              </h3>
-              <p className="text-sm text-blue-100 mt-1">
-                {language === "fr"
-                  ? "Donnez un nom à votre nouveau projet de création"
-                  : "Give a name to your new creation project"}
-              </p>
-            </div>
 
-            {/* Contenu */}
-            <div className="px-6 py-5">
-              <Label htmlFor="newProjectNameInput" className="text-sm font-medium text-gray-700 mb-2 block">
-                {language === "fr" ? "Nom du projet" : "Project name"}
-              </Label>
-              <Input
-                id="newProjectNameInput"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateNewProject();
-                  if (e.key === 'Escape') { setShowNewProjectHelp(false); setNewProjectName(''); }
-                }}
-                placeholder={language === "fr" ? "Ex: Mon collage vacances..." : "Ex: My vacation collage..."}
-                className="w-full"
-                autoFocus
-              />
-            </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setShowNewProjectHelp(false); setNewProjectName(''); }}
-              >
-                {language === "fr" ? "Annuler" : "Cancel"}
-              </Button>
-              <Button
-                size="sm"
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                onClick={handleCreateNewProject}
-                disabled={!newProjectName.trim()}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                {language === "fr" ? "Créer le projet" : "Create project"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
 
       {/* Modale d'aperçu SVG laser avant téléchargement */}
