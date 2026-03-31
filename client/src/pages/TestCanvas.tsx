@@ -409,6 +409,12 @@ export default function TestCanvas() {
   if (!imageSrc) {
     return (
       <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui" }}>
+        <button
+          onClick={() => window.close()}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 14px", marginBottom: 16, fontSize: 13, color: "#4b5563", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }}
+        >
+          ← Retour à l'Atelier
+        </button>
         <h2 style={{ marginBottom: 16, color: "#374151" }}>Détourage manuel</h2>
         <p style={{ color: "#6b7280" }}>Aucune image reçue.</p>
         <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 8 }}>
@@ -424,9 +430,17 @@ export default function TestCanvas() {
 
   return (
     <div style={{ padding: 20, fontFamily: "system-ui", maxWidth: 1000, margin: "0 auto" }}>
-      <h2 style={{ marginBottom: 12, color: "#374151", fontSize: 18 }}>
-        Détourage manuel
-      </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <button
+          onClick={() => window.close()}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 14px", fontSize: 13, color: "#4b5563", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }}
+        >
+          ← Retour à l'Atelier
+        </button>
+        <h2 style={{ color: "#374151", fontSize: 18, margin: 0 }}>
+          Détourage manuel
+        </h2>
+      </div>
 
       {/* Barre d'outils */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>

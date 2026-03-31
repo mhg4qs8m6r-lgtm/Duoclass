@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { db, AlbumMeta, getAllCreationsProjects, deleteCreationsProject, CreationsProject } from '@/db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -13,13 +13,23 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 // IDs des albums fixes Créations (affichés dans la colonne Albums)
 const CREATIONS_FIXED_ALBUM_IDS = [
+  'album_creations_bordures',
+  'album_creations_cadres',
   'album_creations_cliparts',
   'album_creations_collages_finis',
+  'album_creations_filets',
   'album_creations_modeles_passe_partout',
   'album_creations_modeles_pele_mele',
   'album_creations_montages_finis',
   'album_creations_puzzle',
   'album_creations_stickers',
+];
+
+// Albums à créer dans IndexedDB s'ils n'existent pas encore
+const CREATIONS_ALBUMS_DEFAULTS: { id: string; title: string }[] = [
+  { id: 'album_creations_bordures', title: 'Bordures' },
+  { id: 'album_creations_cadres', title: 'Cadres' },
+  { id: 'album_creations_filets', title: 'Filets' },
 ];
 
 export default function Atelier() {
@@ -41,6 +51,25 @@ export default function Atelier() {
 
   // Récupérer les projets créations
   const creationsProjects = useLiveQuery(() => getAllCreationsProjects(), []) || [];
+
+  // Créer les albums manquants au montage
+  useEffect(() => {
+    (async () => {
+      for (const def of CREATIONS_ALBUMS_DEFAULTS) {
+        const exists = await db.album_metas.get(def.id);
+        if (!exists) {
+          await db.album_metas.put({
+            id: def.id,
+            title: def.title,
+            type: 'standard',
+            series: 'photoclass',
+            createdAt: Date.now(),
+            categoryId: 'cat_creations',
+          });
+        }
+      }
+    })();
+  }, []);
 
   // Catégories de l'Atelier : "Images projets" (cat_mes_projets) + "CRÉATIONS" (cat_creations) + catégories user de type creations
   const atelierCategories = (categories || []).filter(c => {
@@ -161,7 +190,7 @@ export default function Atelier() {
                 ← {language === 'fr' ? 'Retour' : 'Back'}
               </button>
             </div>
-            <AlbumCreationQuestionnaire onAlbumCreated={() => setShowCreationForm(false)} />
+            <AlbumCreationQuestionnaire onAlbumCreated={() => setShowCreationForm(false)} mode="atelier" />
           </div>
         ) : (
           /* 4 colonnes : Catégories | Albums | Catégories Projets | Projets */

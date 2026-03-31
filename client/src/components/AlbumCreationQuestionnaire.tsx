@@ -24,9 +24,11 @@ import {
 interface AlbumCreationQuestionnaireProps {
   onAlbumCreated: () => void;
   defaultAccessType?: "standard" | "secure";
+  /** 'albums' = colonnes Catégorie + Album uniquement ; 'atelier' = colonne Projet uniquement */
+  mode?: 'albums' | 'atelier';
 }
 
-export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAccessType = "standard" }: AlbumCreationQuestionnaireProps) {
+export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAccessType = "standard", mode = 'albums' }: AlbumCreationQuestionnaireProps) {
   const { t, language } = useLanguage();
   // Form state
   const [albumName, setAlbumName] = useState("");
@@ -283,6 +285,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
 
   return (
     <div className="flex gap-4 h-full">
+      {mode !== 'atelier' && (<>
       {/* LEFT SIDE - 1/3 - CATEGORY MANAGEMENT (FILTERED) */}
       <div className="w-1/3 flex flex-col gap-3 overflow-y-auto pr-2">
         {/* QUICK CREATE NEW CATEGORY */}
@@ -580,18 +583,11 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
         </div>
       </div>
 
-      {/* DIVIDER 2 */}
-      <div className="flex items-stretch justify-center px-3 py-2">
-        <img
-          src="/images/separator-decorative.png"
-          alt=""
-          className="w-8 object-cover"
-          style={{ height: '100%', minHeight: '450px' }}
-        />
-      </div>
+      </>)}
 
+      {mode !== 'albums' && (<>
       {/* RIGHT SIDE - NOUVEAU PROJET */}
-      <div className="w-1/3 flex flex-col gap-3 overflow-y-auto pl-2">
+      <div className="flex-1 flex flex-col gap-3 overflow-y-auto pl-2">
         <h2 className="text-lg font-bold text-gray-800">{language === "fr" ? "Nouveau Projet" : "New Project"}</h2>
 
         {/* Nom du projet */}
@@ -675,6 +671,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
           </Button>
         </div>
       </div>
+      </>)}
 
       {/* DELETE CONFIRMATION DIALOG */}
       <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>

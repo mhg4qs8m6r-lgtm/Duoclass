@@ -16,7 +16,7 @@ import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
 // Import des panneaux d'outils (inline, pas de modales)
-import DetourageToolsPanel, { DetourageMode, ManualTool } from "./DetourageToolsPanel";
+import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig } from "./AssemblagePanel";
 import Collecteur from "../Collecteur";
 
@@ -770,6 +770,20 @@ export default function CreationsAtelierV2({
   const [isDetourageActive, setIsDetourageActive] = useState(false);
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
+  // ─── État gomme sur le canvas principal ─────────────────────────────────────
+  const [isEraserActive, setIsEraserActive] = useState(false);
+  const [eraserSize, setEraserSize] = useState(12);
+  const eraserCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const eraserImageDataRef = useRef<ImageData | null>(null);
+  const isErasingOnCanvasRef = useRef(false);
+  // Réinitialiser les données gomme quand l'élément sélectionné change
+  const prevSelectedIdForEraser = useRef(selectedElementId);
+  if (prevSelectedIdForEraser.current !== selectedElementId) {
+    prevSelectedIdForEraser.current = selectedElementId;
+    eraserImageDataRef.current = null;
+    eraserCanvasRef.current = null;
+  }
+
   // Écouter le résultat du détourage manuel (retour depuis /test-canvas via postMessage)
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -789,7 +803,51 @@ export default function CreationsAtelierV2({
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [language]);
-  
+
+  // ─── Gomme : utilitaires pour le canvas principal ──────────────────────────
+  const eraserLoadImage = useCallback((src: string): Promise<{ canvas: HTMLCanvasElement; imageData: ImageData }> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img');
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height);
+        resolve({ canvas: c, imageData: data });
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = src;
+    });
+  }, []);
+
+  const eraserCommit = useCallback(() => {
+    const data = eraserImageDataRef.current;
+    const c = eraserCanvasRef.current;
+    if (!data || !c || !selectedElementId) return;
+    c.getContext('2d')!.putImageData(data, 0, 0);
+    c.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      updateCanvasElement(selectedElementId, { src: url });
+      setActiveCanvasPhoto(url);
+    }, 'image/png');
+  }, [selectedElementId]);
+
+  // Global mouseup pour la gomme (si l'user relâche hors du canvas)
+  useEffect(() => {
+    const handleGlobalUp = () => {
+      if (isErasingOnCanvasRef.current) {
+        isErasingOnCanvasRef.current = false;
+        eraserCommit();
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalUp);
+    return () => window.removeEventListener('mouseup', handleGlobalUp);
+  }, [eraserCommit]);
+
   // État pour le menu contextuel (clic droit sur élément)
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -2414,9 +2472,10 @@ export default function CreationsAtelierV2({
           src = domSrcLen >= stateSrcLen ? domSrcFull : (element.src || '');
         }
         
-        // Validation : data: URL complète ou URL http(s)
+        // Validation : data: URL complète, URL http(s), ou blob: URL
         const isValidSrc = (src.startsWith('data:') && src.length > 100) ||
-                           (src.startsWith('http') && src.length > 10);
+                           (src.startsWith('http') && src.length > 10) ||
+                           src.startsWith('blob:');
         if (!src || !isValidSrc) {
           diagLines.push(`  -> SKIP: src invalide (len=${src.length}, debut=${src.substring(0, 30)})`);
           continue;
@@ -2784,7 +2843,42 @@ export default function CreationsAtelierV2({
   }, [canvasContainerSize, paperFormat, orientation]);
   
   const canvasDimensions = getCanvasPixelDimensions();
-  
+
+  // ─── Gomme : convertir coordonnées écran → pixels image ────────────────────
+  const eraserGetImageCoords = useCallback((e: React.MouseEvent, element: any): { x: number; y: number } | null => {
+    const page = pageRef.current;
+    if (!page) return null;
+    const pageRect = page.getBoundingClientRect();
+    const pxPerCm = canvasDimensions.pxPerCm;
+
+    const clickPageX = e.clientX - pageRect.left;
+    const clickPageY = e.clientY - pageRect.top;
+
+    const elLeft = element.x * pxPerCm;
+    const elTop = element.y * pxPerCm;
+    const elW = element.width * pxPerCm;
+    const elH = element.height * pxPerCm;
+
+    const elCx = elLeft + elW / 2;
+    const elCy = elTop + elH / 2;
+
+    // Rotation inverse
+    const rad = -(element.rotation || 0) * Math.PI / 180;
+    const dx = clickPageX - elCx;
+    const dy = clickPageY - elCy;
+    const localX = dx * Math.cos(rad) - dy * Math.sin(rad) + elW / 2;
+    const localY = dx * Math.sin(rad) + dy * Math.cos(rad) + elH / 2;
+
+    if (localX < 0 || localX > elW || localY < 0 || localY > elH) return null;
+
+    const imgData = eraserImageDataRef.current;
+    if (!imgData) return null;
+    return {
+      x: (localX / elW) * imgData.width,
+      y: (localY / elH) * imgData.height,
+    };
+  }, [canvasDimensions.pxPerCm]);
+
   // Gérer le zoom IMAGE avec la molette (uniquement si une image est sélectionnée et non verrouillée)
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (selectedElementId) {
@@ -4521,6 +4615,18 @@ export default function CreationsAtelierV2({
                         setManualTool(tool);
                         setDetouragePoints([]);
                         setIsDetourageActive(mode === "manual" && tool !== "polygon");
+                        // Désactiver la gomme quand on change de mode
+                        setIsEraserActive(false);
+                        eraserImageDataRef.current = null;
+                        eraserCanvasRef.current = null;
+                      }}
+                      onEraserChange={(active, size) => {
+                        setIsEraserActive(active);
+                        setEraserSize(size);
+                        if (!active) {
+                          eraserImageDataRef.current = null;
+                          eraserCanvasRef.current = null;
+                        }
                       }}
                     />
                     
@@ -6081,7 +6187,7 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isLassoing || isLineDrawMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-cell' : isLassoing || isLineDrawMode ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète
                   minWidth: canvasDimensions.workspaceWidth,
@@ -6190,6 +6296,31 @@ export default function CreationsAtelierV2({
                     }
                     return;
                   }
+                  // Gomme active : effacer les pixels en temps réel
+                  if (isEraserActive && isErasingOnCanvasRef.current && eraserImageDataRef.current && selectedElementId) {
+                    const el = canvasElements.find(el => el.id === selectedElementId);
+                    if (el && el.type === 'image') {
+                      const coords = eraserGetImageCoords(e, el);
+                      if (coords) {
+                        const imgData = eraserImageDataRef.current;
+                        eraseCircle(imgData, coords.x, coords.y, eraserSize * (imgData.width / (el.width * canvasDimensions.pxPerCm)));
+                        // Mettre à jour l'affichage en temps réel via le DOM
+                        const domCanvas = document.querySelector(`canvas[data-element-id="${selectedElementId}"]`) as HTMLCanvasElement | null;
+                        if (domCanvas) {
+                          const tmpC = document.createElement('canvas');
+                          tmpC.width = imgData.width;
+                          tmpC.height = imgData.height;
+                          tmpC.getContext('2d')!.putImageData(imgData, 0, 0);
+                          const ctx = domCanvas.getContext('2d');
+                          if (ctx) {
+                            ctx.clearRect(0, 0, domCanvas.width, domCanvas.height);
+                            ctx.drawImage(tmpC, 0, 0, domCanvas.width, domCanvas.height);
+                          }
+                        }
+                      }
+                    }
+                    return;
+                  }
                   handleMouseMove(e);
                   handleResizeMove(e);
                   handleRotateMove(e);
@@ -6206,6 +6337,12 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseUp={(e) => {
+                  // Gomme : finaliser le trait et committer l'image
+                  if (isEraserActive && isErasingOnCanvasRef.current) {
+                    isErasingOnCanvasRef.current = false;
+                    eraserCommit();
+                    return;
+                  }
                   // Mode tracé libre de ligne : créer l'élément ligne et chaîner les segments
                   if (isLineDrawMode && lineDrawStartRef.current) {
                     // Utiliser la ref synchrone pour le point de départ (garantit la cohérence
@@ -6714,7 +6851,34 @@ export default function CreationsAtelierV2({
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                       }}
                       draggable={false}
-                      onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, element.id); }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        // Gomme active : démarrer l'effacement au lieu du drag
+                        if (isEraserActive && element.type === 'image' && element.src && element.id === selectedElementId) {
+                          e.preventDefault();
+                          isErasingOnCanvasRef.current = true;
+                          // Charger l'image si pas encore fait
+                          if (!eraserImageDataRef.current) {
+                            eraserLoadImage(element.src).then(({ canvas, imageData }) => {
+                              eraserCanvasRef.current = canvas;
+                              eraserImageDataRef.current = imageData;
+                              // Appliquer le premier point
+                              const coords = eraserGetImageCoords(e, element);
+                              if (coords) {
+                                eraseCircle(imageData, coords.x, coords.y, eraserSize * (imageData.width / (element.width * canvasDimensions.pxPerCm)));
+                                eraserImageDataRef.current = imageData;
+                              }
+                            });
+                          } else {
+                            const coords = eraserGetImageCoords(e, element);
+                            if (coords) {
+                              eraseCircle(eraserImageDataRef.current, coords.x, coords.y, eraserSize * (eraserImageDataRef.current.width / (element.width * canvasDimensions.pxPerCm)));
+                            }
+                          }
+                          return;
+                        }
+                        handleMouseDown(e, element.id);
+                      }}
                       onContextMenu={(e) => handleContextMenu(e, element.id)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
