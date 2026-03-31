@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID, getAllCreationsProjects, deleteCreationsProject, CreationsProject } from '@/db';
+import { db, AlbumMeta, MODELES_STICKERS_ALBUM_ID } from '@/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,7 +10,7 @@ import { Lock, Plus, Image, X, GripVertical, Trash2, Pencil } from 'lucide-react
 import { toast } from 'sonner';
 import MainLayout from '@/components/MainLayout';
 import AlbumCreationQuestionnaire from '@/components/AlbumCreationQuestionnaire';
-import CreationsAtelierV2 from '@/components/creations/CreationsAtelierV2';
+
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AlbumWithSeries extends AlbumMeta {
@@ -21,10 +21,6 @@ export default function Albums() {
   const { t, language } = useLanguage();
   const [, setLocation] = useLocation();
   const [showCreationForm, setShowCreationForm] = useState(false);
-  const [showCreationsModal, setShowCreationsModal] = useState(false);
-  const [creationsProjectId, setCreationsProjectId] = useState<string | undefined>(undefined);
-  const [creationsProjectName, setCreationsProjectName] = useState<string>("Nouveau projet");
-  const [showAtelierHelp, setShowAtelierHelp] = useState(false);
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState<string | null>(null);
   const [selectedDocCategory, setSelectedDocCategory] = useState<string | null>(null);
   const [unlockedCategories, setUnlockedCategories] = useState<string[]>([]);
@@ -37,10 +33,7 @@ export default function Albums() {
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
 
   // États pour la suppression
-  const [itemToDelete, setItemToDelete] = useState<{ type: 'category' | 'album' | 'project'; item: any; categoryType?: 'photo' | 'doc' } | null>(null);
-
-  // État pour la catégorie projet sélectionnée
-  const [selectedProjectCategory, setSelectedProjectCategory] = useState<'en_cours' | 'finis' | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'category' | 'album'; item: any; categoryType?: 'photo' | 'doc' } | null>(null);
 
   // États pour renommer un album
   const [albumToRename, setAlbumToRename] = useState<AlbumMeta | null>(null);
@@ -49,9 +42,6 @@ export default function Albums() {
   // Récupérer les catégories et albums
   const categories = useLiveQuery(() => db.categories.toArray());
   const albums = useLiveQuery(() => db.album_metas.toArray());
-
-  // Récupérer les projets créations
-  const creationsProjects = useLiveQuery(() => getAllCreationsProjects(), []) || [];
 
   // Fonction pour traduire les labels de catégories et albums par défaut
   const translateLabel = (label: string): string => {
@@ -124,9 +114,12 @@ export default function Albums() {
   // Filtrer les catégories par type de média (exclure les catégories privées)
   // {t('albums.photosVideos')} : uniquement les catégories PhotoClass standard
   const photoCategories = sortWithNonClasseeFirst(
-    categories?.filter(c => 
+    categories?.filter(c =>
       c.accessType !== 'secure' &&
-      c.series === 'photoclass'
+      c.series === 'photoclass' &&
+      c.id !== 'cat_mes_projets' &&
+      c.id !== 'cat_creations' &&
+      !c.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('MES PROJETS')
     ) || []
   );
 
@@ -303,19 +296,6 @@ export default function Albums() {
       toast.error(t('toast.deleteError'));
     }
     
-    setItemToDelete(null);
-  };
-
-  // Supprimer un projet créations
-  const handleDeleteProject = async () => {
-    if (!itemToDelete || itemToDelete.type !== 'project') return;
-    try {
-      await deleteCreationsProject(itemToDelete.item.id);
-      toast.success(language === 'fr' ? 'Projet supprimé' : 'Project deleted');
-    } catch (error) {
-      console.error('Erreur lors de la suppression du projet:', error);
-      toast.error(language === 'fr' ? 'Erreur lors de la suppression' : 'Delete error');
-    }
     setItemToDelete(null);
   };
 
@@ -531,22 +511,6 @@ export default function Albums() {
           </div>
         </div>
 
-        {/* Bandeau aide Atelier */}
-        <div className="bg-emerald-500 text-white flex items-center justify-center py-2 px-4 text-sm font-medium">
-          <span
-            className="cursor-pointer hover:underline"
-            onClick={() => setShowAtelierHelp(true)}
-          >
-            {"\uD83D\uDCCB"} {language === 'fr' ? "Comment utiliser l'Atelier Créations ? Cliquez ici" : "How to use the Creations Workshop? Click here"}
-          </span>
-          <button
-            className="ml-4 bg-white/20 hover:bg-white/30 text-white font-semibold py-1 px-3 rounded transition-colors text-sm"
-            onClick={() => setShowCreationForm(true)}
-          >
-            {"\u2728"} {language === 'fr' ? "Créer un nouveau projet" : "Create a new project"}
-          </button>
-        </div>
-
         {/* Main Content */}
         <div className="flex-1 overflow-auto p-6">
           {showCreationForm ? (
@@ -703,128 +667,6 @@ export default function Albums() {
                         </div>
                       ))
                     )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Colonne Projets */}
-              <div className="p-2 min-w-0 flex-1">
-                <h2 className="text-xl font-medium mb-4 text-gray-800 flex items-center gap-2 border-b pb-3">
-                  <span className="text-2xl">🎨</span>
-                  {language === 'fr' ? 'Projets' : 'Projects'}
-                </h2>
-
-                {/* En-têtes des sous-colonnes */}
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div className="text-sm font-semibold text-gray-500 text-center">{t('albums.categories')}</div>
-                  <div className="text-sm font-semibold text-gray-500 text-center">{language === 'fr' ? 'Projets' : 'Projects'}</div>
-                </div>
-
-                {/* Contenu avec catégories et projets */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Zone A - Catégories fixes (non effaçables) */}
-                  <div className="space-y-2 border-r pr-4 flex flex-col items-center">
-                    <div
-                      onClick={() => setSelectedProjectCategory('en_cours')}
-                      style={{ width: '160px', minWidth: '160px' }}
-                      className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
-                        selectedProjectCategory === 'en_cours'
-                          ? 'bg-purple-100 border-2 border-purple-400'
-                          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                      }`}
-                    >
-                      <div
-                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        style={{
-                          borderColor: '#8B5CF6',
-                          backgroundColor: selectedProjectCategory === 'en_cours' ? '#8B5CF6' : 'transparent'
-                        }}
-                      >
-                        {selectedProjectCategory === 'en_cours' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
-                        {language === 'fr' ? 'Projets en cours' : 'Current projects'}
-                        <span className="text-gray-400 ml-1">({creationsProjects.filter(p => ((p as any).projectCategory || 'en_cours') === 'en_cours').length})</span>
-                      </span>
-                    </div>
-                    <div
-                      onClick={() => setSelectedProjectCategory('finis')}
-                      style={{ width: '160px', minWidth: '160px' }}
-                      className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
-                        selectedProjectCategory === 'finis'
-                          ? 'bg-purple-100 border-2 border-purple-400'
-                          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                      }`}
-                    >
-                      <div
-                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        style={{
-                          borderColor: '#8B5CF6',
-                          backgroundColor: selectedProjectCategory === 'finis' ? '#8B5CF6' : 'transparent'
-                        }}
-                      >
-                        {selectedProjectCategory === 'finis' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <span className="font-normal text-gray-800 text-sm flex-1 break-words">
-                        {language === 'fr' ? 'Projets finis' : 'Finished projects'}
-                        <span className="text-gray-400 ml-1">({creationsProjects.filter(p => ((p as any).projectCategory) === 'finis').length})</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Zone B - Projets de la catégorie sélectionnée */}
-                  <div className="space-y-2 pl-2 flex flex-col items-center">
-                    {!selectedProjectCategory ? (
-                      <p className="text-gray-400 text-center py-4 text-sm">
-                        {language === 'fr' ? 'Sélectionnez une catégorie' : 'Select a category'}
-                      </p>
-                    ) : (() => {
-                      // Filtrer les projets par catégorie sélectionnée
-                      // Les projets sans projectCategory sont considérés comme "en_cours"
-                      const filteredProjects = creationsProjects.filter(p =>
-                        ((p as any).projectCategory || 'en_cours') === selectedProjectCategory
-                      );
-                      return filteredProjects.length === 0 ? (
-                        <p className="text-gray-400 text-center py-4 text-sm">
-                          {language === 'fr' ? 'Aucun projet' : 'No project'}
-                        </p>
-                      ) : (
-                        filteredProjects.map(project => (
-                        <div
-                          key={project.id}
-                          onClick={() => {
-                            setCreationsProjectId(project.id);
-                            setCreationsProjectName(project.name);
-                            setShowCreationsModal(true);
-                          }}
-                          style={{ width: '160px', minWidth: '160px' }}
-                          className="rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-purple-50 hover:bg-purple-100 border border-purple-200"
-                        >
-                          <div
-                            className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                            style={{ borderColor: '#8B5CF6', backgroundColor: '#8B5CF6' }}
-                          >
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                          </div>
-                          <span className="font-normal text-gray-800 text-sm break-words flex-1">{project.name}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setItemToDelete({ type: 'project', item: project });
-                            }}
-                            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
-                            title={language === 'fr' ? 'Supprimer le projet' : 'Delete project'}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))
-                      );
-                    })()}
                   </div>
                 </div>
               </div>
@@ -1038,12 +880,6 @@ export default function Albums() {
                     ⚠️ {t('albums.allAlbumsWillBeDeleted')}
                   </p>
                 </>
-              ) : itemToDelete?.type === 'project' ? (
-                <p className="text-gray-600">
-                  {language === 'fr'
-                    ? `Supprimer le projet « ${itemToDelete.item.name} » ?`
-                    : `Delete project "${itemToDelete.item.name}"?`}
-                </p>
               ) : (
                 <p className="text-gray-600">
                   {t('albums.confirmDeleteAlbum').replace('{album}', itemToDelete?.item.title || '')}
@@ -1054,7 +890,7 @@ export default function Albums() {
                   {t('common.cancel')}
                 </Button>
                 <Button
-                  onClick={itemToDelete?.type === 'category' ? handleDeleteCategory : itemToDelete?.type === 'project' ? handleDeleteProject : handleDeleteAlbum}
+                  onClick={itemToDelete?.type === 'category' ? handleDeleteCategory : handleDeleteAlbum}
                   className="flex-1 bg-red-500 hover:bg-red-600"
                 >
                   {t('common.delete')}
@@ -1107,62 +943,6 @@ export default function Albums() {
         </Dialog>
       </div>
 
-      {/* Modale aide Atelier Créations */}
-      {showAtelierHelp && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setShowAtelierHelp(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5 rounded-t-xl">
-              <h3 className="text-xl font-bold text-white">{"\uD83C\uDFA8"} {language === 'fr' ? "Bienvenue dans l'Atelier Créations !" : "Welcome to the Creations Workshop!"}</h3>
-            </div>
-            <div className="px-6 py-5 space-y-5 text-sm text-gray-700">
-              <div>
-                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 1 — Créez votre projet" : "Step 1 — Create your project"}</h4>
-                <p>{"\u2192"} {language === 'fr' ? 'Cliquez sur "Créer catégorie/album" en haut à droite' : 'Click "Create category/album" at the top right'}</p>
-                <p>{"\u2192"} {language === 'fr' ? "Donnez un nom à votre projet et choisissez son type" : "Give your project a name and choose its type"}</p>
-              </div>
-              <div>
-                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 2 — Préparez vos images" : "Step 2 — Prepare your images"}</h4>
-                <p>{"\u2192"} {language === 'fr' ? "Sélectionnez vos images dans Albums" : "Select your images in Albums"}</p>
-                <p>{"\u2192"} {language === 'fr' ? 'Clic droit sur l\'image \u2192 "Envoyer dans le Collecteur"' : 'Right-click on the image \u2192 "Send to Collector"'}</p>
-              </div>
-              <div>
-                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 3 — Ouvrez l'Atelier" : "Step 3 — Open the Workshop"}</h4>
-                <p>{"\u2192"} {language === 'fr' ? "Cliquez sur le nom de votre projet dans la liste" : "Click on your project name in the list"}</p>
-                <p>{"\u2192"} {language === 'fr' ? "Une fois ouvert, vous pouvez aussi glisser une image directement depuis votre bureau" : "Once open, you can also drag an image directly from your desktop"}</p>
-              </div>
-              <div>
-                <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 4 — Réalisez votre création" : "Step 4 — Create your design"}</h4>
-                <p>{"\u2192"} {language === 'fr' ? "Vous avez choisi un type de création lors de la création de votre projet" : "You chose a creation type when creating your project"}</p>
-                <p className="font-medium text-gray-800 mt-2">{language === 'fr' ? "Une fois votre projet élaboré :" : "Once your project is ready:"}</p>
-                <p>{"\u2192"} <strong>{language === 'fr' ? '"Exporter l\'image"' : '"Export image"'}</strong> : {language === 'fr' ? "enregistre l'image finale dans votre album" : "saves the final image to your album"}</p>
-                <p>{"\u2192"} <strong>{language === 'fr' ? '"Sauvegarder le projet"' : '"Save project"'}</strong> : {language === 'fr' ? "conserve votre projet pour le reprendre plus tard" : "keeps your project to resume later"}</p>
-                <p>{"\u2192"} <strong>{language === 'fr' ? '"Fermer"' : '"Close"'}</strong> : {language === 'fr' ? "retour à Albums" : "back to Albums"}</p>
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end rounded-b-xl">
-              <Button onClick={() => setShowAtelierHelp(false)}>
-                {language === 'fr' ? "J'ai compris !" : "Got it!"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODALE CRÉATIONS / ATELIER - Nouvelle version avec 4 zones */}
-      <CreationsAtelierV2
-        isOpen={showCreationsModal}
-        onClose={() => {
-          setShowCreationsModal(false);
-          setCreationsProjectId(undefined);
-          setCreationsProjectName("Nouveau projet");
-        }}
-        projectId={creationsProjectId}
-        projectName={creationsProjectName}
-        onSaveProject={(projectData) => {
-          console.log('[Albums] Sauvegarde du projet:', projectData);
-          // La sauvegarde est gérée dans le composant via IndexedDB
-        }}
-      />
     </MainLayout>
   );
 }

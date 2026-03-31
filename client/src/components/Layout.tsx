@@ -14,7 +14,8 @@ import {
   Smartphone,
   Lock,
   Unlock,
-  LogOut
+  LogOut,
+  Palette
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -198,6 +199,7 @@ export default function Layout(props: LayoutProps) {
   const sidebarItems = [
     { id: "albums", label: t('sidebar.albums'), icon: ImageIcon, path: "/albums", img: "/assets/icons/sidebar/PhotoClass.png" },
     { id: "albums-prives", label: t('sidebar.privateAlbums'), icon: Lock, path: "/albums-prives", img: "/assets/icons/sidebar/PhotoClass.png" },
+    { id: "atelier", label: t('sidebar.workshop'), icon: Palette, path: "/atelier", img: "/assets/icons/sidebar/Utilitaires.png" },
     { id: "parametres", label: t('sidebar.settings'), icon: Settings, path: "/parametres", img: "/assets/icons/sidebar/parametres.png" },
     { id: "themes", label: t('sidebar.themes'), icon: Settings, path: "/themes", img: "/assets/icons/sidebar/parametres.png" },
     { id: "aide", label: t('sidebar.help'), icon: Wrench, path: "/aide", img: "/assets/icons/sidebar/Utilitaires.png" },

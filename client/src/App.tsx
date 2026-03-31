@@ -18,6 +18,7 @@ import Albums from "@/pages/Albums";
 import AlbumsPrives from "@/pages/AlbumsPrives";
 import Themes from "@/pages/Themes";
 import Aide from "@/pages/Aide";
+import Atelier from "@/pages/Atelier";
 import Landing from "@/pages/Landing";
 import AdminLicenses from "@/pages/AdminLicenses";
 import MesLicences from "@/pages/MesLicences";
@@ -97,6 +98,7 @@ function Router() {
       <Route path="/albums">{() => <ProtectedRoute><Albums /></ProtectedRoute>}</Route>
       <Route path="/albums-prives">{() => <ProtectedRoute><AlbumsPrives /></ProtectedRoute>}</Route>
       <Route path="/themes">{() => <ProtectedRoute><Themes /></ProtectedRoute>}</Route>
+      <Route path="/atelier">{() => <ProtectedRoute><Atelier /></ProtectedRoute>}</Route>
       <Route path="/aide">{() => <ProtectedRoute><Aide /></ProtectedRoute>}</Route>
       <Route path="/admin/licenses">{() => <ProtectedRoute><AdminLicenses /></ProtectedRoute>}</Route>
       <Route path="/mes-licences">{() => <ProtectedRoute><MesLicences /></ProtectedRoute>}</Route>
