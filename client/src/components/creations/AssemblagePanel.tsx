@@ -12,7 +12,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Frame,
-  Sparkles,
   ChevronDown,
   ChevronRight,
   Upload,
@@ -984,276 +983,8 @@ function PassePartoutSection({
 
 
 // ---------------------------------------------------------------------------
-// Sous-section : Effets photo
+// Sous-section : Effets photo — supprimée (les effets sont dans RetouchePhoto.tsx)
 // ---------------------------------------------------------------------------
-
-type EffectId =
-  | "noir-blanc"
-  | "sepia"
-  | "vintage"
-  | "vivid"
-  | "froid"
-  | "chaud"
-  | "flou"
-  | "contraste"
-  | "luminosite";
-
-interface EffectDef {
-  id: EffectId;
-  labelFr: string;
-  labelEn: string;
-}
-
-const EFFECTS: EffectDef[] = [
-  { id: "noir-blanc",  labelFr: "Noir & Blanc",      labelEn: "Black & White"  },
-  { id: "sepia",       labelFr: "Sépia",              labelEn: "Sepia"          },
-  { id: "vintage",     labelFr: "Vintage",            labelEn: "Vintage"        },
-  { id: "vivid",       labelFr: "Couleurs vives",     labelEn: "Vivid"          },
-  { id: "froid",       labelFr: "Tons froids",        labelEn: "Cool tones"     },
-  { id: "chaud",       labelFr: "Tons chauds",        labelEn: "Warm tones"     },
-  { id: "flou",        labelFr: "Flou artistique",    labelEn: "Artistic blur"  },
-  { id: "contraste",   labelFr: "Contraste fort",     labelEn: "High contrast"  },
-  { id: "luminosite",  labelFr: "Luminosité",         labelEn: "Brightness"     },
-];
-
-/**
- * Applique un effet à une image via canvas 2D et retourne le data-URL résultant.
- * Tous les traitements sont réalisés côté client, sans appel serveur.
- */
-function applyEffectToImage(
-  src: string,
-  effectId: EffectId,
-  intensity: number
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      const t = intensity / 100; // facteur 0..1
-
-      for (let i = 0; i < data.length; i += 4) {
-        let r = data[i];
-        let g = data[i + 1];
-        let b = data[i + 2];
-
-        switch (effectId) {
-          case "noir-blanc": {
-            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            r = r + (gray - r) * t;
-            g = g + (gray - g) * t;
-            b = b + (gray - b) * t;
-            break;
-          }
-          case "sepia": {
-            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            const sr = gray * 1.08;
-            const sg = gray * 0.88;
-            const sb = gray * 0.62;
-            r = r + (Math.min(255, sr) - r) * t;
-            g = g + (Math.min(255, sg) - g) * t;
-            b = b + (Math.min(255, sb) - b) * t;
-            break;
-          }
-          case "vintage": {
-            r = r + (Math.min(255, r * 1.1 + 20) - r) * t;
-            g = g + (g * 0.95 - g) * t;
-            b = b + (b * 0.8 - b) * t;
-            break;
-          }
-          case "vivid": {
-            const avg = (r + g + b) / 3;
-            r = r + (Math.min(255, avg + (r - avg) * 1.5) - r) * t;
-            g = g + (Math.min(255, avg + (g - avg) * 1.5) - g) * t;
-            b = b + (Math.min(255, avg + (b - avg) * 1.5) - b) * t;
-            break;
-          }
-          case "froid": {
-            r = r + (r * 0.85 - r) * t;
-            b = b + (Math.min(255, b * 1.15) - b) * t;
-            break;
-          }
-          case "chaud": {
-            r = r + (Math.min(255, r * 1.15) - r) * t;
-            b = b + (b * 0.85 - b) * t;
-            break;
-          }
-          case "contraste": {
-            const factor = 1 + t * 1.5;
-            r = Math.min(255, Math.max(0, factor * (r - 128) + 128));
-            g = Math.min(255, Math.max(0, factor * (g - 128) + 128));
-            b = Math.min(255, Math.max(0, factor * (b - 128) + 128));
-            break;
-          }
-          case "luminosite": {
-            const boost = t * 80;
-            r = Math.min(255, r + boost);
-            g = Math.min(255, g + boost);
-            b = Math.min(255, b + boost);
-            break;
-          }
-          case "flou":
-            // Le flou est appliqué via filter CSS, pas pixel par pixel
-            break;
-        }
-
-        data[i]     = r;
-        data[i + 1] = g;
-        data[i + 2] = b;
-      }
-
-      if (effectId === "flou") {
-        // Flou via filtre CSS sur un canvas intermédiaire
-        const blurCanvas = document.createElement("canvas");
-        blurCanvas.width = canvas.width;
-        blurCanvas.height = canvas.height;
-        const blurCtx = blurCanvas.getContext("2d")!;
-        const blurPx = Math.round(t * 8);
-        blurCtx.filter = `blur(${blurPx}px)`;
-        blurCtx.drawImage(img, 0, 0);
-        resolve(blurCanvas.toDataURL("image/jpeg", 0.92));
-        return;
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-      resolve(canvas.toDataURL("image/jpeg", 0.92));
-    };
-    img.onerror = () => reject(new Error("Image load failed"));
-    img.src = src;
-  });
-}
-
-function EffetsPhotoSection({
-  activeCanvasPhoto,
-  onApplyEffect,
-}: Pick<AssemblagePanelProps, "activeCanvasPhoto" | "onApplyEffect">) {
-  const { language } = useLanguage();
-  const [selectedEffect, setSelectedEffect] = useState<EffectId | null>(null);
-  const [intensity, setIntensity] = useState(70);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Générer un aperçu dès que l'effet ou l'intensité change
-  useEffect(() => {
-    if (!activeCanvasPhoto || !selectedEffect) {
-      setPreviewSrc(null);
-      return;
-    }
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-    previewTimerRef.current = setTimeout(async () => {
-      try {
-        const result = await applyEffectToImage(activeCanvasPhoto, selectedEffect, intensity);
-        setPreviewSrc(result);
-      } catch {
-        setPreviewSrc(null);
-      }
-    }, 300);
-    return () => {
-      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-    };
-  }, [activeCanvasPhoto, selectedEffect, intensity]);
-
-  const handleApply = async () => {
-    if (!activeCanvasPhoto) {
-      toast.error(
-        language === "fr"
-          ? "Sélectionnez d'abord une photo sur le canvas"
-          : "First select a photo on the canvas"
-      );
-      return;
-    }
-    if (!selectedEffect) {
-      toast.error(language === "fr" ? "Choisissez un effet" : "Choose an effect");
-      return;
-    }
-    setIsProcessing(true);
-    try {
-      const result = await applyEffectToImage(activeCanvasPhoto, selectedEffect, intensity);
-      onApplyEffect(result);
-      toast.success(language === "fr" ? "Effet appliqué" : "Effect applied");
-    } catch {
-      toast.error(language === "fr" ? "Erreur lors de l'application" : "Error applying effect");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      {!activeCanvasPhoto && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
-          {language === "fr"
-            ? "Sélectionnez une photo sur le canvas pour appliquer un effet."
-            : "Select a photo on the canvas to apply an effect."}
-        </div>
-      )}
-
-      {/* Grille des effets */}
-      <div className="grid grid-cols-2 gap-1">
-        {EFFECTS.map((eff) => (
-          <Button
-            key={eff.id}
-            variant={selectedEffect === eff.id ? "default" : "outline"}
-            size="sm"
-            className={`text-xs justify-start ${selectedEffect === eff.id ? "bg-purple-600 text-white" : ""}`}
-            onClick={() => setSelectedEffect(eff.id)}
-          >
-            {language === "fr" ? eff.labelFr : eff.labelEn}
-          </Button>
-        ))}
-      </div>
-
-      {/* Intensité */}
-      {selectedEffect && (
-        <div className="pt-2 border-t space-y-1">
-          <Label className="text-xs text-gray-600">
-            {language === "fr" ? `Intensité : ${intensity}%` : `Intensity: ${intensity}%`}
-          </Label>
-          <Slider
-            value={[intensity]}
-            onValueChange={([v]) => setIntensity(v)}
-            min={10}
-            max={100}
-            step={5}
-          />
-        </div>
-      )}
-
-      {/* Aperçu */}
-      {previewSrc && (
-        <div className="pt-2 border-t">
-          <Label className="text-xs text-gray-600 mb-1 block">
-            {language === "fr" ? "Aperçu" : "Preview"}
-          </Label>
-          <img
-            src={previewSrc}
-            alt="preview"
-            className="w-full rounded border border-gray-200 max-h-32 object-contain"
-          />
-        </div>
-      )}
-
-      {/* Bouton Appliquer */}
-      <Button
-        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm"
-        onClick={handleApply}
-        disabled={isProcessing || !activeCanvasPhoto || !selectedEffect}
-      >
-        {isProcessing
-          ? (language === "fr" ? "Application..." : "Applying...")
-          : (language === "fr" ? "Appliquer l'effet" : "Apply effect")}
-      </Button>
-    </div>
-  );
-}
 
 /// ---------------------------------------------------------------------------
 // Sous-section : Texte & Typographie
@@ -1583,7 +1314,7 @@ function buildPuzzlePathLocal(
   h: number,
   edges: { top: number; right: number; bottom: number; left: number }
 ): string {
-  const nr = Math.min(w, h) * 0.20;
+  const nr = Math.min(w, h) * 0.12;
   const pcx = w / 2, pcy = h / 2;
   const { top, right, bottom, left } = edges;
   const segs: string[] = [];
@@ -1681,7 +1412,6 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
   const [puzzlePieceCount, setPuzzlePieceCount] = useState<number>(16);
   const [showPuzzleNumbers, setShowPuzzleNumbers] = useState<boolean>(false);
   const [puzzleNumberSize, setPuzzleNumberSize] = useState<'small' | 'medium' | 'large'>('medium');
-  const [puzzleTransparent, setPuzzleTransparent] = useState<boolean>(false);
 
   const getPuzzleGrid = (count: number) => {
     const ratio = canvasFormat ? canvasFormat.width / canvasFormat.height : 1;
@@ -1713,8 +1443,8 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
       {/* Description */}
       <p className="text-xs text-gray-500 italic">
         {fr
-          ? "Divisez la page en pi\u00e8ces de puzzle avec de vraies encoches. G\u00e9n\u00e9rez puis exportez en SVG pour la d\u00e9coupe laser."
-          : "Divide the page into puzzle pieces with real interlocking tabs. Generate then export as SVG for laser cutting."}
+          ? "Générateur de gabarit puzzle SVG pour découpe laser. Choisissez le nombre de pièces, générez, puis exportez."
+          : "SVG puzzle template generator for laser cutting. Choose piece count, generate, then export."}
       </p>
 
       {/* S\u00e9lecteur du nombre de pi\u00e8ces */}
@@ -1753,10 +1483,9 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
             <g key={i} transform={`translate(${x},${y})`}>
               <path
                 d={path}
-                fill="#6366f1"
-                fillOpacity={0.55}
+                fill="none"
                 stroke="#4338ca"
-                strokeWidth={0.8}
+                strokeWidth={0.5}
                 strokeLinejoin="round"
               />
             </g>
@@ -1817,42 +1546,16 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
         </div>
       )}
 
-      {/* Toggle mode vierge */}
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-xs font-medium text-gray-700">
-            {fr ? "\u{1FAB5} Mode vierge (bois)" : "\u{1FAB5} Blank mode (wood)"}
-          </span>
-          <span className="text-xs text-gray-400 italic">
-            {fr ? "Contours seuls, sans remplissage" : "Outlines only, no fill"}
-          </span>
-        </div>
-        <button
-          role="switch"
-          aria-checked={puzzleTransparent}
-          onClick={() => setPuzzleTransparent(v => !v)}
-          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-            puzzleTransparent ? 'bg-amber-500' : 'bg-gray-300'
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-              puzzleTransparent ? 'translate-x-4' : 'translate-x-0'
-            }`}
-          />
-        </button>
-      </div>
-
       {/* Bouton Générer */}
       <button
         className="w-full py-2 rounded bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
         onClick={() => {
           if (onGenerateFullPagePuzzle) {
-            onGenerateFullPagePuzzle(cols, rows, showPuzzleNumbers, puzzleTransparent, puzzleNumberSize);
+            onGenerateFullPagePuzzle(cols, rows, showPuzzleNumbers, true, puzzleNumberSize);
           }
         }}
       >
-        {fr ? `G\u00e9n\u00e9rer le puzzle (${puzzlePieceCount} pi\u00e8ces)` : `Generate puzzle (${puzzlePieceCount} pieces)`}
+        {fr ? `Générer le puzzle (${puzzlePieceCount} pièces)` : `Generate puzzle (${puzzlePieceCount} pieces)`}
       </button>
 
       {/* Bouton SVG laser */}
@@ -1869,8 +1572,8 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
         }}
         title={
           canvasOpenings && canvasOpenings.length > 0
-            ? (fr ? 'T\u00e9l\u00e9charger le SVG de d\u00e9coupe laser' : 'Download laser cut SVG')
-            : (fr ? "Ajoutez des ouvertures pour activer l'export SVG" : 'Add openings to enable SVG export')
+            ? (fr ? 'Télécharger le SVG de découpe laser' : 'Download laser cut SVG')
+            : (fr ? "Générez le puzzle d'abord" : 'Generate the puzzle first')
         }
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1880,11 +1583,11 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
         </svg>
         {fr
           ? (canvasOpenings && canvasOpenings.length > 0
-              ? `T\u00e9l\u00e9charger SVG laser (${canvasOpenings.length} ouverture${canvasOpenings.length > 1 ? 's' : ''})`
-              : 'T\u00e9l\u00e9charger SVG laser (aucune ouverture)')
+              ? `Télécharger SVG laser (${canvasOpenings.length} pièce${canvasOpenings.length > 1 ? 's' : ''})`
+              : 'Télécharger SVG laser')
           : (canvasOpenings && canvasOpenings.length > 0
-              ? `Download laser SVG (${canvasOpenings.length} opening${canvasOpenings.length > 1 ? 's' : ''})`
-              : 'Download laser SVG (no openings)')}
+              ? `Download laser SVG (${canvasOpenings.length} piece${canvasOpenings.length > 1 ? 's' : ''})`
+              : 'Download laser SVG')}
       </button>
       <p className="text-xs text-gray-400 text-center">
         {fr ? 'Compatible LightBurn, RDWorks, LaserGRBL' : 'Compatible with LightBurn, RDWorks, LaserGRBL'}
@@ -1896,7 +1599,7 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 // ---------------------------------------------------------------------------
 // Composant principal : AssemblagePanel
 // ---------------------------------------------------------------------------
-type SectionId = "passe-partout" | "effets" | "texte" | "puzzle";
+type SectionId = "passe-partout" | "texte" | "puzzle";
 
 interface SectionDef {
   id: SectionId;
@@ -1907,7 +1610,6 @@ interface SectionDef {
 
 const SECTIONS: SectionDef[] = [
   { id: "passe-partout", labelFr: "Passe-partout",       labelEn: "Mat frames",         icon: Frame    },
-  { id: "effets",        labelFr: "Effets photo",        labelEn: "Photo effects",      icon: Sparkles },
   { id: "texte",         labelFr: "Texte & Typographie", labelEn: "Text & Typography",  icon: Type     },
   { id: "puzzle",        labelFr: "Puzzle",              labelEn: "Puzzle",             icon: Puzzle   },
 ];
@@ -2000,12 +1702,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                     lineStrokeWidth={props.lineStrokeWidth}
                     onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                    />
-                )}
-                {section.id === "effets" && (
-                  <EffetsPhotoSection
-                    activeCanvasPhoto={props.activeCanvasPhoto}
-                    onApplyEffect={props.onApplyEffect}
-                  />
                 )}
                 {section.id === "texte" && (
                   <TexteSection

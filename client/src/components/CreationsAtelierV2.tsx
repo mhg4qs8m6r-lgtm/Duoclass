@@ -185,7 +185,7 @@ function buildPuzzlePath(
   h: number,
   edges: { top: number; right: number; bottom: number; left: number }
 ): string {
-  const nr = Math.min(w, h) * 0.20; // rayon du tenon
+  const nr = Math.min(w, h) * 0.12; // rayon du tenon (fin pour découpe laser)
   const pcx = w / 2, pcy = h / 2;
   const { top, right, bottom, left } = edges;
 
@@ -1866,15 +1866,12 @@ export default function CreationsAtelierV2({
             const svgPath = buildPuzzlePath(w, h, edges);
             const path2d = new Path2D(svgPath);
             ctx.translate(-w / 2, -h / 2);
-            ctx.fillStyle = element.puzzleTransparent ? 'rgba(0,0,0,0)' : fillColor;
+            ctx.fillStyle = 'none';
             ctx.fill(path2d);
-            // Halo blanc semi-transparent pour lisibilité sur fond sombre
-            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-            ctx.lineWidth = strokeWidth + 3;
-            ctx.stroke(path2d);
-            // Trait principal
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = strokeWidth;
+            // Trait fin pour découpe laser
+            ctx.strokeStyle = '#1a1a1a';
+            ctx.lineWidth = 0.8;
+            ctx.lineJoin = 'round';
             ctx.stroke(path2d);
             if (element.puzzleShowNumber && element.openingIndex != null) {
               const sizeKey = element.puzzleNumberSize || 'medium';
@@ -4765,11 +4762,8 @@ export default function CreationsAtelierV2({
                             break;
                           }
                           case 'puzzle': {
-                            // Utilise buildPuzzlePath avec les edges de la pièce, puis translate au bon endroit
                             const edges = el.puzzleEdges ?? { top: 1, right: 1, bottom: 1, left: -1 };
-                            // buildPuzzlePath génère un path relatif à (0,0) — on applique une translation SVG via transform
-                            // Pour éviter la translation, on reconstruit le path avec les coordonnées absolues
-                            const nr = Math.min(w, h) * 0.20;
+                            const nr = Math.min(w, h) * 0.12;
                             const pcx = w / 2, pcy = h / 2;
                             const segs: string[] = [];
                             segs.push(`M${x},${y}`);
@@ -4993,10 +4987,11 @@ export default function CreationsAtelierV2({
                             zIndex: canvasElements.filter(el => el.type !== 'shape').length + 10 + idx,
                             opacity: 1,
                             validated: true,
+                            locked: true,
                             openingIndex: idx,
                             name: language === 'fr' ? `Pièce ${idx}` : `Piece ${idx}`,
-                            openingColor: transparent ? 'transparent' : '#e0e7ff',
-                            puzzleTransparent: transparent ?? false,
+                            openingColor: 'transparent',
+                            puzzleTransparent: true,
                             puzzleNumberSize: numberSize ?? 'medium',
                             puzzleEdges: { top, right, bottom, left },
                             puzzleShowNumber: showNumbers ?? false,
@@ -5009,8 +5004,8 @@ export default function CreationsAtelierV2({
                       ]);
                       toast.success(
                         language === 'fr'
-                          ? `Puzzle généré : ${cols * rows} pièces (${cols}×${rows}) - glissez vos photos sur chaque pièce`
-                          : `Puzzle generated: ${cols * rows} pieces (${cols}×${rows}) - drag photos onto each piece`
+                          ? `Gabarit puzzle généré : ${cols * rows} pièces (${cols}×${rows})`
+                          : `Puzzle template generated: ${cols * rows} pieces (${cols}×${rows})`
                       );
                     }}
                     onApplyTemplate={(openings) => {
@@ -6358,27 +6353,12 @@ export default function CreationsAtelierV2({
                           style={{ overflow: 'visible' }}
                         >
                           {/* Couleur opaque de la découpe (transparent en mode vierge) */}
-                          <path d={pathD} fill={element.puzzleTransparent ? 'none' : fillColor} />
-                          {/* Contour toujours visible pour les pièces puzzle */}
-                          {/* Mode vierge : contour noir épais (2.5px) pour découpe laser sur bois */}
-                          {/* Mode normal : gris foncé (1.8px) ou violet sélectioné (2.5px) */}
-                          {/* Halo blanc sous le contour pour lisibilité sur fond sombre */}
-                          {element.shape === 'puzzle' && (
-                            <path
-                              d={pathD}
-                              fill="none"
-                              stroke="white"
-                              strokeWidth={element.puzzleTransparent ? 6 : (isSelected ? 6 : 5)}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              opacity={0.7}
-                            />
-                          )}
+                          <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} />
                           <path
                             d={pathD}
                             fill="none"
-                            stroke={isSelected ? '#6366f1' : (element.shape === 'puzzle' ? (element.puzzleTransparent ? '#000000' : '#1a1a1a') : 'transparent')}
-                            strokeWidth={element.shape === 'puzzle' ? (element.puzzleTransparent ? 4 : (isSelected ? 4 : 3)) : (isSelected ? 2 : 0)}
+                            stroke={isSelected ? '#6366f1' : (element.shape === 'puzzle' ? '#1a1a1a' : 'transparent')}
+                            strokeWidth={element.shape === 'puzzle' ? (isSelected ? 1.2 : 0.8) : (isSelected ? 2 : 0)}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                           />
