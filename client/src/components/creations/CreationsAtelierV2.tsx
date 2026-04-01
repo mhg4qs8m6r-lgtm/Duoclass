@@ -123,8 +123,8 @@ interface CollectorItem {
   groupYs?: number[];      // Positions Y cm de chaque membre
 }
 
-// Onglets principaux
-type MainTab = "detourage" | "assemblage";
+// Onglet unique (legacy type conservé pour compatibilité)
+type MainTab = "tous";
   // Sous-onglets d'assemblage (conservé pour compatibilité éventuelle)
 type AssemblageSubTab = "bibliotheque" | "effets" | "miseenpage" | "stickers";
 
@@ -633,7 +633,7 @@ export default function CreationsAtelierV2({
   const [filets, setFilets] = useState<FiletConfig[]>([]);
 
   // Onglets
-  const [activeMainTab, setActiveMainTab] = useState<MainTab>("detourage");
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>("tous");
   // activeAssemblageSubTab conservé pour éviter les erreurs de références résiduelles
   const [activeAssemblageSubTab] = useState<AssemblageSubTab>("bibliotheque");
   
@@ -4540,33 +4540,12 @@ export default function CreationsAtelierV2({
           
           {/* ZONE 1 : Onglets verticaux + Zone Outils */}
           <div className="w-80 bg-gray-50 border-r flex flex-col">
-            {/* Onglets principaux - z-10 pour rester au-dessus du ScrollArea */}
-            <div className="flex border-b bg-white relative z-10 flex-shrink-0">
-              {/* Onglet Détourage */}
-              <button
-                className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                  activeMainTab === "detourage" 
-                    ? "bg-purple-100 text-purple-700 border-b-2 border-purple-500" 
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-                onClick={() => setActiveMainTab("detourage")}
-              >
-                <Scissors className="w-4 h-4" />
-                {language === "fr" ? "Détourage" : "Cutout"}
-              </button>
-              
-              {/* Onglet Assemblage */}
-              <button
-                className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                  activeMainTab === "assemblage" 
-                    ? "bg-purple-100 text-purple-700 border-b-2 border-purple-500" 
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-                onClick={() => setActiveMainTab("assemblage")}
-              >
-                <Wrench className="w-4 h-4" />
-                {language === "fr" ? "Assemblage" : "Assembly"}
-              </button>
+            {/* Titre du panneau outils */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b bg-white relative z-10 flex-shrink-0">
+              <Wrench className="w-4 h-4 text-purple-600" />
+              <span className="text-sm font-semibold text-purple-700">
+                {language === "fr" ? "Tous les outils" : "All tools"}
+              </span>
             </div>
             
 {/* Barre de sous-onglets supprimée - remplacée par l'accordéon AssemblagePanel */}
@@ -4574,8 +4553,7 @@ export default function CreationsAtelierV2({
             {/* Zone Outils - overflow-y-auto + min-h-0 garantit le défilement dans un flex-col */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-4">
-                {activeMainTab === "detourage" && (
-                  <>
+                {/* Détourage (toujours visible) */}
                     <DetourageToolsPanel
                       activePhoto={activeCanvasPhoto}
                       selectedElementId={selectedElementId}
@@ -4665,10 +4643,7 @@ export default function CreationsAtelierV2({
                         )}
                       </div>
                     )}
-                  </>
-                )}
-                
-                {activeMainTab === "assemblage" && (
+                {/* Assemblage (toujours visible, sous le détourage) */}
                   <AssemblagePanel
                     canvasFormat={{
                       width: orientation === "portrait" ? paperFormat.width : paperFormat.height,
@@ -6093,11 +6068,10 @@ export default function CreationsAtelierV2({
                       });
                     }}
                   />
-                )}
               </div>
             </div>
           </div>
-          
+
           {/* ZONE 2 : Zone de travail (Canvas) - Occupe TOUT l'espace */}
           <div 
             className="flex-1 overflow-hidden flex flex-col"

@@ -1599,7 +1599,14 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 // ---------------------------------------------------------------------------
 // Composant principal : AssemblagePanel
 // ---------------------------------------------------------------------------
-type SectionId = "passe-partout" | "texte" | "puzzle";
+type SectionId =
+  | "passe-partout"
+  | "montage-pp"
+  | "pelemele-modele"
+  | "montage-pelemele"
+  | "collage"
+  | "texte"
+  | "puzzle";
 
 interface SectionDef {
   id: SectionId;
@@ -1609,14 +1616,18 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "passe-partout", labelFr: "Passe-partout",       labelEn: "Mat frames",         icon: Frame    },
-  { id: "texte",         labelFr: "Texte & Typographie", labelEn: "Text & Typography",  icon: Type     },
-  { id: "puzzle",        labelFr: "Puzzle",              labelEn: "Puzzle",             icon: Puzzle   },
+  { id: "passe-partout",    labelFr: "Passe-partout modèle",        labelEn: "Mat frame template",        icon: Frame              },
+  { id: "montage-pp",       labelFr: "Montage / Passe-partout",     labelEn: "Montage / Mat frame",       icon: Frame              },
+  { id: "pelemele-modele",  labelFr: "Pêle-mêle modèle",           labelEn: "Collage template",          icon: RectangleHorizontal },
+  { id: "montage-pelemele", labelFr: "Montage / Pêle-mêle",        labelEn: "Montage / Collage",         icon: RectangleHorizontal },
+  { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
+  { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
+  { id: "puzzle",           labelFr: "Puzzle",                      labelEn: "Puzzle",                    icon: Puzzle              },
 ];
 
 export default function AssemblagePanel(props: AssemblagePanelProps) {
   const { language } = useLanguage();
-  const [openSection, setOpenSection] = useState<SectionId | null>("passe-partout");
+  const [openSection, setOpenSection] = useState<SectionId | null>(null);
 
   const toggle = (id: SectionId) => {
     setOpenSection((prev) => (prev === id ? null : id));
@@ -1652,7 +1663,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
             {/* Contenu de la section */}
             {isOpen && (
               <div className="p-3 bg-white">
-                {section.id === "passe-partout" && (
+                {(section.id === "passe-partout" || section.id === "montage-pp") && (
                   <PassePartoutSection
                     canvasFormat={props.canvasFormat}
                     onAddPassePartout={props.onAddPassePartout}
@@ -1672,23 +1683,23 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                     onGetCurrentShapes={props.onGetCurrentShapes}
                     onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
                     onExportLaserSVG={props.onExportLaserSVG}
-                     onAddBackground={props.onAddBackground}
-                     hasExistingBackground={props.hasExistingBackground}
-                     onRemoveBackground={props.onRemoveBackground}
-                     showFormatBorder={props.showFormatBorder}
-                     onShowFormatBorderChange={props.onShowFormatBorderChange}
-                     filets={props.filets}
-                     onFiletsChange={props.onFiletsChange}
-                     segmentEditorActive={props.segmentEditorActive}
-                     segmentsRounded={props.segmentsRounded}
-                     onRoundAllSegments={props.onRoundAllSegments}
-                     isNodeEditMode={props.isNodeEditMode}
-                     onToggleNodeEditMode={props.onToggleNodeEditMode}
-                     selectedSegmentIndex={props.selectedSegmentIndex}
-                     onRoundSegmentConcave={props.onRoundSegmentConcave}
-                     onRoundSegmentConvex={props.onRoundSegmentConvex}
-                     onDeleteSegment={props.onDeleteSegment}
-                     onStraightenSegment={props.onStraightenSegment}
+                    onAddBackground={props.onAddBackground}
+                    hasExistingBackground={props.hasExistingBackground}
+                    onRemoveBackground={props.onRemoveBackground}
+                    showFormatBorder={props.showFormatBorder}
+                    onShowFormatBorderChange={props.onShowFormatBorderChange}
+                    filets={props.filets}
+                    onFiletsChange={props.onFiletsChange}
+                    segmentEditorActive={props.segmentEditorActive}
+                    segmentsRounded={props.segmentsRounded}
+                    onRoundAllSegments={props.onRoundAllSegments}
+                    isNodeEditMode={props.isNodeEditMode}
+                    onToggleNodeEditMode={props.onToggleNodeEditMode}
+                    selectedSegmentIndex={props.selectedSegmentIndex}
+                    onRoundSegmentConcave={props.onRoundSegmentConcave}
+                    onRoundSegmentConvex={props.onRoundSegmentConvex}
+                    onDeleteSegment={props.onDeleteSegment}
+                    onStraightenSegment={props.onStraightenSegment}
                     isCutMode={props.isCutMode}
                     onToggleCutMode={props.onToggleCutMode}
                     isLineDrawMode={props.isLineDrawMode}
@@ -1701,7 +1712,132 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                     onLineColorChange={props.onLineColorChange}
                     lineStrokeWidth={props.lineStrokeWidth}
                     onLineStrokeWidthChange={props.onLineStrokeWidthChange}
-                   />
+                  />
+                )}
+                {section.id === "pelemele-modele" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 italic">
+                      {language === "fr"
+                        ? "Créez une disposition vierge de pêle-mêle avec plusieurs ouvertures de formes variées."
+                        : "Create a blank collage layout with multiple openings of various shapes."}
+                    </p>
+                    <PassePartoutSection
+                      canvasFormat={props.canvasFormat}
+                      onAddPassePartout={props.onAddPassePartout}
+                      onReplacePassePartout={props.onReplacePassePartout}
+                      onReplaceColorOnly={props.onReplaceColorOnly}
+                      onReplacePatternOnly={props.onReplacePatternOnly}
+                      hasExistingPassePartout={props.hasExistingPassePartout}
+                      onAddOpening={props.onAddOpening}
+                      onValidateOpening={props.onValidateOpening}
+                      onDeleteOpening={props.onDeleteOpening}
+                      onApplyColorToOpenings={props.onApplyColorToOpenings}
+                      onGenerateFromOpenings={props.onGenerateFromOpenings}
+                      canvasOpenings={props.canvasOpenings}
+                      activeOpeningId={props.activeOpeningId}
+                      selectedCanvasElementId={props.selectedCanvasElementId}
+                      onApplyTemplate={props.onApplyTemplate}
+                      onGetCurrentShapes={props.onGetCurrentShapes}
+                      onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
+                      onExportLaserSVG={props.onExportLaserSVG}
+                      onAddBackground={props.onAddBackground}
+                      hasExistingBackground={props.hasExistingBackground}
+                      onRemoveBackground={props.onRemoveBackground}
+                      showFormatBorder={props.showFormatBorder}
+                      onShowFormatBorderChange={props.onShowFormatBorderChange}
+                      filets={props.filets}
+                      onFiletsChange={props.onFiletsChange}
+                      segmentEditorActive={props.segmentEditorActive}
+                      segmentsRounded={props.segmentsRounded}
+                      onRoundAllSegments={props.onRoundAllSegments}
+                      isNodeEditMode={props.isNodeEditMode}
+                      onToggleNodeEditMode={props.onToggleNodeEditMode}
+                      selectedSegmentIndex={props.selectedSegmentIndex}
+                      onRoundSegmentConcave={props.onRoundSegmentConcave}
+                      onRoundSegmentConvex={props.onRoundSegmentConvex}
+                      onDeleteSegment={props.onDeleteSegment}
+                      onStraightenSegment={props.onStraightenSegment}
+                      isCutMode={props.isCutMode}
+                      onToggleCutMode={props.onToggleCutMode}
+                      isLineDrawMode={props.isLineDrawMode}
+                      onToggleLineDrawMode={props.onToggleLineDrawMode}
+                      lineSelected={props.lineSelected}
+                      lineIsRounded={props.lineIsRounded}
+                      onRoundLine={props.onRoundLine}
+                      lineChainCount={props.lineChainCount}
+                      lineColor={props.lineColor}
+                      onLineColorChange={props.onLineColorChange}
+                      lineStrokeWidth={props.lineStrokeWidth}
+                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
+                    />
+                  </div>
+                )}
+                {section.id === "montage-pelemele" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 italic">
+                      {language === "fr"
+                        ? "Disposition pêle-mêle avec photos. Glissez vos photos dans les ouvertures."
+                        : "Collage layout with photos. Drag your photos into the openings."}
+                    </p>
+                    <PassePartoutSection
+                      canvasFormat={props.canvasFormat}
+                      onAddPassePartout={props.onAddPassePartout}
+                      onReplacePassePartout={props.onReplacePassePartout}
+                      onReplaceColorOnly={props.onReplaceColorOnly}
+                      onReplacePatternOnly={props.onReplacePatternOnly}
+                      hasExistingPassePartout={props.hasExistingPassePartout}
+                      onAddOpening={props.onAddOpening}
+                      onValidateOpening={props.onValidateOpening}
+                      onDeleteOpening={props.onDeleteOpening}
+                      onApplyColorToOpenings={props.onApplyColorToOpenings}
+                      onGenerateFromOpenings={props.onGenerateFromOpenings}
+                      canvasOpenings={props.canvasOpenings}
+                      activeOpeningId={props.activeOpeningId}
+                      selectedCanvasElementId={props.selectedCanvasElementId}
+                      onApplyTemplate={props.onApplyTemplate}
+                      onGetCurrentShapes={props.onGetCurrentShapes}
+                      onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
+                      onExportLaserSVG={props.onExportLaserSVG}
+                      onAddBackground={props.onAddBackground}
+                      hasExistingBackground={props.hasExistingBackground}
+                      onRemoveBackground={props.onRemoveBackground}
+                      showFormatBorder={props.showFormatBorder}
+                      onShowFormatBorderChange={props.onShowFormatBorderChange}
+                      filets={props.filets}
+                      onFiletsChange={props.onFiletsChange}
+                      segmentEditorActive={props.segmentEditorActive}
+                      segmentsRounded={props.segmentsRounded}
+                      onRoundAllSegments={props.onRoundAllSegments}
+                      isNodeEditMode={props.isNodeEditMode}
+                      onToggleNodeEditMode={props.onToggleNodeEditMode}
+                      selectedSegmentIndex={props.selectedSegmentIndex}
+                      onRoundSegmentConcave={props.onRoundSegmentConcave}
+                      onRoundSegmentConvex={props.onRoundSegmentConvex}
+                      onDeleteSegment={props.onDeleteSegment}
+                      onStraightenSegment={props.onStraightenSegment}
+                      isCutMode={props.isCutMode}
+                      onToggleCutMode={props.onToggleCutMode}
+                      isLineDrawMode={props.isLineDrawMode}
+                      onToggleLineDrawMode={props.onToggleLineDrawMode}
+                      lineSelected={props.lineSelected}
+                      lineIsRounded={props.lineIsRounded}
+                      onRoundLine={props.onRoundLine}
+                      lineChainCount={props.lineChainCount}
+                      lineColor={props.lineColor}
+                      onLineColorChange={props.onLineColorChange}
+                      lineStrokeWidth={props.lineStrokeWidth}
+                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
+                    />
+                  </div>
+                )}
+                {section.id === "collage" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 italic">
+                      {language === "fr"
+                        ? "Composition libre. Glissez des photos sur le canvas et disposez-les comme vous le souhaitez."
+                        : "Free composition. Drag photos onto the canvas and arrange them as you like."}
+                    </p>
+                  </div>
                 )}
                 {section.id === "texte" && (
                   <TexteSection
