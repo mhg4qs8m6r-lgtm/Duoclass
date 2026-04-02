@@ -170,6 +170,8 @@ export interface AssemblagePanelProps {
    * déplace chaque élément vers sa nouvelle position calculée.
    */
   onApplyBinPackLayout?: (placements: Array<{ id: string; x: number; y: number }>) => void;
+  /** Si fourni, seules les sections dont l'id est dans cette liste sont affichées */
+  visibleSections?: SectionId[];
   /**
    * Duplique un élément existant du canvas N fois,
    * en plaçant chaque copie aux coordonnées précalculées (en cm).
@@ -1599,7 +1601,7 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 // ---------------------------------------------------------------------------
 // Composant principal : AssemblagePanel
 // ---------------------------------------------------------------------------
-type SectionId =
+export type SectionId =
   | "passe-partout"
   | "montage-pp"
   | "pelemele-modele"
@@ -1618,7 +1620,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "passe-partout",    labelFr: "Passe-partout modèle",        labelEn: "Mat frame template",        icon: Frame              },
   { id: "montage-pp",       labelFr: "Montage / Passe-partout",     labelEn: "Montage / Mat frame",       icon: Frame              },
-  { id: "pelemele-modele",  labelFr: "Pêle-mêle modèle",           labelEn: "Collage template",          icon: RectangleHorizontal },
+  { id: "pelemele-modele",  labelFr: "Formes",                     labelEn: "Shapes",                    icon: RectangleHorizontal },
   { id: "montage-pelemele", labelFr: "Montage / Pêle-mêle",        labelEn: "Montage / Collage",         icon: RectangleHorizontal },
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
@@ -1633,9 +1635,13 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
     setOpenSection((prev) => (prev === id ? null : id));
   };
 
+  const filteredSections = props.visibleSections
+    ? SECTIONS.filter((s) => props.visibleSections!.includes(s.id))
+    : SECTIONS;
+
   return (
     <div className="space-y-1">
-      {SECTIONS.map((section) => {
+      {filteredSections.map((section) => {
         const isOpen = openSection !== null && openSection === section.id;
         const Icon = section.icon;
         return (

@@ -17,7 +17,7 @@ import { jsPDF } from "jspdf";
 
 // Import des panneaux d'outils (inline, pas de modales)
 import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
-import AssemblagePanel, { PassePartoutData, FiletConfig } from "./AssemblagePanel";
+import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
 import Collecteur from "../Collecteur";
 
 interface CreationsAtelierProps {
@@ -768,6 +768,23 @@ export default function CreationsAtelierV2({
   const [manualTool, setManualTool] = useState<ManualTool | null>(null);
   const [detouragePoints, setDetouragePoints] = useState<{x: number, y: number}[]>([]);
   const [isDetourageActive, setIsDetourageActive] = useState(false);
+  const [isDetourageSectionOpen, setIsDetourageSectionOpen] = useState(true);
+  const [showAllTools, setShowAllTools] = useState(false);
+
+  // Filtrage des outils selon le type de projet
+  const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
+    if (showAllTools) return { showDetourage: true, sections: null }; // null = tout afficher
+    const map: Record<string, { showDetourage: boolean; sections: SectionId[] }> = {
+      "Collage":                      { showDetourage: true,  sections: ["collage", "texte"] },
+      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte"] },
+      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte"] },
+      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte"] },
+      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte"] },
+      "Page de stickers":            { showDetourage: true,  sections: [] },
+    };
+    return map[currentProjectType] || { showDetourage: true, sections: null }; // Projet libre → tout
+  }, [currentProjectType, showAllTools]);
+
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
   // ─── État gomme sur le canvas principal ─────────────────────────────────────
@@ -4540,20 +4557,56 @@ export default function CreationsAtelierV2({
           
           {/* ZONE 1 : Onglets verticaux + Zone Outils */}
           <div className="w-80 bg-gray-50 border-r flex flex-col">
-            {/* Titre du panneau outils */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-white relative z-10 flex-shrink-0">
-              <Wrench className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-semibold text-purple-700">
-                {language === "fr" ? "Tous les outils" : "All tools"}
-              </span>
+            {/* En-tête panneau outils */}
+            <div className="px-4 py-3 border-b bg-white relative z-10 flex-shrink-0 space-y-2">
+              {/* Bouton toggle Tous les outils / Retour */}
+              <button
+                onClick={() => setShowAllTools(prev => !prev)}
+                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${
+                  showAllTools
+                    ? "bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
+                    : "bg-white text-purple-700 border-purple-300 hover:bg-purple-50"
+                }`}
+              >
+                <Wrench className="w-4 h-4" />
+                {showAllTools
+                  ? (language === "fr" ? "← Retour" : "← Back")
+                  : (language === "fr" ? "Tous les outils" : "All tools")}
+              </button>
+              {/* Titre du type de projet (masqué si Projet libre ou mode Tous les outils) */}
+              {!showAllTools && currentProjectType !== "Projet libre" && (
+                <p className="text-sm font-semibold text-purple-700 text-center">
+                  {currentProjectType}
+                </p>
+              )}
             </div>
-            
-{/* Barre de sous-onglets supprimée - remplacée par l'accordéon AssemblagePanel */}
             
             {/* Zone Outils - overflow-y-auto + min-h-0 garantit le défilement dans un flex-col */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-4">
-                {/* Détourage (toujours visible) */}
+                {/* Détourage (section accordéon) */}
+                {toolsFilter.showDetourage && (
+                <div className="border border-gray-200 rounded-lg overflow-hidden mb-1">
+                  <button
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
+                      isDetourageSectionOpen
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                    }`}
+                    onClick={() => setIsDetourageSectionOpen(prev => !prev)}
+                  >
+                    <Scissors className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm font-medium flex-1">
+                      {language === "fr" ? "Détourage" : "Cutout"}
+                    </span>
+                    {isDetourageSectionOpen ? (
+                      <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                    )}
+                  </button>
+                  {isDetourageSectionOpen && (
+                  <div className="p-3 bg-white">
                     <DetourageToolsPanel
                       activePhoto={activeCanvasPhoto}
                       selectedElementId={selectedElementId}
@@ -4643,7 +4696,12 @@ export default function CreationsAtelierV2({
                         )}
                       </div>
                     )}
-                {/* Assemblage (toujours visible, sous le détourage) */}
+                  </div>
+                  )}
+                </div>
+                )}
+                {/* Assemblage (sous le détourage) */}
+                {(toolsFilter.sections === null || toolsFilter.sections.length > 0) && (
                   <AssemblagePanel
                     canvasFormat={{
                       width: orientation === "portrait" ? paperFormat.width : paperFormat.height,
@@ -6067,7 +6125,9 @@ export default function CreationsAtelierV2({
                         return [...filtered, ...newElements];
                       });
                     }}
+                    visibleSections={toolsFilter.sections ?? undefined}
                   />
+                )}
               </div>
             </div>
           </div>
