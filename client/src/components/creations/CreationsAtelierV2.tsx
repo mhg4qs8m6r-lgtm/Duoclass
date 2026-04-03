@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Library, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Library, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -770,6 +770,7 @@ export default function CreationsAtelierV2({
   const [isDetourageActive, setIsDetourageActive] = useState(false);
   const [isDetourageSectionOpen, setIsDetourageSectionOpen] = useState(true);
   const [showAllTools, setShowAllTools] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Filtrage des outils selon le type de projet
   const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
@@ -4559,20 +4560,29 @@ export default function CreationsAtelierV2({
           <div className="w-80 bg-gray-50 border-r flex flex-col">
             {/* En-tête panneau outils */}
             <div className="px-4 py-3 border-b bg-white relative z-10 flex-shrink-0 space-y-2">
-              {/* Bouton toggle Tous les outils / Retour */}
-              <button
-                onClick={() => setShowAllTools(prev => !prev)}
-                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${
-                  showAllTools
-                    ? "bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
-                    : "bg-white text-purple-700 border-purple-300 hover:bg-purple-50"
-                }`}
-              >
-                <Wrench className="w-4 h-4" />
-                {showAllTools
-                  ? (language === "fr" ? "← Retour" : "← Back")
-                  : (language === "fr" ? "Tous les outils" : "All tools")}
-              </button>
+              {/* Bouton toggle Tous les outils / Retour + bouton Infos */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAllTools(prev => !prev)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${
+                    showAllTools
+                      ? "bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
+                      : "bg-white text-purple-700 border-purple-300 hover:bg-purple-50"
+                  }`}
+                >
+                  <Wrench className="w-4 h-4" />
+                  {showAllTools
+                    ? (language === "fr" ? "← Retour" : "← Back")
+                    : (language === "fr" ? "Tous les outils" : "All tools")}
+                </button>
+                <button
+                  onClick={() => setShowHelpModal(true)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border bg-white text-purple-700 border-purple-300 hover:bg-purple-50"
+                >
+                  <Info className="w-4 h-4" />
+                  Infos
+                </button>
+              </div>
               {/* Titre du type de projet (masqué si Projet libre ou mode Tous les outils) */}
               {!showAllTools && currentProjectType !== "Projet libre" && (
                 <p className="text-sm font-semibold text-purple-700 text-center">
@@ -9321,6 +9331,57 @@ export default function CreationsAtelierV2({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modale d'aide Atelier */}
+      {showHelpModal && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setShowHelpModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-purple-700 mb-4">🎨 {language === "fr" ? "Comment utiliser l'Atelier ?" : "How to use the Workshop?"}</h2>
+            <div className="space-y-3 text-sm text-gray-700">
+              <p>
+                {language === "fr"
+                  ? "Quand vous ouvrez un projet, seuls les outils nécessaires à votre type de création sont affichés."
+                  : "When you open a project, only the tools needed for your type of creation are displayed."}
+              </p>
+              <p className="font-semibold text-gray-800">
+                {language === "fr" ? "Besoin d'un outil supplémentaire ?" : "Need an extra tool?"}
+              </p>
+              <p>
+                {language === "fr"
+                  ? '→ Cliquez sur "Tous les outils" pour accéder à l\'ensemble des fonctions disponibles.'
+                  : '→ Click "All tools" to access all available functions.'}
+              </p>
+              <p>
+                {language === "fr"
+                  ? "→ Cliquez à nouveau pour revenir aux outils de votre projet."
+                  : "→ Click again to return to your project's tools."}
+              </p>
+              <p className="font-semibold text-gray-800">
+                {language === "fr" ? "Pour alimenter votre Collecteur :" : "To fill your Collector:"}
+              </p>
+              <p>
+                {language === "fr"
+                  ? "→ Fermez l'Atelier, allez dans Albums, sélectionnez vos images et envoyez-les dans le Collecteur. Votre projet est automatiquement sauvegardé."
+                  : "→ Close the Workshop, go to Albums, select your images and send them to the Collector. Your project is automatically saved."}
+              </p>
+              <p>
+                {language === "fr"
+                  ? "→ Ou glissez une image directement depuis votre bureau."
+                  : "→ Or drag an image directly from your desktop."}
+              </p>
+            </div>
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+              >
+                {language === "fr" ? "J'ai compris !" : "Got it!"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
