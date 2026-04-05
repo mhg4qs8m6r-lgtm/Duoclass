@@ -768,7 +768,7 @@ export default function CreationsAtelierV2({
   const [manualTool, setManualTool] = useState<ManualTool | null>(null);
   const [detouragePoints, setDetouragePoints] = useState<{x: number, y: number}[]>([]);
   const [isDetourageActive, setIsDetourageActive] = useState(false);
-  const [isDetourageSectionOpen, setIsDetourageSectionOpen] = useState(true);
+  const [isDetourageSectionOpen, setIsDetourageSectionOpen] = useState(false);
   const [showAllTools, setShowAllTools] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
@@ -782,6 +782,7 @@ export default function CreationsAtelierV2({
       "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte"] },
       "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte"] },
       "Page de stickers":            { showDetourage: true,  sections: [] },
+      "Puzzle":                      { showDetourage: true,  sections: ["puzzle", "texte"] },
     };
     return map[currentProjectType] || { showDetourage: true, sections: null }; // Projet libre → tout
   }, [currentProjectType, showAllTools]);
@@ -1290,10 +1291,8 @@ export default function CreationsAtelierV2({
                 setCanvasElements(savedData.canvasElements);
               }
               
-              // Restaurer les éléments du collecteur
-              if (savedData.collectorItems && Array.isArray(savedData.collectorItems)) {
-                setCollectorItems(savedData.collectorItems);
-              }
+              // Les éléments du collecteur sont gérés par la live query IndexedDB
+              // (ne PAS restaurer depuis canvasData, sinon les ajouts récents via "Envoyer vers" sont écrasés)
               
               // Restaurer le format papier
               if (savedData.paperFormat) {

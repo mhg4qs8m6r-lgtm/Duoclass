@@ -657,6 +657,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
             <option value="Pêle-mêle modèle">{language === "fr" ? "Pêle-mêle modèle" : "Photo montage template"}</option>
             <option value="Montage photos/Pêle-mêle">{language === "fr" ? "Montage photos/Pêle-mêle" : "Photo montage/Collage"}</option>
             <option value="Page de stickers">{language === "fr" ? "Page de stickers" : "Sticker page"}</option>
+            <option value="Puzzle">{language === "fr" ? "Puzzle" : "Puzzle"}</option>
           </select>
         </div>
 
