@@ -2700,40 +2700,17 @@ export default function CreationsAtelierV2({
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
 
-  // Mapper le type de projet vers l'album de destination
-  const getDestinationAlbumId = (projectType: string): string => {
-    const typeMap: Record<string, string> = {
-      'Collage': 'album_creations_collages_finis',
-      'Passe-partout': 'album_creations_modeles_passe_partout',
-      'Pêle-mêle': 'album_creations_modeles_pele_mele',
-      'Montage photos/Pêle-mêle': 'album_creations_montages_finis',
-      'Montage photos/Passe-partout': 'album_creations_montages_finis',
-      'Page de stickers': 'album_creations_stickers',
-      'Puzzle': 'album_creations_puzzle',
-    };
-    return typeMap[projectType] || 'album_creations_collages_finis';
-  };
-
-  const getDestinationAlbumName = (projectType: string): string => {
-    const nameMap: Record<string, string> = {
-      'Collage': 'Collages finis',
-      'Passe-partout': 'Modèles passe-partout',
-      'Pêle-mêle': 'Modèles pêle-mêle',
-      'Montage photos/Pêle-mêle': 'Montages finis',
-      'Montage photos/Passe-partout': 'Montages finis',
-      'Page de stickers': 'Stickers',
-      'Puzzle': 'Puzzle',
-    };
-    return nameMap[projectType] || 'Collages finis';
-  };
+  // Album de destination : "Images projets" (catégorie cat_mes_projets)
+  const IMAGES_PROJETS_ALBUM_ID = 'album_images_projets';
+  const IMAGES_PROJETS_ALBUM_NAME = 'Images projets';
 
   // Sauver comme : capture l'image et la sauvegarde dans l'album de destination selon le type du projet
   const handleSaveAs = async () => {
     if (isExporting) return;
     setIsExporting(true);
     const collageName = currentProjectName || (language === 'fr' ? 'Mon Collage' : 'My Collage');
-    const destAlbumId = getDestinationAlbumId(currentProjectType);
-    const destAlbumName = getDestinationAlbumName(currentProjectType);
+    const destAlbumId = IMAGES_PROJETS_ALBUM_ID;
+    const destAlbumName = IMAGES_PROJETS_ALBUM_NAME;
     toast.info(language === 'fr' ? 'Capture du collage en cours...' : 'Capturing collage...');
     try {
       const canvas = await captureCanvas(3); // Haute résolution
@@ -2792,6 +2769,18 @@ export default function CreationsAtelierV2({
           frames: [newFrame],
           updatedAt: Date.now(),
         } as any);
+        // Créer aussi le album_meta pour que l'album apparaisse dans la catégorie "Images projets"
+        const existingMeta = await db.album_metas.get(destAlbumId);
+        if (!existingMeta) {
+          await db.album_metas.put({
+            id: destAlbumId,
+            title: destAlbumName,
+            type: 'standard',
+            series: 'photoclass',
+            createdAt: Date.now(),
+            categoryId: 'cat_mes_projets',
+          });
+        }
       }
       toast.success(
         language === 'fr'
@@ -8576,16 +8565,13 @@ export default function CreationsAtelierV2({
             {/* Actions projet */}
             <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting || canvasElements.length === 0}>
               <ImagePlus className="w-3.5 h-3.5" />
-              {isExporting ? (language === "fr" ? "Export..." : "Exporting...") : (language === "fr" ? "Exporter l'image" : "Export image")}
+              {isExporting ? (language === "fr" ? "Sauvegarde..." : "Saving...") : (language === "fr" ? "Sauver l'image" : "Save image")}
             </Button>
 
             <Button
               size="sm"
               className="gap-1 text-xs h-7 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md"
-              onClick={() => {
-                setSaveCategoryChoice('en_cours');
-                setShowSaveCategoryModal(true);
-              }}
+              onClick={() => handleSaveProject('finis')}
             >
               <Save className="w-3.5 h-3.5" />
               {language === "fr" ? "Sauvegarder le projet" : "Save project"}

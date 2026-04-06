@@ -251,7 +251,7 @@ export default function Layout(props: LayoutProps) {
           <div className="flex items-center gap-4 w-[350px]">
             {/* Window Controls (Mac-style) */}
             <div className="flex gap-2 shrink-0">
-              <div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600 hover:bg-red-600 cursor-pointer shadow-sm" title={t('common.close')}></div>
+              <div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600 shadow-sm"></div>
               <div className="w-3.5 h-3.5 rounded-full bg-yellow-400 border border-yellow-500 hover:bg-yellow-500 cursor-pointer shadow-sm" title={t('common.minimize')}></div>
               <div className="w-3.5 h-3.5 rounded-full bg-green-500 border border-green-600 hover:bg-green-600 cursor-pointer shadow-sm" title={t('common.maximize')}></div>
             </div>

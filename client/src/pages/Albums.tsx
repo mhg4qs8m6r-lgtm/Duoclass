@@ -68,7 +68,7 @@ export default function Albums() {
     return title;
   };
 
-  // Fonction pour trier avec "NON CLASSEE" en premier, "MES PROJETS" en second, puis "MES COLLAGES"
+  // Fonction pour trier avec "NON CLASSEE" en premier, puis "MES PROJETS", "MES COLLAGES"
   const sortWithNonClasseeFirst = (items: any[], labelField: string = 'label') => {
     return [...items].sort((a, b) => {
       const normalize = (val: string) => val.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -111,14 +111,14 @@ export default function Albums() {
     });
   };
 
-  // Filtrer les catégories par type de média (exclure les catégories privées)
-  // {t('albums.photosVideos')} : uniquement les catégories PhotoClass standard
+  // Filtrer les catégories par type de média (exclure les catégories privées et Créations)
   const photoCategories = sortWithNonClasseeFirst(
     categories?.filter(c =>
       c.accessType !== 'secure' &&
       c.series === 'photoclass' &&
-      c.id !== 'cat_mes_projets' &&
       c.id !== 'cat_creations' &&
+      !c.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('CREATIONS') &&
+      c.id !== 'cat_mes_projets' &&
       !c.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('MES PROJETS')
     ) || []
   );
@@ -133,40 +133,9 @@ export default function Albums() {
 
   // Plus d'auto-sélection : les colonnes Albums restent vides tant qu'on ne clique pas sur une catégorie
 
-  // IDs des albums fixes Créations (non effaçables)
-  const CREATIONS_FIXED_ALBUM_IDS = [
-    'album_creations_cliparts',
-    'album_creations_modeles_passe_partout',
-    'album_creations_modeles_pele_mele',
-    'album_creations_projets_en_cours',
-    'album_creations_collages_finis',
-    'album_creations_montages_finis',
-    'album_creations_stickers',
-    'album_creations_puzzle',
-  ];
-
-  const isCreationsFixedAlbum = (album: AlbumMeta) => CREATIONS_FIXED_ALBUM_IDS.includes(album.id);
-
-  // Albums filtrés strictement par categoryId de la catégorie sélectionnée
-  const creationsFixedAlbums = albums?.filter(a => CREATIONS_FIXED_ALBUM_IDS.includes(a.id) && a.id !== 'album_creations_projets_en_cours') || [];
-
-  // Détecter si la catégorie photo sélectionnée est "Images projets" (MES PROJETS)
-  const selectedPhotoIsMesProjets = (() => {
-    if (!selectedPhotoCategory) return false;
-    if (selectedPhotoCategory === 'cat_mes_projets') return true;
-    const cat = categories?.find(c => c.id === selectedPhotoCategory);
-    if (!cat) return false;
-    const normalized = cat.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return normalized.includes('MES PROJETS');
-  })();
-
   const photoAlbums = selectedPhotoCategory
     ? sortAlbumsWithNonClasseesFirst(
-        selectedPhotoIsMesProjets
-          // "Images projets" : albums de cette catégorie + albums fixes Créations (categoryId: cat_creations)
-          ? [...(albums?.filter(a => a.categoryId === selectedPhotoCategory) || []), ...creationsFixedAlbums]
-          // Autres catégories : filtrage strict par categoryId
-          : albums?.filter(a => a.categoryId === selectedPhotoCategory) || []
+        albums?.filter(a => a.categoryId === selectedPhotoCategory) || []
       )
     : [];
   const docAlbums = selectedDocCategory
@@ -217,7 +186,7 @@ export default function Albums() {
 
   // === SUPPRESSION ===
   
-  // Vérifier si une catégorie est protégée (NON CLASSEE, MES COLLAGES, CRÉATIONS)
+  // Vérifier si une catégorie est protégée (NON CLASSEE, MES COLLAGES, MES PROJETS)
   const isProtectedCategory = (category: any) => {
     const label = category.label?.toUpperCase() || '';
     const normalized = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -225,10 +194,8 @@ export default function Albums() {
            label.includes('NON CLASSÉES') ||
            label.includes('MES COLLAGES') ||
            normalized.includes('MES PROJETS') ||
-           label.includes('CRÉATIONS') ||
            category.id === 'cat_mes_collages' ||
-           category.id === 'cat_mes_projets' ||
-           category.id === 'cat_creations';
+           category.id === 'cat_mes_projets';
   };
   
   // Alias pour compatibilité
@@ -243,8 +210,7 @@ export default function Albums() {
     return album.title?.toLowerCase().includes('non classées') ||
            album.title?.toLowerCase().includes('non classee') ||
            album.id === 'album_mes_collages' ||
-           album.id === MODELES_STICKERS_ALBUM_ID ||
-           album.id?.startsWith('album_creations_');
+           album.id === MODELES_STICKERS_ALBUM_ID;
   };
 
   // Supprimer une catégorie
@@ -418,16 +384,7 @@ export default function Albums() {
 
   // Compter les albums par catégorie
   const getAlbumCount = (categoryId: string) => {
-    const count = (albums?.filter(a => a.categoryId === categoryId) || []).length;
-    // Pour "Images projets" : ajouter les albums fixes Créations
-    const cat = categories?.find(c => c.id === categoryId);
-    if (cat) {
-      const normalized = cat.label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (normalized.includes('MES PROJETS') || categoryId === 'cat_mes_projets') {
-        return count + creationsFixedAlbums.length;
-      }
-    }
-    return count;
+    return (albums?.filter(a => a.categoryId === categoryId) || []).length;
   };
 
   // Obtenir l'icône appropriée pour une catégorie (images PNG comme dans le formulaire de création)

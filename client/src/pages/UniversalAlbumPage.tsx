@@ -2747,16 +2747,16 @@ export default function UniversalAlbumPage({
       {/* FIL D'ARIANE (BREADCRUMB) */}
       <div className="bg-gradient-to-r from-gray-50 to-white border-b px-4 py-2 shrink-0">
         <nav className="flex items-center gap-2 text-sm">
-          {/* Lien vers Albums ou Albums Privés */}
+          {/* Lien vers Atelier, Albums ou Albums Privés */}
           <button
-            onClick={() => setLocation(albumType === 'secure' ? '/albums-prives' : '/albums')}
+            onClick={() => setLocation(albumType === 'secure' ? '/albums-prives' : currentAlbumCategory?.id === 'cat_mes_projets' ? '/atelier' : '/albums')}
             className={`font-medium hover:underline transition-colors ${
-              albumType === 'secure' 
-                ? 'text-purple-600 hover:text-purple-800' 
+              albumType === 'secure'
+                ? 'text-purple-600 hover:text-purple-800'
                 : 'text-blue-600 hover:text-blue-800'
             }`}
           >
-            {albumType === 'secure' ? language === 'fr' ? 'Albums Privés' : 'Private Albums' : 'Albums'}
+            {albumType === 'secure' ? (language === 'fr' ? 'Albums Privés' : 'Private Albums') : currentAlbumCategory?.id === 'cat_mes_projets' ? (language === 'fr' ? 'Projets' : 'Projects') : 'Albums'}
           </button>
           
           {/* Séparateur */}
@@ -2843,10 +2843,19 @@ export default function UniversalAlbumPage({
               ← Retour Albums Privés
             </Button>
           )}
-          {/* Bouton Changer d'album pour les albums standards */}
-          {currentAlbumId && albumType !== 'secure' && (
-            <Button 
-              variant="ghost" 
+          {/* Bouton Retour : vers Atelier si album "Images projets", sinon vers Albums */}
+          {currentAlbumId && albumType !== 'secure' && currentAlbumCategory?.id === 'cat_mes_projets' && (
+            <Button
+              variant="ghost"
+              className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              onClick={() => setLocation('/atelier')}
+            >
+              ← {language === 'fr' ? 'Retour Projets' : 'Back to Projects'}
+            </Button>
+          )}
+          {currentAlbumId && albumType !== 'secure' && currentAlbumCategory?.id !== 'cat_mes_projets' && (
+            <Button
+              variant="ghost"
               className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
               onClick={() => setLocation('/albums')}
             >
