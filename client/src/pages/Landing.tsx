@@ -167,8 +167,8 @@ export default function Landing() {
       icon: Camera,
       gradient: "from-cyan-400 to-blue-500",
       description: fr
-        ? "Classez vos photos par albums et catégories — organisez chaque photo individuellement, sans déranger les autres."
-        : "Sort your photos by albums and categories — organize each photo individually without disturbing the others.",
+        ? "DuoClass vous permet de créer autant d'albums et de catégories que vous le souhaitez. Créez et organisez vos photos, vidéos familiales et documents exactement comme vous en avez envie. Utilisez des catégories par thème — Famille, Voyages, Travail... — puis organisez vos albums à l'intérieur. Vos albums privés sont protégés par un mot de passe, vous permettant de conserver des souvenirs en toute discrétion. Triez, retouchez, imprimez, envoyez par @Mail, convertissez vos formats... toutes ces fonctions sont à votre disposition !"
+        : "DuoClass lets you create as many albums and categories as you want. Create and organize your photos, family videos and documents exactly the way you like. Use themed categories — Family, Travel, Work... — then organize your albums within them. Your private albums are password-protected, letting you keep memories in complete privacy. Sort, retouch, print, send by email, convert formats... all these features are at your fingertips!",
       placeholder: fr ? "Vidéo de démonstration à venir" : "Demo video coming soon",
       placeholderIcon: Play,
     },
@@ -178,8 +178,8 @@ export default function Landing() {
       icon: Sparkles,
       gradient: "from-pink-400 to-purple-500",
       description: fr
-        ? "Retouchez vos images avec de multiples effets\u00A0: Noir & Blanc, Sépia, Aquarelle, Peinture à l'huile, et bien plus encore."
-        : "Retouch your images with multiple effects: Black & White, Sepia, Watercolor, Oil Painting, and much more.",
+        ? "DuoClass met à votre disposition un ensemble d'outils de retouche pour magnifier vos photos sans quitter l'application. Vous disposez de 3 niveaux de retouche : retouche magique, manuelle et avancée pour modifier, améliorer et sublimer vos photos. Ajustez la luminosité, le contraste, la saturation et la netteté en quelques glissements. Appliquez des effets artistiques pour donner une atmosphère unique à vos images. Recadrez, faites pivoter, corrigez les yeux rouges — toutes les retouches essentielles sont là, simples et intuitives. Vos photos originales sont toujours préservées — vous pouvez revenir en arrière à tout moment."
+        : "DuoClass provides a full set of retouching tools to enhance your photos without leaving the app. You get 3 levels of retouching: magic, manual and advanced to edit, improve and transform your photos. Adjust brightness, contrast, saturation and sharpness with a few swipes. Apply artistic effects to give your images a unique atmosphere. Crop, rotate, fix red eyes — all essential retouching tools are there, simple and intuitive. Your original photos are always preserved — you can revert at any time.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
     },
@@ -189,8 +189,8 @@ export default function Landing() {
       icon: Scissors,
       gradient: "from-orange-400 to-red-500",
       description: fr
-        ? "Créez des détourages, collages, passe-partout, pêle-mêle et puzzles pour découpe laser."
-        : "Create cutouts, collages, matting, montages and puzzles for laser cutting.",
+        ? "L'Atelier Créatif de DuoClass vous ouvre un espace de création unique pour donner vie à vos plus beaux souvenirs et plus encore... à votre imagination ! Créez des collages, montages, pêle-mêles, passe-partout, pages de stickers et même des puzzles — tout est possible avec vos propres photos ou des images. Chaque projet est sauvegardé automatiquement. Reprenez votre création à tout moment, ajoutez des images depuis vos albums, retouchez, ajoutez du texte et des effets typographiques. Une fois satisfait, téléchargez, imprimez ou partagez votre création directement depuis l'Atelier."
+        : "The DuoClass Creative Workshop opens a unique creative space to bring your most beautiful memories to life and more... your imagination! Create collages, montages, photo mixes, matting, sticker pages and even puzzles — anything is possible with your own photos or images. Each project is saved automatically. Resume your creation at any time, add images from your albums, retouch, add text and typographic effects. Once satisfied, download, print or share your creation directly from the Workshop.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
     },
@@ -200,8 +200,8 @@ export default function Landing() {
       icon: Send,
       gradient: "from-emerald-400 to-teal-500",
       description: fr
-        ? "Importez, imprimez, envoyez par @Mail, convertissez les formats et créez des diaporamas."
-        : "Import, print, send by email, convert formats and create slideshows.",
+        ? "DuoClass vous permet d'importer facilement vos photos et documents depuis votre appareil, sa carte SD ou votre ordinateur. Faites des selfies directement à partir de la caméra de votre PC ou portable ! Importez en quelques clics depuis votre Mac ou PC. DuoClass accepte tous les formats courants — JPEG, PNG, HEIC, PDF, vidéos et bien d'autres. Partagez vos albums et créations avec votre famille et vos proches en un clic — par @Mail directement depuis l'application. Convertissez vos formats, imprimez, téléchargez — tout ce dont vous avez besoin pour partager vos souvenirs est réuni au même endroit."
+        : "DuoClass lets you easily import your photos and documents from your device, its SD card or your computer. Take selfies directly from your PC or laptop camera! Import in a few clicks from your Mac or PC. DuoClass accepts all common formats — JPEG, PNG, HEIC, PDF, videos and many more. Share your albums and creations with family and loved ones in one click — by email directly from the app. Convert formats, print, download — everything you need to share your memories is gathered in one place.",
       placeholder: null,
       placeholderIcon: null,
     },
@@ -211,8 +211,8 @@ export default function Landing() {
       icon: Shield,
       gradient: "from-purple-400 to-indigo-500",
       description: fr
-        ? "Sécurisez vos albums privés avec un code personnel — vos documents deviennent confidentiels, vos souvenirs restent discrets."
-        : "Secure your private albums with a personal code — your documents and memories stay private.",
+        ? "DuoClass vous offre la possibilité de protéger vos photos et documents personnels, privés, dans des albums accessibles uniquement par vous. Chaque album privé est protégé par un mot de passe de votre choix. Vos souvenirs restent à l'abri des regards indiscrets, en toute sérénité. Créez autant d'albums privés que vous le souhaitez — photos de famille, documents personnels, contrats, documents juridiques, souvenirs intimes — tout ce que vous souhaitez garder rien que pour vous."
+        : "DuoClass lets you protect your personal, private photos and documents in albums accessible only by you. Each private album is protected by a password of your choice. Your memories stay safe from prying eyes, in complete peace of mind. Create as many private albums as you wish — family photos, personal documents, contracts, legal documents, intimate memories — everything you want to keep just for yourself.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
     },
@@ -222,8 +222,8 @@ export default function Landing() {
       icon: ShieldCheck,
       gradient: "from-violet-500 to-purple-600",
       description: fr
-        ? "Protégez vos enfants avec le contrôle parental intégré et détectez automatiquement les photos en double pour libérer de l'espace."
-        : "Protect your children with built-in parental controls and automatically detect duplicate photos to free up space.",
+        ? "DuoClass intègre un contrôle parental pour protéger les plus jeunes. Grâce à un curseur de progression, définissez le niveau d'accès global aux contenus sensibles sur l'appareil. Une application familiale en toute sécurité. Avec le temps, les photos en double s'accumulent et occupent inutilement de l'espace. DuoClass détecte automatiquement vos photos en double et vous propose en un clic de les supprimer, de les conserver en cas de retouches, ou de faire votre choix ultérieurement. Libérez de l'espace, gardez vos albums propres et bien organisés — sans effort !"
+        : "DuoClass includes parental controls to protect younger users. With a progress slider, set the overall access level to sensitive content on the device. A family app in complete safety. Over time, duplicate photos pile up and waste space. DuoClass automatically detects your duplicate photos and lets you delete them in one click, keep them in case of retouching, or decide later. Free up space, keep your albums clean and well organized — effortlessly!",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
     },

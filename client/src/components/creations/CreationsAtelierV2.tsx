@@ -9404,6 +9404,11 @@ export default function CreationsAtelierV2({
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-purple-700 mb-4">🎨 {language === "fr" ? "Comment utiliser l'Atelier ?" : "How to use the Workshop?"}</h2>
             <div className="space-y-3 text-sm text-gray-700">
+              <p className="text-amber-700 font-semibold">
+                {language === "fr"
+                  ? "⚠️ Important : chaque modification doit être validée manuellement. Après chaque changement, pensez à cliquer sur le bouton de validation pour que celui-ci soit bien pris en compte."
+                  : "⚠️ Important: each change must be validated manually. After each modification, remember to click the validation button to confirm it."}
+              </p>
               <p>
                 {language === "fr"
                   ? "Quand vous ouvrez un projet, seuls les outils nécessaires à votre type de création sont affichés."
