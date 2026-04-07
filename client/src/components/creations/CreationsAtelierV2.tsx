@@ -334,7 +334,7 @@ function buildPuzzlePath(
     }
 
     // Bord gauche : (0,h) → (0,0)
-    if (left === 0) { if (showBorder) s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push(`L${ox},${oy}`); }
     else {
       const d = left, cx = ox, cy = oy + pcy;
       const sw = d > 0 ? 1 : 0;
@@ -344,7 +344,7 @@ function buildPuzzlePath(
       s.push(`A${headR},${headR} 0 0,${sw} ${apxX},${cy}`);
       s.push(`A${headR},${headR} 0 0,${sw} ${cx - d * neckH},${cy - neckW}`);
       s.push(`L${cx},${cy - neckW}`);
-      s.push('Z');
+      s.push(`L${ox},${oy}`);
     }
     return s.join(' ');
   }
@@ -379,12 +379,12 @@ function buildPuzzlePath(
       s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx - nr},${oy + h}`);
       s.push(`L${ox},${oy + h}`);
     }
-    if (left === 0) { if (showBorder) s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push(`L${ox},${oy}`); }
     else {
       const sweep = left > 0 ? 0 : 1;
       s.push(`L${ox},${oy + pcy + nr}`);
       s.push(`A${nr},${nr} 0 0,${sweep} ${ox},${oy + pcy - nr}`);
-      s.push('Z');
+      s.push(`L${ox},${oy}`);
     }
     return s.join(' ');
   }
@@ -421,12 +421,12 @@ function buildPuzzlePath(
       s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx - nr},${oy + h}`);
       s.push(`L${ox},${oy + h}`);
     }
-    if (left === 0) { if (showBorder) s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push(`L${ox},${oy}`); }
     else {
       const sweep = left > 0 ? 0 : 1;
       s.push(`L${ox},${oy + pcy + nr}`);
       s.push(`A${nr},${nr} 0 0,${sweep} ${ox},${oy + pcy - nr}`);
-      s.push('Z');
+      s.push(`L${ox},${oy}`);
     }
     return s.join(' ');
   }

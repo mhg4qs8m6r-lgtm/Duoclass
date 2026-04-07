@@ -1357,13 +1357,13 @@ function buildPuzzlePathLocal(
       s.push(`C${cx - headR * k},${cy + d * apexH} ${cx - headR},${cy + d * neckH} ${cx - neckW},${cy + d * neckH}`);
       s.push(`L${cx - neckW},${cy}`); s.push(`L0,${h}`);
     }
-    if (left === 0) { if (showBorder) s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push('L0,0'); }
     else {
       const d = left, cx = 0, cy = pcy;
       s.push(`L${cx},${cy + neckW}`); s.push(`L${cx - d * neckH},${cy + neckW}`);
       s.push(`C${cx - d * neckH},${cy + headR} ${cx - d * apexH},${cy + headR * k} ${cx - d * apexH},${cy}`);
       s.push(`C${cx - d * apexH},${cy - headR * k} ${cx - d * neckH},${cy - headR} ${cx - d * neckH},${cy - neckW}`);
-      s.push(`L${cx},${cy - neckW}`); s.push('Z');
+      s.push(`L${cx},${cy - neckW}`); s.push('L0,0');
     }
     return s.join(' ');
   }
@@ -1380,8 +1380,8 @@ function buildPuzzlePathLocal(
     else { s.push(`L${w},${pcy - nr}`); s.push(`A${nr},${nr} 0 0,${right > 0 ? 0 : 1} ${w},${pcy + nr}`); s.push(`L${w},${h}`); }
     if (bottom === 0) { s.push(`${lm(true)}0,${h}`); }
     else { s.push(`L${pcx + nr},${h}`); s.push(`A${nr},${nr} 0 0,${bottom > 0 ? 0 : 1} ${pcx - nr},${h}`); s.push(`L0,${h}`); }
-    if (left === 0) { if (showBorder) s.push('Z'); }
-    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push('L0,0'); }
+    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('L0,0'); }
     return s.join(' ');
   }
 
@@ -1397,8 +1397,8 @@ function buildPuzzlePathLocal(
     else { s.push(`L${w},${pcy - nr}`); s.push(`A${nr},${nr} 0 0,${right > 0 ? 0 : 1} ${w},${pcy + nr}`); s.push(`L${w},${h}`); }
     if (bottom === 0) { s.push(`${lm(true)}0,${h}`); }
     else { s.push(`L${pcx + nr},${h}`); s.push(`A${nr},${nr} 0 0,${bottom > 0 ? 0 : 1} ${pcx - nr},${h}`); s.push(`L0,${h}`); }
-    if (left === 0) { if (showBorder) s.push('Z'); }
-    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('Z'); }
+    if (left === 0) { if (showBorder) s.push('L0,0'); }
+    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('L0,0'); }
     return s.join(' ');
   }
 }
