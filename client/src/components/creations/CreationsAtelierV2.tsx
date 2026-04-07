@@ -92,6 +92,12 @@ interface CanvasElement {
   puzzleTransparent?: boolean;
   /** Taille des numéros de pièces (small=20%, medium=35%, large=55% de la plus petite dimension) */
   puzzleNumberSize?: 'small' | 'medium' | 'large';
+  /** Modèle de découpe du puzzle */
+  puzzleCutStyle?: 'classique' | 'geometrique' | 'enfant';
+  /** Afficher la bordure extérieure du puzzle */
+  puzzleShowBorder?: boolean;
+  /** Graines par bord pour le style aléatoire (identiques entre pièces adjacentes) */
+  puzzleEdgeSeeds?: { top: number; right: number; bottom: number; left: number };
   /** Nombre de branches de l'étoile (3 à 8, défaut 5) */
   starBranches?: number;
   /** Profondeur de l'encoche du cœur (0=cœur plat, 100=cœur profond, défaut 50) */
@@ -246,76 +252,184 @@ const CanvasImage = ({ src, className, dataElementId }: { src: string; className
 };
 
 /**
- * Génère le SVG path d'une pièce de puzzle avec encoches Bezier.
- * @param w Largeur de la pièce (en unités quelconques : px, mm, cm)
- * @param h Hauteur de la pièce
- * @param edges { top, right, bottom, left } : 1=tenon sortant, -1=mortaise rentrante, 0=bord droit
- * @returns string SVG path (d attribut), coordonnées relatives à (0,0)
+ * Génère le SVG path d'une pièce de puzzle avec encoches.
+ * 3 styles, tous avec emboîtement garanti.
+ *
+ * @param cutStyle
+ *   - classique   : vraie encoche puzzle avec col étroit + tête ronde (style Ravensburger)
+ *   - geometrique : demi-cercles parfaits via SVG arc (A)
+ *   - enfant      : demi-cercles larges (arc A, rayon 25 %)
  */
+type PuzzleCutStyle = 'classique' | 'geometrique' | 'enfant';
+
 function buildPuzzlePath(
   w: number,
   h: number,
-  edges: { top: number; right: number; bottom: number; left: number }
+  edges: { top: number; right: number; bottom: number; left: number },
+  cutStyle: PuzzleCutStyle = 'classique',
+  showBorder: boolean = true,
+  ox: number = 0,
+  oy: number = 0,
+  _edgeSeeds?: { top: number; right: number; bottom: number; left: number }
 ): string {
-  const nr = Math.min(w, h) * 0.12; // rayon du tenon (fin pour découpe laser)
-  const pcx = w / 2, pcy = h / 2;
   const { top, right, bottom, left } = edges;
+  const lm = (isFlat: boolean) => (!showBorder && isFlat) ? 'M' : 'L';
 
-  // Segment de bord avec encoche :
-  // dir=1 tenon sortant, dir=-1 mortaise rentrante, dir=0 bord droit
-  // Pour le bord haut (gauche→droite) : tenon sort vers y négatif
-  // Pour le bord droit (haut→bas) : tenon sort vers x positif
-  // Pour le bord bas (droite→gauche) : tenon sort vers y positif
-  // Pour le bord gauche (bas→haut) : tenon sort vers x négatif
+  // ────────────────────────────────────────────────────────────────────────────
+  // CLASSIQUE — Encoche puzzle : col étroit + tête = cercle parfait (2 arcs SVG A)
+  //   Ligne droite → col → cercle complet (2 semi-arcs via apex) → col → ligne droite
+  //   sweep uniforme : d>0 → clockwise (1), d<0 → counter-clockwise (0)
+  // ────────────────────────────────────────────────────────────────────────────
+  if (cutStyle === 'classique') {
+    const base = Math.min(w, h);
+    const S = 0.75;                                    // facteur d'échelle global
+    const neckW = base * 0.10 * S * 0.56;               // demi-largeur col (× 0.5 × 1.12)
+    const headR = base * 0.25 * S * 0.56;              // rayon tête (× 0.5 × 1.12)
+    const neckH = base * 0.10 * S;                     // hauteur col (bord → jonction cercle)
+    const yOff = Math.sqrt(headR * headR - neckW * neckW); // distance jonction col → centre cercle
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
 
-  const segments: string[] = [];
+    // Bord haut : (0,0) → (w,0)
+    s.push(`M${ox},${oy}`);
+    if (top === 0) { s.push(`${lm(true)}${ox + w},${oy}`); }
+    else {
+      const d = top, cx = ox + pcx, cy = oy;
+      const sw = d > 0 ? 1 : 0;
+      const apxY = cy - d * (neckH + yOff + headR);
+      s.push(`L${cx - neckW},${cy}`);
+      s.push(`L${cx - neckW},${cy - d * neckH}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx},${apxY}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx + neckW},${cy - d * neckH}`);
+      s.push(`L${cx + neckW},${cy}`);
+      s.push(`L${ox + w},${oy}`);
+    }
 
-  // --- Bord haut : de (0,0) vers (w,0), tenon vers y négatif ---
-  segments.push(`M0,0`);
-  if (top === 0) {
-    segments.push(`L${w},0`);
-  } else {
-    const d = top; // 1=sortant vers haut, -1=rentrant vers bas
-    segments.push(`L${pcx - nr},0`);
-    segments.push(`C${pcx - nr},${-d * nr * 0.5} ${pcx - nr * 0.5},${-d * nr * 1.3} ${pcx},${-d * nr * 1.3}`);
-    segments.push(`C${pcx + nr * 0.5},${-d * nr * 1.3} ${pcx + nr},${-d * nr * 0.5} ${pcx + nr},0`);
-    segments.push(`L${w},0`);
+    // Bord droit : (w,0) → (w,h)
+    if (right === 0) { s.push(`${lm(true)}${ox + w},${oy + h}`); }
+    else {
+      const d = right, cx = ox + w, cy = oy + pcy;
+      const sw = d > 0 ? 1 : 0;
+      const apxX = cx + d * (neckH + yOff + headR);
+      s.push(`L${cx},${cy - neckW}`);
+      s.push(`L${cx + d * neckH},${cy - neckW}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${apxX},${cy}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx + d * neckH},${cy + neckW}`);
+      s.push(`L${cx},${cy + neckW}`);
+      s.push(`L${ox + w},${oy + h}`);
+    }
+
+    // Bord bas : (w,h) → (0,h)
+    if (bottom === 0) { s.push(`${lm(true)}${ox},${oy + h}`); }
+    else {
+      const d = bottom, cx = ox + pcx, cy = oy + h;
+      const sw = d > 0 ? 1 : 0;
+      const apxY = cy + d * (neckH + yOff + headR);
+      s.push(`L${cx + neckW},${cy}`);
+      s.push(`L${cx + neckW},${cy + d * neckH}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx},${apxY}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx - neckW},${cy + d * neckH}`);
+      s.push(`L${cx - neckW},${cy}`);
+      s.push(`L${ox},${oy + h}`);
+    }
+
+    // Bord gauche : (0,h) → (0,0)
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else {
+      const d = left, cx = ox, cy = oy + pcy;
+      const sw = d > 0 ? 1 : 0;
+      const apxX = cx - d * (neckH + yOff + headR);
+      s.push(`L${cx},${cy + neckW}`);
+      s.push(`L${cx - d * neckH},${cy + neckW}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${apxX},${cy}`);
+      s.push(`A${headR},${headR} 0 0,${sw} ${cx - d * neckH},${cy - neckW}`);
+      s.push(`L${cx},${cy - neckW}`);
+      s.push('Z');
+    }
+    return s.join(' ');
   }
 
-  // --- Bord droit : de (w,0) vers (w,h), tenon vers x positif ---
-  if (right === 0) {
-    segments.push(`L${w},${h}`);
-  } else {
-    const d = right;
-    segments.push(`L${w},${pcy - nr}`);
-    segments.push(`C${w + d * nr * 0.5},${pcy - nr} ${w + d * nr * 1.3},${pcy - nr * 0.5} ${w + d * nr * 1.3},${pcy}`);
-    segments.push(`C${w + d * nr * 1.3},${pcy + nr * 0.5} ${w + d * nr * 0.5},${pcy + nr} ${w},${pcy + nr}`);
-    segments.push(`L${w},${h}`);
+  // ────────────────────────────────────────────────────────────────────────────
+  // GÉOMÉTRIQUE — Demi-cercles parfaits via commande SVG Arc (A)
+  // ────────────────────────────────────────────────────────────────────────────
+  if (cutStyle === 'geometrique') {
+    const nr = Math.min(w, h) * 0.15;
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
+
+    s.push(`M${ox},${oy}`);
+    if (top === 0) { s.push(`${lm(true)}${ox + w},${oy}`); }
+    else {
+      const sweep = top > 0 ? 0 : 1;
+      s.push(`L${ox + pcx - nr},${oy}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx + nr},${oy}`);
+      s.push(`L${ox + w},${oy}`);
+    }
+    if (right === 0) { s.push(`${lm(true)}${ox + w},${oy + h}`); }
+    else {
+      const sweep = right > 0 ? 0 : 1;
+      s.push(`L${ox + w},${oy + pcy - nr}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + w},${oy + pcy + nr}`);
+      s.push(`L${ox + w},${oy + h}`);
+    }
+    if (bottom === 0) { s.push(`${lm(true)}${ox},${oy + h}`); }
+    else {
+      const sweep = bottom > 0 ? 0 : 1;
+      s.push(`L${ox + pcx + nr},${oy + h}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx - nr},${oy + h}`);
+      s.push(`L${ox},${oy + h}`);
+    }
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else {
+      const sweep = left > 0 ? 0 : 1;
+      s.push(`L${ox},${oy + pcy + nr}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox},${oy + pcy - nr}`);
+      s.push('Z');
+    }
+    return s.join(' ');
   }
 
-  // --- Bord bas : de (w,h) vers (0,h), tenon vers y positif ---
-  if (bottom === 0) {
-    segments.push(`L0,${h}`);
-  } else {
-    const d = bottom;
-    segments.push(`L${pcx + nr},${h}`);
-    segments.push(`C${pcx + nr},${h + d * nr * 0.5} ${pcx + nr * 0.5},${h + d * nr * 1.3} ${pcx},${h + d * nr * 1.3}`);
-    segments.push(`C${pcx - nr * 0.5},${h + d * nr * 1.3} ${pcx - nr},${h + d * nr * 0.5} ${pcx - nr},${h}`);
-    segments.push(`L0,${h}`);
-  }
+  // ────────────────────────────────────────────────────────────────────────────
+  // ENFANT — Même algorithme Arc (A) que Géométrique, mais avec des
+  // demi-cercles beaucoup plus grands (rayon = 25 % de la pièce au lieu de 15 %).
+  // Pièces simples, peu nombreuses (max 9), style doux pour jeunes enfants.
+  // ────────────────────────────────────────────────────────────────────────────
+  {
+    const nr = Math.min(w, h) * 0.25;
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
 
-  // --- Bord gauche : de (0,h) vers (0,0), tenon vers x négatif ---
-  if (left === 0) {
-    segments.push(`Z`);
-  } else {
-    const d = left;
-    segments.push(`L0,${pcy + nr}`);
-    segments.push(`C${-d * nr * 0.5},${pcy + nr} ${-d * nr * 1.3},${pcy + nr * 0.5} ${-d * nr * 1.3},${pcy}`);
-    segments.push(`C${-d * nr * 1.3},${pcy - nr * 0.5} ${-d * nr * 0.5},${pcy - nr} 0,${pcy - nr}`);
-    segments.push(`Z`);
+    s.push(`M${ox},${oy}`);
+    if (top === 0) { s.push(`${lm(true)}${ox + w},${oy}`); }
+    else {
+      const sweep = top > 0 ? 0 : 1;
+      s.push(`L${ox + pcx - nr},${oy}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx + nr},${oy}`);
+      s.push(`L${ox + w},${oy}`);
+    }
+    if (right === 0) { s.push(`${lm(true)}${ox + w},${oy + h}`); }
+    else {
+      const sweep = right > 0 ? 0 : 1;
+      s.push(`L${ox + w},${oy + pcy - nr}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + w},${oy + pcy + nr}`);
+      s.push(`L${ox + w},${oy + h}`);
+    }
+    if (bottom === 0) { s.push(`${lm(true)}${ox},${oy + h}`); }
+    else {
+      const sweep = bottom > 0 ? 0 : 1;
+      s.push(`L${ox + pcx + nr},${oy + h}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox + pcx - nr},${oy + h}`);
+      s.push(`L${ox},${oy + h}`);
+    }
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else {
+      const sweep = left > 0 ? 0 : 1;
+      s.push(`L${ox},${oy + pcy + nr}`);
+      s.push(`A${nr},${nr} 0 0,${sweep} ${ox},${oy + pcy - nr}`);
+      s.push('Z');
+    }
+    return s.join(' ');
   }
-
-  return segments.join(' ');
 }
 
 // ─── Éditeur de segments ─────────────────────────────────────────────────────
@@ -2271,7 +2385,7 @@ export default function CreationsAtelierV2({
 
           if (element.shape === 'puzzle') {
             const edges = element.puzzleEdges || { top: 0, right: 0, bottom: 0, left: 0 };
-            const svgPath = buildPuzzlePath(w, h, edges);
+            const svgPath = buildPuzzlePath(w, h, edges, element.puzzleCutStyle ?? 'classique', element.puzzleShowBorder ?? true, 0, 0, element.puzzleEdgeSeeds);
             const path2d = new Path2D(svgPath);
             ctx.translate(-w / 2, -h / 2);
             ctx.fillStyle = 'none';
@@ -5447,47 +5561,7 @@ export default function CreationsAtelierV2({
                           }
                           case 'puzzle': {
                             const edges = el.puzzleEdges ?? { top: 1, right: 1, bottom: 1, left: -1 };
-                            const nr = Math.min(w, h) * 0.12;
-                            const pcx = w / 2, pcy = h / 2;
-                            const segs: string[] = [];
-                            segs.push(`M${x},${y}`);
-                            if (edges.top === 0) {
-                              segs.push(`L${x + w},${y}`);
-                            } else {
-                              const dir = edges.top;
-                              segs.push(`L${x + pcx - nr},${y}`);
-                              segs.push(`C${x + pcx - nr},${y - dir * nr * 0.5} ${x + pcx - nr * 0.5},${y - dir * nr * 1.3} ${x + pcx},${y - dir * nr * 1.3}`);
-                              segs.push(`C${x + pcx + nr * 0.5},${y - dir * nr * 1.3} ${x + pcx + nr},${y - dir * nr * 0.5} ${x + pcx + nr},${y}`);
-                              segs.push(`L${x + w},${y}`);
-                            }
-                            if (edges.right === 0) {
-                              segs.push(`L${x + w},${y + h}`);
-                            } else {
-                              const dir = edges.right;
-                              segs.push(`L${x + w},${y + pcy - nr}`);
-                              segs.push(`C${x + w + dir * nr * 0.5},${y + pcy - nr} ${x + w + dir * nr * 1.3},${y + pcy - nr * 0.5} ${x + w + dir * nr * 1.3},${y + pcy}`);
-                              segs.push(`C${x + w + dir * nr * 1.3},${y + pcy + nr * 0.5} ${x + w + dir * nr * 0.5},${y + pcy + nr} ${x + w},${y + pcy + nr}`);
-                              segs.push(`L${x + w},${y + h}`);
-                            }
-                            if (edges.bottom === 0) {
-                              segs.push(`L${x},${y + h}`);
-                            } else {
-                              const dir = edges.bottom;
-                              segs.push(`L${x + pcx + nr},${y + h}`);
-                              segs.push(`C${x + pcx + nr},${y + h + dir * nr * 0.5} ${x + pcx + nr * 0.5},${y + h + dir * nr * 1.3} ${x + pcx},${y + h + dir * nr * 1.3}`);
-                              segs.push(`C${x + pcx - nr * 0.5},${y + h + dir * nr * 1.3} ${x + pcx - nr},${y + h + dir * nr * 0.5} ${x + pcx - nr},${y + h}`);
-                              segs.push(`L${x},${y + h}`);
-                            }
-                            if (edges.left === 0) {
-                              segs.push(`Z`);
-                            } else {
-                              const dir = edges.left;
-                              segs.push(`L${x},${y + pcy + nr}`);
-                              segs.push(`C${x - dir * nr * 0.5},${y + pcy + nr} ${x - dir * nr * 1.3},${y + pcy + nr * 0.5} ${x - dir * nr * 1.3},${y + pcy}`);
-                              segs.push(`C${x - dir * nr * 1.3},${y + pcy - nr * 0.5} ${x - dir * nr * 0.5},${y + pcy - nr} ${x},${y + pcy - nr}`);
-                              segs.push(`Z`);
-                            }
-                            d = segs.join(' ');
+                            d = buildPuzzlePath(w, h, edges, (el.puzzleCutStyle ?? 'classique') as PuzzleCutStyle, el.puzzleShowBorder ?? true, x, y, el.puzzleEdgeSeeds);
                             break;
                           }
                           case 'diamond': {
@@ -5658,7 +5732,7 @@ export default function CreationsAtelierV2({
                       const filename = `duoclass_laser_${formatLabel}_${shapes.length}ouvertures.svg`;
                       setSvgPreviewModal({ svgContent, filename });
                     }}
-                      onGenerateFullPagePuzzle={(cols, rows, showNumbers, transparent, numberSize) => {
+                      onGenerateFullPagePuzzle={(cols, rows, showNumbers, transparent, numberSize, cutStyle, showBorder) => {
                       // Génère cols*rows pièces de puzzle couvrant la page entière
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
@@ -5709,6 +5783,14 @@ export default function CreationsAtelierV2({
                             puzzleNumberSize: numberSize ?? 'medium',
                             puzzleEdges: { top, right, bottom, left },
                             puzzleShowNumber: showNumbers ?? false,
+                            puzzleCutStyle: cutStyle ?? 'classique',
+                            puzzleShowBorder: showBorder ?? true,
+                            puzzleEdgeSeeds: {
+                              top:    r === 0        ? 0 : (r - 1) * 100 + c,
+                              bottom: r === rows - 1 ? 0 : r * 100 + c,
+                              left:   c === 0        ? 0 : r * 100 + (c - 1) + 5000,
+                              right:  c === cols - 1 ? 0 : r * 100 + c + 5000,
+                            },
                           });
                         }
                       }
@@ -7084,10 +7166,8 @@ export default function CreationsAtelierV2({
                           break;
                         }
                         case 'puzzle': {
-                          // Utilise la fonction utilitaire buildPuzzlePath avec les edges de la pièce
-                          // Si puzzleEdges n'est pas défini (ancienne pièce), utilise l'alternance par défaut
                           const edges = element.puzzleEdges ?? { top: 1, right: 1, bottom: 1, left: -1 };
-                          pathD = buildPuzzlePath(w, h, edges);
+                          pathD = buildPuzzlePath(w, h, edges, element.puzzleCutStyle ?? 'classique', element.puzzleShowBorder ?? true, 0, 0, element.puzzleEdgeSeeds);
                           break;
                         }
                         case 'heart': {

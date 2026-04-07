@@ -141,7 +141,7 @@ export interface AssemblagePanelProps {
   onApplyTemplate?: (openings: Array<{ shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star'; xFrac: number; yFrac: number; wFrac: number; hFrac: number }>) => void;
   /** Retourne les formes actuelles du canvas en coordonnées fractionnaires pour sauvegarde */
   onGetCurrentShapes?: () => Array<{ shape: string; xFrac: number; yFrac: number; wFrac: number; hFrac: number }> | null;
-  onGenerateFullPagePuzzle?: (cols: number, rows: number, showNumbers?: boolean, transparent?: boolean, numberSize?: 'small' | 'medium' | 'large') => void;
+  onGenerateFullPagePuzzle?: (cols: number, rows: number, showNumbers?: boolean, transparent?: boolean, numberSize?: 'small' | 'medium' | 'large', cutStyle?: 'classique' | 'geometrique' | 'enfant', showBorder?: boolean) => void;
   /** Génère et télécharge le SVG de découpe laser (périmètre + ouvertures) */
   onExportLaserSVG?: () => void;
   /** Ajoute un fond (rectangle plein, sans découpe) au canvas */
@@ -1307,57 +1307,100 @@ function TexteSection({
 
 const PUZZLE_PIECE_COUNTS_SECTION = [9, 16, 25, 36, 48, 64, 100] as const;
 
+type PuzzleCutStyleLocal = 'classique' | 'geometrique' | 'enfant';
+
 /**
- * Génère le path SVG d'une pièce de puzzle avec vraies encoches Bézier.
- * Identique à buildPuzzlePath dans CreationsAtelierV2 (dupliqué pour éviter une dépendance circulaire).
+ * Génère le path SVG d'une pièce de puzzle avec encoches.
+ * Dupliqué de buildPuzzlePath (sans offset ox/oy).
+ * 3 styles : classique (col+tête), geometrique (arc A), enfant (arc A large).
  */
 function buildPuzzlePathLocal(
   w: number,
   h: number,
-  edges: { top: number; right: number; bottom: number; left: number }
+  edges: { top: number; right: number; bottom: number; left: number },
+  cutStyle: PuzzleCutStyleLocal = 'classique',
+  showBorder: boolean = true,
+  _edgeSeeds?: { top: number; right: number; bottom: number; left: number }
 ): string {
-  const nr = Math.min(w, h) * 0.12;
-  const pcx = w / 2, pcy = h / 2;
   const { top, right, bottom, left } = edges;
-  const segs: string[] = [];
-  segs.push(`M0,0`);
-  if (top === 0) {
-    segs.push(`L${w},0`);
-  } else {
-    const d = top;
-    segs.push(`L${pcx - nr},0`);
-    segs.push(`C${pcx - nr},${-d * nr * 0.5} ${pcx - nr * 0.5},${-d * nr * 1.3} ${pcx},${-d * nr * 1.3}`);
-    segs.push(`C${pcx + nr * 0.5},${-d * nr * 1.3} ${pcx + nr},${-d * nr * 0.5} ${pcx + nr},0`);
-    segs.push(`L${w},0`);
+  const lm = (isFlat: boolean) => (!showBorder && isFlat) ? 'M' : 'L';
+
+  // ── CLASSIQUE — Col droit (L) + tête ronde (C), forme sucette/champignon ──
+  if (cutStyle === 'classique') {
+    const base = Math.min(w, h);
+    const neckW = base * 0.073, headR = base * 0.182;
+    const neckH = base * 0.10, apexH = neckH + headR, k = 0.55;
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
+    s.push('M0,0');
+    if (top === 0) { s.push(`${lm(true)}${w},0`); }
+    else {
+      const d = top, cx = pcx, cy = 0;
+      s.push(`L${cx - neckW},${cy}`); s.push(`L${cx - neckW},${cy - d * neckH}`);
+      s.push(`C${cx - headR},${cy - d * neckH} ${cx - headR * k},${cy - d * apexH} ${cx},${cy - d * apexH}`);
+      s.push(`C${cx + headR * k},${cy - d * apexH} ${cx + headR},${cy - d * neckH} ${cx + neckW},${cy - d * neckH}`);
+      s.push(`L${cx + neckW},${cy}`); s.push(`L${w},0`);
+    }
+    if (right === 0) { s.push(`${lm(true)}${w},${h}`); }
+    else {
+      const d = right, cx = w, cy = pcy;
+      s.push(`L${cx},${cy - neckW}`); s.push(`L${cx + d * neckH},${cy - neckW}`);
+      s.push(`C${cx + d * neckH},${cy - headR} ${cx + d * apexH},${cy - headR * k} ${cx + d * apexH},${cy}`);
+      s.push(`C${cx + d * apexH},${cy + headR * k} ${cx + d * neckH},${cy + headR} ${cx + d * neckH},${cy + neckW}`);
+      s.push(`L${cx},${cy + neckW}`); s.push(`L${w},${h}`);
+    }
+    if (bottom === 0) { s.push(`${lm(true)}0,${h}`); }
+    else {
+      const d = bottom, cx = pcx, cy = h;
+      s.push(`L${cx + neckW},${cy}`); s.push(`L${cx + neckW},${cy + d * neckH}`);
+      s.push(`C${cx + headR},${cy + d * neckH} ${cx + headR * k},${cy + d * apexH} ${cx},${cy + d * apexH}`);
+      s.push(`C${cx - headR * k},${cy + d * apexH} ${cx - headR},${cy + d * neckH} ${cx - neckW},${cy + d * neckH}`);
+      s.push(`L${cx - neckW},${cy}`); s.push(`L0,${h}`);
+    }
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else {
+      const d = left, cx = 0, cy = pcy;
+      s.push(`L${cx},${cy + neckW}`); s.push(`L${cx - d * neckH},${cy + neckW}`);
+      s.push(`C${cx - d * neckH},${cy + headR} ${cx - d * apexH},${cy + headR * k} ${cx - d * apexH},${cy}`);
+      s.push(`C${cx - d * apexH},${cy - headR * k} ${cx - d * neckH},${cy - headR} ${cx - d * neckH},${cy - neckW}`);
+      s.push(`L${cx},${cy - neckW}`); s.push('Z');
+    }
+    return s.join(' ');
   }
-  if (right === 0) {
-    segs.push(`L${w},${h}`);
-  } else {
-    const d = right;
-    segs.push(`L${w},${pcy - nr}`);
-    segs.push(`C${w + d * nr * 0.5},${pcy - nr} ${w + d * nr * 1.3},${pcy - nr * 0.5} ${w + d * nr * 1.3},${pcy}`);
-    segs.push(`C${w + d * nr * 1.3},${pcy + nr * 0.5} ${w + d * nr * 0.5},${pcy + nr} ${w},${pcy + nr}`);
-    segs.push(`L${w},${h}`);
+
+  // ── GÉOMÉTRIQUE — Demi-cercles parfaits (SVG arc A) ──
+  if (cutStyle === 'geometrique') {
+    const nr = Math.min(w, h) * 0.15;
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
+    s.push('M0,0');
+    if (top === 0) { s.push(`${lm(true)}${w},0`); }
+    else { s.push(`L${pcx - nr},0`); s.push(`A${nr},${nr} 0 0,${top > 0 ? 0 : 1} ${pcx + nr},0`); s.push(`L${w},0`); }
+    if (right === 0) { s.push(`${lm(true)}${w},${h}`); }
+    else { s.push(`L${w},${pcy - nr}`); s.push(`A${nr},${nr} 0 0,${right > 0 ? 0 : 1} ${w},${pcy + nr}`); s.push(`L${w},${h}`); }
+    if (bottom === 0) { s.push(`${lm(true)}0,${h}`); }
+    else { s.push(`L${pcx + nr},${h}`); s.push(`A${nr},${nr} 0 0,${bottom > 0 ? 0 : 1} ${pcx - nr},${h}`); s.push(`L0,${h}`); }
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('Z'); }
+    return s.join(' ');
   }
-  if (bottom === 0) {
-    segs.push(`L0,${h}`);
-  } else {
-    const d = bottom;
-    segs.push(`L${pcx + nr},${h}`);
-    segs.push(`C${pcx + nr},${h + d * nr * 0.5} ${pcx + nr * 0.5},${h + d * nr * 1.3} ${pcx},${h + d * nr * 1.3}`);
-    segs.push(`C${pcx - nr * 0.5},${h + d * nr * 1.3} ${pcx - nr},${h + d * nr * 0.5} ${pcx - nr},${h}`);
-    segs.push(`L0,${h}`);
+
+  // ── ENFANT — Comme Géométrique mais demi-cercles plus grands (rayon 25 %) ──
+  {
+    const nr = Math.min(w, h) * 0.25;
+    const pcx = w / 2, pcy = h / 2;
+    const s: string[] = [];
+    s.push('M0,0');
+    if (top === 0) { s.push(`${lm(true)}${w},0`); }
+    else { s.push(`L${pcx - nr},0`); s.push(`A${nr},${nr} 0 0,${top > 0 ? 0 : 1} ${pcx + nr},0`); s.push(`L${w},0`); }
+    if (right === 0) { s.push(`${lm(true)}${w},${h}`); }
+    else { s.push(`L${w},${pcy - nr}`); s.push(`A${nr},${nr} 0 0,${right > 0 ? 0 : 1} ${w},${pcy + nr}`); s.push(`L${w},${h}`); }
+    if (bottom === 0) { s.push(`${lm(true)}0,${h}`); }
+    else { s.push(`L${pcx + nr},${h}`); s.push(`A${nr},${nr} 0 0,${bottom > 0 ? 0 : 1} ${pcx - nr},${h}`); s.push(`L0,${h}`); }
+    if (left === 0) { if (showBorder) s.push('Z'); }
+    else { s.push(`L0,${pcy + nr}`); s.push(`A${nr},${nr} 0 0,${left > 0 ? 0 : 1} 0,${pcy - nr}`); s.push('Z'); }
+    return s.join(' ');
   }
-  if (left === 0) {
-    segs.push(`Z`);
-  } else {
-    const d = left;
-    segs.push(`L0,${pcy + nr}`);
-    segs.push(`C${-d * nr * 0.5},${pcy + nr} ${-d * nr * 1.3},${pcy + nr * 0.5} ${-d * nr * 1.3},${pcy}`);
-    segs.push(`C${-d * nr * 1.3},${pcy - nr * 0.5} ${-d * nr * 0.5},${pcy - nr} 0,${pcy - nr}`);
-    segs.push(`Z`);
-  }
-  return segs.join(' ');
 }
 
 /**
@@ -1368,13 +1411,12 @@ function buildPuzzleGridPaths(
   cols: number,
   rows: number,
   svgW: number,
-  svgH: number
+  svgH: number,
+  cutStyle: PuzzleCutStyleLocal = 'classique',
+  showBorder: boolean = true
 ): Array<{ path: string; x: number; y: number }> {
   const cellW = svgW / cols;
   const cellH = svgH / rows;
-  // Pré-calculer les encoches : chaque bord partagé a une direction fixée aléatoirement mais cohérente
-  // hEdges[r][c] = direction du bord horizontal entre rangée r et r+1 pour colonne c
-  // vEdges[r][c] = direction du bord vertical entre colonne c et c+1 pour rangée r
   const hEdges: number[][] = Array.from({ length: rows - 1 }, (_, r) =>
     Array.from({ length: cols }, (_, c) => ((r * cols + c) % 2 === 0 ? 1 : -1))
   );
@@ -1393,7 +1435,13 @@ function buildPuzzleGridPaths(
         left:   c === 0         ? 0 : -vEdges[r][c - 1],
         right:  c === cols - 1  ? 0 :  vEdges[r][c],
       };
-      const path = buildPuzzlePathLocal(cellW, cellH, edges);
+      const eSeeds = {
+        top:    r === 0        ? 0 : (r - 1) * 100 + c,
+        bottom: r === rows - 1 ? 0 : r * 100 + c,
+        left:   c === 0        ? 0 : r * 100 + (c - 1) + 5000,
+        right:  c === cols - 1 ? 0 : r * 100 + c + 5000,
+      };
+      const path = buildPuzzlePathLocal(cellW, cellH, edges, cutStyle, showBorder, eSeeds);
       pieces.push({ path, x, y });
     }
   }
@@ -1403,7 +1451,7 @@ function buildPuzzleGridPaths(
 interface PuzzleSectionProps {
   canvasFormat: CanvasFormat;
   canvasOpenings?: Array<{ id: string; shape: string; openingColor: string; validated: boolean; name: string }>;
-  onGenerateFullPagePuzzle?: (cols: number, rows: number, showNumbers?: boolean, transparent?: boolean, numberSize?: 'small' | 'medium' | 'large') => void;
+  onGenerateFullPagePuzzle?: (cols: number, rows: number, showNumbers?: boolean, transparent?: boolean, numberSize?: 'small' | 'medium' | 'large', cutStyle?: 'classique' | 'geometrique' | 'enfant', showBorder?: boolean) => void;
   onExportLaserSVG?: () => void;
 }
 
@@ -1414,6 +1462,8 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
   const [puzzlePieceCount, setPuzzlePieceCount] = useState<number>(16);
   const [showPuzzleNumbers, setShowPuzzleNumbers] = useState<boolean>(false);
   const [puzzleNumberSize, setPuzzleNumberSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [puzzleCutStyle, setPuzzleCutStyle] = useState<PuzzleCutStyleLocal>('classique');
+  const [puzzleShowBorder, setPuzzleShowBorder] = useState<boolean>(true);
 
   const getPuzzleGrid = (count: number) => {
     const ratio = canvasFormat ? canvasFormat.width / canvasFormat.height : 1;
@@ -1436,8 +1486,8 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
   const innerW = PREVIEW_W - MARGIN * 2;
   const innerH = PREVIEW_H - MARGIN * 2;
   const previewPieces = useMemo(
-    () => buildPuzzleGridPaths(cols, rows, innerW, innerH),
-    [cols, rows, innerW, innerH]
+    () => buildPuzzleGridPaths(cols, rows, innerW, innerH, puzzleCutStyle, puzzleShowBorder),
+    [cols, rows, innerW, innerH, puzzleCutStyle, puzzleShowBorder]
   );
 
   return (
@@ -1455,7 +1505,10 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
           {fr ? "Nombre de pi\u00e8ces" : "Number of pieces"}
         </p>
         <div className="flex flex-wrap gap-1">
-          {PUZZLE_PIECE_COUNTS_SECTION.map(n => (
+          {(puzzleCutStyle === 'enfant'
+            ? [4, 6, 9] as const
+            : PUZZLE_PIECE_COUNTS_SECTION
+          ).map(n => (
             <button
               key={n}
               className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${
@@ -1469,6 +1522,64 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Modèle de découpe */}
+      <div>
+        <p className="text-xs font-semibold text-gray-700 mb-1.5">
+          {fr ? "Modèle de découpe" : "Cut style"}
+        </p>
+        <div className="grid grid-cols-3 gap-1">
+          {([
+            { id: 'classique' as const,   labelFr: 'Classique',   labelEn: 'Classic',     descFr: 'Vrai puzzle traditionnel',     descEn: 'Traditional puzzle' },
+            { id: 'geometrique' as const, labelFr: 'Géométrique', labelEn: 'Geometric',   descFr: 'Demi-cercles symétriques',     descEn: 'Round symmetric notches' },
+            { id: 'enfant' as const,      labelFr: 'Enfant',      labelEn: 'Kids',        descFr: 'Grandes pièces arrondies',     descEn: 'Large rounded pieces' },
+          ]).map(style => (
+            <button
+              key={style.id}
+              className={`px-2 py-1.5 rounded text-left border transition-colors ${
+                puzzleCutStyle === style.id
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
+              }`}
+              onClick={() => {
+                setPuzzleCutStyle(style.id);
+                if (style.id === 'enfant' && puzzlePieceCount > 9) setPuzzlePieceCount(9);
+              }}
+            >
+              <span className="text-xs font-medium block">{fr ? style.labelFr : style.labelEn}</span>
+              <span className={`text-[10px] block ${puzzleCutStyle === style.id ? 'text-indigo-200' : 'text-gray-400'}`}>
+                {fr ? style.descFr : style.descEn}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Toggle bordure extérieure */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-xs font-medium text-gray-700">
+            {fr ? "Bordure extérieure" : "Outer border"}
+          </span>
+          <span className="text-xs text-gray-400 italic">
+            {fr ? "Cadre autour du puzzle" : "Frame around the puzzle"}
+          </span>
+        </div>
+        <button
+          role="switch"
+          aria-checked={puzzleShowBorder}
+          onClick={() => setPuzzleShowBorder(v => !v)}
+          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+            puzzleShowBorder ? 'bg-indigo-600' : 'bg-gray-300'
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+              puzzleShowBorder ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
       </div>
 
       {/* Aper\u00e7u puzzle avec vraies encoches B\u00e9zier */}
@@ -1553,7 +1664,7 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
         className="w-full py-2 rounded bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
         onClick={() => {
           if (onGenerateFullPagePuzzle) {
-            onGenerateFullPagePuzzle(cols, rows, showPuzzleNumbers, true, puzzleNumberSize);
+            onGenerateFullPagePuzzle(cols, rows, showPuzzleNumbers, true, puzzleNumberSize, puzzleCutStyle, puzzleShowBorder);
           }
         }}
       >
