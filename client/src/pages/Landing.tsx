@@ -32,6 +32,16 @@ import photo10 from "@/assets/photo 10.jpeg";
 import photo11 from "@/assets/photo 11 .jpeg";
 import photo12 from "@/assets/photo 12 .jpeg";
 
+import screenshotAlbums from "@/assets/Albums_et_catégories .png";
+import screenshotRetoucheMagique from "@/assets/retouche_magique.png";
+import screenshotRetoucheManuelle from "@/assets/retouche_manuelle.png";
+import screenshotRetouchesAvancees from "@/assets/retouches_avancées.png";
+import screenshotAtelier from "@/assets/Atelier_créatif.png";
+import screenshotImport from "@/assets/Import_et_partage.png";
+import screenshotPrives from "@/assets/Albums_privés.png";
+import screenshotParental from "@/assets/Controle_parental.png";
+import screenshotDoublons from "@/assets/Doublons.png";
+
 /* ────────────── Photo Carousel (12 photos, 3 visible) ────────────── */
 const CAROUSEL_PHOTOS = [
   { id: 1, src: photo1 },
@@ -159,6 +169,7 @@ export default function Landing() {
 
   const fr = language === "fr";
   const [openModal, setOpenModal] = useState<number | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const featureModals = [
     {
@@ -171,6 +182,7 @@ export default function Landing() {
         : "DuoClass lets you create as many albums and categories as you want. Create and organize your photos, family videos and documents exactly the way you like. Use themed categories — Family, Travel, Work... — then organize your albums within them. Your private albums are password-protected, letting you keep memories in complete privacy. Sort, retouch, print, send by email, convert formats... all these features are at your fingertips!",
       placeholder: fr ? "Vidéo de démonstration à venir" : "Demo video coming soon",
       placeholderIcon: Play,
+      screenshots: [screenshotAlbums],
     },
     {
       emoji: "✨",
@@ -182,6 +194,7 @@ export default function Landing() {
         : "DuoClass provides a full set of retouching tools to enhance your photos without leaving the app. You get 3 levels of retouching: magic, manual and advanced to edit, improve and transform your photos. Adjust brightness, contrast, saturation and sharpness with a few swipes. Apply artistic effects to give your images a unique atmosphere. Crop, rotate, fix red eyes — all essential retouching tools are there, simple and intuitive. Your original photos are always preserved — you can revert at any time.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
+      screenshots: [screenshotRetoucheMagique, screenshotRetoucheManuelle, screenshotRetouchesAvancees],
     },
     {
       emoji: "🎨",
@@ -193,6 +206,7 @@ export default function Landing() {
         : "The DuoClass Creative Workshop opens a unique creative space to bring your most beautiful memories to life and more... your imagination! Create collages, montages, photo mixes, matting, sticker pages and even puzzles — anything is possible with your own photos or images. Each project is saved automatically. Resume your creation at any time, add images from your albums, retouch, add text and typographic effects. Once satisfied, download, print or share your creation directly from the Workshop.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
+      screenshots: [screenshotAtelier],
     },
     {
       emoji: "📤",
@@ -204,6 +218,7 @@ export default function Landing() {
         : "DuoClass lets you easily import your photos and documents from your device, its SD card or your computer. Take selfies directly from your PC or laptop camera! Import in a few clicks from your Mac or PC. DuoClass accepts all common formats — JPEG, PNG, HEIC, PDF, videos and many more. Share your albums and creations with family and loved ones in one click — by email directly from the app. Convert formats, print, download — everything you need to share your memories is gathered in one place.",
       placeholder: null,
       placeholderIcon: null,
+      screenshots: [screenshotImport],
     },
     {
       emoji: "🔒",
@@ -215,6 +230,7 @@ export default function Landing() {
         : "DuoClass lets you protect your personal, private photos and documents in albums accessible only by you. Each private album is protected by a password of your choice. Your memories stay safe from prying eyes, in complete peace of mind. Create as many private albums as you wish — family photos, personal documents, contracts, legal documents, intimate memories — everything you want to keep just for yourself.",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
+      screenshots: [screenshotPrives],
     },
     {
       emoji: "🛡️",
@@ -226,6 +242,7 @@ export default function Landing() {
         : "DuoClass includes parental controls to protect younger users. With a progress slider, set the overall access level to sensitive content on the device. A family app in complete safety. Over time, duplicate photos pile up and waste space. DuoClass automatically detects your duplicate photos and lets you delete them in one click, keep them in case of retouching, or decide later. Free up space, keep your albums clean and well organized — effortlessly!",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
+      screenshots: [screenshotParental, screenshotDoublons],
     },
   ];
 
@@ -438,7 +455,7 @@ export default function Landing() {
             onClick={() => setOpenModal(null)}
           >
             <div
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden"
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header gradient */}
@@ -463,15 +480,25 @@ export default function Landing() {
                   {feat.description}
                 </p>
 
-                {/* Media placeholder */}
-                {feat.placeholder && feat.placeholderIcon && (
-                  <div className={`rounded-2xl bg-gradient-to-br ${feat.gradient} bg-opacity-10 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center py-16 gap-4`}>
-                    <div className="w-20 h-20 rounded-full bg-white/80 flex items-center justify-center shadow-sm">
-                      <feat.placeholderIcon className="w-10 h-10 text-gray-400" />
-                    </div>
-                    <span className="text-base text-gray-400 font-medium italic">
-                      {feat.placeholder}
-                    </span>
+                {/* Screenshots */}
+                {feat.screenshots && feat.screenshots.length > 0 && (
+                  <div className={`flex gap-3 justify-center ${feat.screenshots.length === 1 ? "flex-col items-center" : ""}`}>
+                    {feat.screenshots.map((src: string, idx: number) => (
+                      <img
+                        key={idx}
+                        src={src}
+                        alt={`${feat.title} ${idx + 1}`}
+                        className="rounded-xl shadow-lg border border-gray-200 object-contain cursor-zoom-in hover:opacity-80 transition-opacity"
+                        style={{
+                          maxHeight: feat.screenshots!.length === 1 ? "400px" : "280px",
+                          maxWidth: feat.screenshots!.length === 1 ? "100%" : `${Math.floor(100 / feat.screenshots!.length) - 2}%`,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxSrc(src);
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
 
@@ -489,6 +516,21 @@ export default function Landing() {
           </div>
         );
       })()}
+
+      {/* ───── Lightbox ───── */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 cursor-pointer"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt="Zoom"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
