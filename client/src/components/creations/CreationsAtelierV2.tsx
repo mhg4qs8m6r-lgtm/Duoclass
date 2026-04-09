@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoFrame } from "@/types/photo";
 import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, deleteCreationsProject, saveCollageToAlbum, addToCollecteur, removeFromCollecteur, clearCollecteur } from "@/db";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
@@ -19,6 +20,7 @@ import { jsPDF } from "jspdf";
 import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
 import Collecteur from "../Collecteur";
+import BibliothequeModeles from "./BibliothequeModeles";
 
 interface CreationsAtelierProps {
   isOpen: boolean;
@@ -705,6 +707,16 @@ export default function CreationsAtelierV2({
   onSaveProject,
 }: CreationsAtelierProps) {
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  // Épaisseurs selon le rôle : admin = traits épais pour gabarits, user = traits fins élégants
+  const STROKE_THICK = isAdmin ? 5 : 1.5;    // formes standard (canvas 2D)
+  const STROKE_PUZZLE = isAdmin ? 5 : 1.5;   // puzzle (canvas 2D)
+  const STROKE_LINE = isAdmin ? 4 : 1.5;     // lignes (canvas 2D)
+  const STROKE_SVG = isAdmin ? 4 : 1.5;      // formes SVG overlay (non sélectionné)
+  const STROKE_SVG_SEL = isAdmin ? 5 : 2;    // formes SVG overlay (sélectionné)
+  const STROKE_FILET_MIN = isAdmin ? 4 : 1;  // filets min
+  const STROKE_THUMB = isAdmin ? 20 : 6;     // contours vignettes passe-partout
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -900,6 +912,20 @@ export default function CreationsAtelierV2({
     };
     return map[currentProjectType] || { showDetourage: true, sections: null }; // Projet libre → tout
   }, [currentProjectType, showAllTools]);
+
+  // Catégories de modèles à afficher selon le type de projet
+  const modelesCategories = useMemo<string[] | null>(() => {
+    const map: Record<string, string[]> = {
+      "Pêle-mêle modèle":            ["pele-mele"],
+      "Montage photos/Pêle-mêle":    ["pele-mele"],
+      "Passe-partout modèle":        ["passe-partout"],
+      "Montage photos/Passe-partout": ["passe-partout"],
+      "Collage":                      ["cadres", "bordures"],
+    };
+    return map[currentProjectType] ?? null;
+  }, [currentProjectType]);
+
+  const [isBibliothequeOpen, setIsBibliothequeOpen] = useState(false);
 
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
@@ -2380,8 +2406,8 @@ export default function CreationsAtelierV2({
           ctx.rotate((element.rotation * Math.PI) / 180);
 
           const fillColor = element.openingColor || '#ffffff';
-          const strokeColor = '#1a1a1a';
-          const strokeWidth = 3;
+          const strokeColor = '#000000';
+          const strokeWidth = STROKE_THICK;
 
           if (element.shape === 'puzzle') {
             const edges = element.puzzleEdges || { top: 0, right: 0, bottom: 0, left: 0 };
@@ -2390,9 +2416,9 @@ export default function CreationsAtelierV2({
             ctx.translate(-w / 2, -h / 2);
             ctx.fillStyle = 'none';
             ctx.fill(path2d);
-            // Trait fin pour découpe laser
-            ctx.strokeStyle = '#1a1a1a';
-            ctx.lineWidth = 0.8;
+            // Trait de découpe laser
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = STROKE_PUZZLE;
             ctx.lineJoin = 'round';
             ctx.stroke(path2d);
             if (element.puzzleShowNumber && element.openingIndex != null) {
@@ -2503,7 +2529,7 @@ export default function CreationsAtelierV2({
                 ctx.lineTo(lx2, ly2);
               }
               ctx.strokeStyle = lineStrokeColor;
-              ctx.lineWidth = Math.max(2, 2);
+              ctx.lineWidth = STROKE_LINE;
               ctx.lineCap = 'round';
               ctx.stroke();
               ctx.restore();
@@ -2585,25 +2611,35 @@ export default function CreationsAtelierV2({
         // 3. Un src valide = data: URL complète (>100 chars) ou URL http(s)
         let src = '';
         const domSrcFull = domImg?.src || '';
+        const stateSrc = element.src || '';
         const domImgLoaded = domImg?.complete === true && (domImg?.naturalWidth ?? 0) > 0;
-        if (domImgLoaded && domSrcFull.length > 200) {
+        // Les URLs relatives (ex: /modeles/...) et http(s) sont courtes mais valides
+        const isStateSrcUrl = stateSrc.startsWith('/') || stateSrc.startsWith('http');
+        const isDomSrcUrl = domSrcFull.startsWith('http') || domSrcFull.startsWith('/');
+        if (isStateSrcUrl) {
+          // URL relative ou absolue : utiliser tel quel
+          src = stateSrc;
+        } else if (domImgLoaded && domSrcFull.length > 200) {
           // Image DOM chargée et src complet : source la plus fiable
           src = domSrcFull;
         } else if (domSrcLen > stateSrcLen && domSrcLen > 200) {
           // DOM src plus long que le state (state tronqué)
           src = domSrcFull;
+        } else if (isDomSrcUrl) {
+          src = domSrcFull;
         } else if (stateSrcLen > 200) {
-          // State src suffisamment long
-          src = element.src || '';
+          // State src suffisamment long (data: URL)
+          src = stateSrc;
         } else {
           // Fallback : prendre le plus long disponible
-          src = domSrcLen >= stateSrcLen ? domSrcFull : (element.src || '');
+          src = domSrcLen >= stateSrcLen ? domSrcFull : stateSrc;
         }
         
-        // Validation : data: URL complète, URL http(s), ou blob: URL
+        // Validation : data: URL complète, URL http(s), blob: URL, ou chemin relatif /
         const isValidSrc = (src.startsWith('data:') && src.length > 100) ||
                            (src.startsWith('http') && src.length > 10) ||
-                           src.startsWith('blob:');
+                           src.startsWith('blob:') ||
+                           src.startsWith('/');
         if (!src || !isValidSrc) {
           diagLines.push(`  -> SKIP: src invalide (len=${src.length}, debut=${src.substring(0, 30)})`);
           continue;
@@ -2909,7 +2945,92 @@ export default function CreationsAtelierV2({
       setIsExporting(false);
     }
   };
-  
+
+  // Mapping type de projet → catégorie de modèle pour la sauvegarde
+  const modelesCategoryForProject: Record<string, string> = {
+    "Passe-partout modèle":         "passe-partout",
+    "Montage photos/Passe-partout": "passe-partout",
+    "Pêle-mêle modèle":            "pele-mele",
+    "Montage photos/Pêle-mêle":    "pele-mele",
+    "Collage":                      "cadres",
+  };
+
+  const saveAsModeleCategory = modelesCategoryForProject[currentProjectType] ?? null;
+
+  const handleSaveAsModele = async () => {
+    if (isExporting || !saveAsModeleCategory) return;
+    setIsExporting(true);
+    const baseName = currentProjectName || (language === "fr" ? "Modele" : "Template");
+    toast.info(language === "fr" ? "Capture en cours..." : "Capturing...");
+    try {
+      const canvas = await captureCanvas(3);
+      if (!canvas) return;
+      const blob = await canvasToBlob(canvas, "image/png");
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      // Generate unique filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `${baseName}_${timestamp}.png`;
+      const resp = await fetch(`/api/modeles/${encodeURIComponent(saveAsModeleCategory)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, dataUrl }),
+      });
+      if (!resp.ok) throw new Error("Server error");
+      toast.success(
+        language === "fr"
+          ? `Modèle "${filename}" sauvegardé dans ${saveAsModeleCategory}/`
+          : `Template "${filename}" saved to ${saveAsModeleCategory}/`
+      );
+    } catch (err) {
+      console.error("Erreur sauver comme modèle:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleSaveToDesktop = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const baseName = currentProjectName || (language === "fr" ? "Image" : "Image");
+    try {
+      const canvas = await captureCanvas(3);
+      if (!canvas) return;
+      const blob = await canvasToBlob(canvas, "image/png");
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `${baseName}_${timestamp}.png`;
+      const resp = await fetch("/api/save-to-desktop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, dataUrl }),
+      });
+      if (!resp.ok) throw new Error("Server error");
+      toast.success(
+        language === "fr"
+          ? `"${filename}" déposée sur le Bureau !`
+          : `"${filename}" saved to Desktop!`
+      );
+    } catch (err) {
+      console.error("Erreur sauvegarde Bureau:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // La zone de travail est fixe, mais la PAGE est dessinée à l'intérieur
   // avec les proportions exactes du format sélectionné
   const getCanvasPixelDimensions = useCallback(() => {
@@ -3181,6 +3302,98 @@ export default function CreationsAtelierV2({
       default: // rect
         ctx.rect(x, y, w, h);
     }
+  };
+
+  /**
+   * Redessine un contour noir épais autour de l'ouverture du passe-partout
+   * (utilise drawOpening pour calculer les dimensions, mais trace un stroke au lieu de fill).
+   * Appelé juste avant toDataURL() pour que la vignette ait des traits bien visibles.
+   */
+  const strokeOpeningOutline = (
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    data: PassePartoutData,
+    pxPerCm: number
+  ) => {
+    const innerW = data.openingWidthCm != null
+      ? data.openingWidthCm * pxPerCm
+      : w - data.borderWidthCm * pxPerCm * 2;
+    const innerH = data.openingHeightCm != null
+      ? data.openingHeightCm * pxPerCm
+      : h - data.borderWidthCm * pxPerCm * 2;
+    const innerX = (w - innerW) / 2;
+    const innerY = (h - innerH) / 2;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = STROKE_THUMB;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    // Triple stroke pour un trait noir bien dense
+    for (let pass = 0; pass < 3; pass++) {
+      ctx.beginPath();
+      switch (data.shape) {
+        case "square": {
+          const side = Math.min(innerW, innerH);
+          const ox = innerX + (innerW - side) / 2;
+          const oy = innerY + (innerH - side) / 2;
+          ctx.rect(ox, oy, side, side);
+          break;
+        }
+        case "round": {
+          const radius = Math.min(innerW, innerH) / 2;
+          ctx.arc(innerX + innerW / 2, innerY + innerH / 2, radius, 0, Math.PI * 2);
+          break;
+        }
+        case "oval":
+          ctx.ellipse(innerX + innerW / 2, innerY + innerH / 2, innerW / 2, innerH / 2, 0, 0, Math.PI * 2);
+          break;
+        case "arch": {
+          const ax = innerX, ay = innerY, aw = innerW, ah = innerH;
+          ctx.moveTo(ax, ay + ah);
+          ctx.lineTo(ax, ay + ah / 2);
+          ctx.arcTo(ax, ay, ax + aw / 2, ay, aw / 2);
+          ctx.arcTo(ax + aw, ay, ax + aw, ay + ah / 2, aw / 2);
+          ctx.lineTo(ax + aw, ay + ah);
+          ctx.closePath();
+          break;
+        }
+        default:
+          ctx.rect(innerX, innerY, innerW, innerH);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  /**
+   * Trace un contour noir épais autour d'une ouverture positionnée (multi-ouvertures).
+   */
+  const strokeOpeningPathOutline = (
+    ctx: CanvasRenderingContext2D,
+    shape: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number
+  ) => {
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = STROKE_THUMB;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    // Triple stroke pour un trait noir bien dense
+    for (let pass = 0; pass < 3; pass++) {
+      ctx.beginPath();
+      drawOpeningPath(ctx, shape, x, y, w, h);
+      ctx.stroke();
+    }
+    ctx.restore();
   };
 
   const addToCanvas = (src: string, name?: string, dropPositionCmOrGroupId?: { x: number; y: number } | string, groupIdArg?: string) => {
@@ -4914,6 +5127,8 @@ export default function CreationsAtelierV2({
                           ctx.globalCompositeOperation = "source-over";
                         }
 
+                        // Contour noir épais autour de l'ouverture (visible dans les vignettes)
+                        strokeOpeningOutline(ctx, ppW, ppH, data, PX);
                         // Ajouter au canvas avec zIndex=1 (arrière-plan)
                         const src = ppCanvas.toDataURL("image/png");
                         const name = language === "fr" ? "Passe-partout" : "Mat frame";
@@ -5014,6 +5229,7 @@ export default function CreationsAtelierV2({
                           }
                           ctx.globalCompositeOperation = "source-over";
                         }
+                        strokeOpeningOutline(ctx, ppW, ppH, data, PX);
                         const src = ppCanvas.toDataURL("image/png");
                         const name = language === "fr" ? "Passe-partout" : "Mat frame";
                         const img = document.createElement("img");
@@ -5069,6 +5285,7 @@ export default function CreationsAtelierV2({
                           }
                           ctx.globalCompositeOperation = "source-over";
                         }
+                        strokeOpeningOutline(ctx, ppW, ppH, mergedData, PX);
                         const src = ppCanvas.toDataURL("image/png");
                         const img = document.createElement("img");
                         img.onload = () => {
@@ -5128,6 +5345,7 @@ export default function CreationsAtelierV2({
                           }
                           ctx.globalCompositeOperation = "source-over";
                         }
+                        strokeOpeningOutline(ctx, ppW, ppH, mergedData, PX);
                         const src = ppCanvas.toDataURL("image/png");
                         const img = document.createElement("img");
                         img.onload = () => {
@@ -5380,6 +5598,10 @@ export default function CreationsAtelierV2({
                           drawOpeningPath(ctx, op.shape || 'rect', opX, opY, opW, opH);
                           ctx.fill();
                           ctx.globalCompositeOperation = 'source-over';
+                        });
+                        // Contours noirs épais autour de chaque ouverture (visible dans les vignettes)
+                        openings.forEach(op => {
+                          strokeOpeningPathOutline(ctx, op.shape || 'rect', op.x * PX, op.y * PX, op.width * PX, op.height * PX);
                         });
                         const src = ppCanvas.toDataURL('image/png');
                         const name = language === 'fr' ? 'Passe-partout' : 'Mat frame';
@@ -6207,6 +6429,38 @@ export default function CreationsAtelierV2({
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
                   />
+                )}
+
+                {/* Bibliothèque de modèles (selon le type de projet) */}
+                {modelesCategories && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mt-1">
+                    <button
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
+                        isBibliothequeOpen
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                      }`}
+                      onClick={() => setIsBibliothequeOpen(prev => !prev)}
+                    >
+                      <Library className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium flex-1">
+                        {language === "fr" ? "Bibliothèque de modèles" : "Template library"}
+                      </span>
+                      {isBibliothequeOpen ? (
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                      )}
+                    </button>
+                    {isBibliothequeOpen && (
+                      <div className="p-3 bg-white">
+                        <BibliothequeModeles
+                          categories={modelesCategories}
+                          onSelectModele={(url, filename) => addToCanvas(url, filename)}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -7122,7 +7376,7 @@ export default function CreationsAtelierV2({
                               x1={0} y1={h / 2}
                               x2={w} y2={h / 2}
                               stroke={lineStroke}
-                              strokeWidth={isSelected ? 3 : 2}
+                              strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                               strokeLinecap="round"
                             />
                             {/* Contour de sélection indigo */}
@@ -7246,8 +7500,8 @@ export default function CreationsAtelierV2({
                           <path
                             d={pathD}
                             fill="none"
-                            stroke={isSelected ? '#6366f1' : (element.shape === 'puzzle' ? '#1a1a1a' : '#9ca3af')}
-                            strokeWidth={element.shape === 'puzzle' ? (isSelected ? 1.2 : 0.8) : (isSelected ? 2 : 1)}
+                            stroke={isSelected ? '#6366f1' : '#000000'}
+                            strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={!isSelected && element.shape !== 'puzzle' ? '4 3' : undefined}
@@ -8302,7 +8556,7 @@ export default function CreationsAtelierV2({
                         return filets.map(filet => {
                           // Convertir offset et épaisseur de mm en px
                           const offsetPx = (filet.offsetMm / 10) * pxPerCm;
-                          const strokePx = Math.max(0.5, (filet.thicknessMm / 10) * pxPerCm);
+                          const strokePx = Math.max(STROKE_FILET_MIN, (filet.thicknessMm / 10) * pxPerCm);
                           const shape = el.shape || 'rect';
                           // Décalage vers l'EXTÉRIEUR de la découpe (la forme est un trou)
                           const rx = elX - offsetPx;
@@ -8627,15 +8881,15 @@ export default function CreationsAtelierV2({
 
 
             {/* Actions export */}
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleDownload} disabled={isExporting || canvasElements.length === 0}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleDownload} disabled={isExporting}>
               <Download className="w-3.5 h-3.5" />
               {isExporting ? (language === "fr" ? "Export..." : "Export...") : (language === "fr" ? "Télécharger" : "Download")}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handlePrint} disabled={isExporting || canvasElements.length === 0}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handlePrint} disabled={isExporting}>
               <Printer className="w-3.5 h-3.5" />
               {language === "fr" ? "Imprimer" : "Print"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleEmail} disabled={isExporting || canvasElements.length === 0}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleEmail} disabled={isExporting}>
               <Mail className="w-3.5 h-3.5" />
               @Mail
             </Button>
@@ -8643,7 +8897,7 @@ export default function CreationsAtelierV2({
             <div className="w-px h-5 bg-gray-300" />
 
             {/* Actions projet */}
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting || canvasElements.length === 0}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting}>
               <ImagePlus className="w-3.5 h-3.5" />
               {isExporting ? (language === "fr" ? "Sauvegarde..." : "Saving...") : (language === "fr" ? "Sauver l'image" : "Save image")}
             </Button>
@@ -8655,6 +8909,10 @@ export default function CreationsAtelierV2({
             >
               <Save className="w-3.5 h-3.5" />
               {language === "fr" ? "Sauvegarder le projet" : "Save project"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-cyan-400 text-cyan-600 hover:bg-cyan-50" onClick={handleSaveToDesktop} disabled={isExporting}>
+              <Download className="w-3.5 h-3.5" />
+              {language === "fr" ? "Bureau" : "Desktop"}
             </Button>
             <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}

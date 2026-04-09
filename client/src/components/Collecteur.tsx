@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CrispThumbnail from "@/components/ui/CrispThumbnail";
 
 /** Un élément stocké dans le Collecteur */
 export interface CollecteurItem {
@@ -74,24 +75,24 @@ export default function Collecteur({ items, onRemoveItem, onClearAll }: Collecte
 
       {/* Zone d'éléments */}
       <ScrollArea className="flex-1">
-        <div className="p-2 flex flex-wrap gap-1.5 justify-center">
+        <div className="p-2 flex flex-wrap gap-2 justify-center">
           {items.map((item) => (
             <div
               key={item.id}
-              className="relative bg-white rounded border border-gray-200 shadow-sm cursor-pointer transition-all duration-200 group w-16"
+              className="relative bg-white rounded border border-gray-200 shadow-sm cursor-pointer transition-all duration-200 group w-28"
             >
-              <img
+              <CrispThumbnail
                 src={item.thumbnail || item.src}
                 alt={item.name}
                 className="w-full h-auto object-contain rounded"
               />
               {/* Croix rouge suppression individuelle */}
               <button
-                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                 onClick={() => onRemoveItem(item.id)}
                 title="Supprimer"
               >
-                <X className="w-2.5 h-2.5" />
+                <X className="w-3 h-3" />
               </button>
             </div>
           ))}

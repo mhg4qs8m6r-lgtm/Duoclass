@@ -404,9 +404,9 @@ function PassePartoutPreview({
         {/* Zone intérieure (ouverture) */}
         <path d={openingPath} fill={innerFill} />
         {/* Contour de l'ouverture */}
-        <path d={openingPath} fill="none" stroke="#9ca3af" strokeWidth="0.8" />
+        <path d={openingPath} fill="none" stroke="#000000" strokeWidth="4" />
         {/* Contour extérieur */}
-        <rect x={0.5} y={0.5} width={SVG_W - 1} height={safeH - 1} fill="none" stroke="#d1d5db" strokeWidth="1" />
+        <rect x={0.5} y={0.5} width={SVG_W - 1} height={safeH - 1} fill="none" stroke="#000000" strokeWidth="4" />
       </svg>
       <p className="text-xs text-gray-400 italic">
         {target === "exterieur" ? "Extérieur coloré" : "Intérieur coloré"}

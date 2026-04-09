@@ -3,8 +3,9 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig } from "vite";
+import modelesIndexPlugin from "./vite-plugin-modeles-index";
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), modelesIndexPlugin()];
 
 export default defineConfig({
   plugins,
