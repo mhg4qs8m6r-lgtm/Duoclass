@@ -4,6 +4,7 @@
  */
 import Dexie, { type Table } from 'dexie';
 import type { PhotoFrame, AlbumMeta, Category, CategoryMediaType, Album } from '@/types/photo';
+import { addToSyncQueue } from './syncService';
 
 // ─── Re-exports de types ───────────────────────────────────────────────────────
 
@@ -50,6 +51,10 @@ export interface CreationsProject {
   canvasFormatWidth?: number;
   canvasFormatHeight?: number;
   thumbnail?: string;
+  /** Type du projet : Projet libre, Passe-partout modèle, Pêle-mêle modèle, etc. */
+  projectType?: string;
+  /** Catégorie du projet : en_cours, finis */
+  projectCategory?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -280,6 +285,23 @@ export async function getCreationsProject(id: string): Promise<CreationsProject 
   return db.creations_projects.get(id);
 }
 
+/** Sérialise un projet pour la sync serveur */
+function projectToSyncData(p: CreationsProject) {
+  return {
+    localId: p.id,
+    name: p.name,
+    canvasElements: JSON.stringify(p.canvasElements ?? []),
+    canvasData: p.canvasData ? JSON.stringify(p.canvasData) : undefined,
+    photos: p.photos ? JSON.stringify(p.photos) : undefined,
+    canvasFormat: p.canvasFormat,
+    canvasFormatWidth: p.canvasFormatWidth,
+    canvasFormatHeight: p.canvasFormatHeight,
+    thumbnail: p.thumbnail,
+    projectType: p.projectType,
+    projectCategory: p.projectCategory,
+  };
+}
+
 export async function createCreationsProject(
   nameOrProject: string | CreationsProject,
   id?: string,
@@ -295,6 +317,7 @@ export async function createCreationsProject(
         }
       : nameOrProject;
   await db.creations_projects.put(project);
+  addToSyncQueue({ entityType: 'project', action: 'create', data: projectToSyncData(project) });
   return project;
 }
 
@@ -304,14 +327,18 @@ export async function updateCreationsProject(
 ): Promise<void> {
   if (typeof projectOrId === 'string') {
     await db.creations_projects.update(projectOrId, { ...updates, updatedAt: Date.now() });
+    const updated = await db.creations_projects.get(projectOrId);
+    if (updated) addToSyncQueue({ entityType: 'project', action: 'update', data: projectToSyncData(updated) });
   } else {
-    // Objet complet passé directement
-    await db.creations_projects.put({ ...projectOrId, updatedAt: Date.now() });
+    const full = { ...projectOrId, updatedAt: Date.now() };
+    await db.creations_projects.put(full);
+    addToSyncQueue({ entityType: 'project', action: 'update', data: projectToSyncData(full) });
   }
 }
 
 export async function deleteCreationsProject(id: string): Promise<void> {
   await db.creations_projects.delete(id);
+  addToSyncQueue({ entityType: 'project', action: 'delete', data: { localId: id } });
 }
 
 /**
@@ -355,4 +382,34 @@ export async function saveCollageToAlbum(
       createdAt: Date.now(),
     });
   }
+}
+
+// ─── Helpers Bibliothèque (avec sync serveur) ───────────────────────────────
+
+function biblioToSyncData(item: BibliothequeItemDB) {
+  return {
+    localId: item.id,
+    category: item.category,
+    type: item.type,
+    name: item.name,
+    url: item.url,
+    thumbnail: item.thumbnail,
+    fullImage: item.fullImage,
+    sourcePhotoId: item.sourcePhotoId,
+    addedAt: item.addedAt,
+  };
+}
+
+export async function addBibliothequeItem(item: BibliothequeItemDB): Promise<void> {
+  await db.bibliotheque_items.add(item);
+  addToSyncQueue({ entityType: 'bibliotheque', action: 'create', data: biblioToSyncData(item) });
+}
+
+export async function deleteBibliothequeItemSync(id: string): Promise<void> {
+  await db.bibliotheque_items.delete(id);
+  addToSyncQueue({ entityType: 'bibliotheque', action: 'delete', data: { localId: id } });
+}
+
+export async function getAllBibliothequeItems(): Promise<BibliothequeItemDB[]> {
+  return db.bibliotheque_items.toArray();
 }

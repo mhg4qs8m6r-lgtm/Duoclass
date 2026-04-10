@@ -120,6 +120,48 @@ export const userSettings = pgTable("userSettings", {
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = typeof userSettings.$inferInsert;
 
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  localId: varchar("localId", { length: 64 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  canvasElements: text("canvasElements"),
+  canvasData: text("canvasData"),
+  photos: text("photos"),
+  canvasFormat: varchar("canvasFormat", { length: 64 }),
+  canvasFormatWidth: integer("canvasFormatWidth"),
+  canvasFormatHeight: integer("canvasFormatHeight"),
+  thumbnail: text("thumbnail"),
+  projectType: varchar("projectType", { length: 64 }),
+  projectCategory: varchar("projectCategory", { length: 32 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+});
+
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
+
+export const bibliothequeItems = pgTable("bibliothequeItems", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  localId: varchar("localId", { length: 64 }).notNull(),
+  category: varchar("category", { length: 64 }).notNull(),
+  type: varchar("type", { length: 64 }),
+  name: varchar("name", { length: 255 }).notNull(),
+  url: text("url"),
+  thumbnail: text("thumbnail"),
+  fullImage: text("fullImage"),
+  sourcePhotoId: varchar("sourcePhotoId", { length: 64 }),
+  addedAt: bigint("addedAt", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+});
+
+export type BibliothequeItem = typeof bibliothequeItems.$inferSelect;
+export type InsertBibliothequeItem = typeof bibliothequeItems.$inferInsert;
+
 export const syncLog = pgTable("syncLog", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Library, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -20,7 +20,6 @@ import { jsPDF } from "jspdf";
 import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
 import Collecteur from "../Collecteur";
-import BibliothequeModeles from "./BibliothequeModeles";
 
 interface CreationsAtelierProps {
   isOpen: boolean;
@@ -914,18 +913,7 @@ export default function CreationsAtelierV2({
   }, [currentProjectType, showAllTools]);
 
   // Catégories de modèles à afficher selon le type de projet
-  const modelesCategories = useMemo<string[] | null>(() => {
-    const map: Record<string, string[]> = {
-      "Pêle-mêle modèle":            ["pele-mele"],
-      "Montage photos/Pêle-mêle":    ["pele-mele"],
-      "Passe-partout modèle":        ["passe-partout"],
-      "Montage photos/Passe-partout": ["passe-partout"],
-      "Collage":                      ["cadres", "bordures"],
-    };
-    return map[currentProjectType] ?? null;
-  }, [currentProjectType]);
 
-  const [isBibliothequeOpen, setIsBibliothequeOpen] = useState(false);
 
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
@@ -1377,7 +1365,7 @@ export default function CreationsAtelierV2({
           const matchedProject = allProjects.find(p => p.id === projectId);
           if (matchedProject) {
             setCurrentProjectName(matchedProject.name);
-            setCurrentProjectType((matchedProject as any).projectType || 'Projet libre');
+            setCurrentProjectType(matchedProject.projectType || 'Projet libre');
           } else if (projectName && projectName !== 'Nouveau projet' && projectName !== 'New project') {
             setCurrentProjectName(projectName);
           }
@@ -1385,7 +1373,7 @@ export default function CreationsAtelierV2({
           if (!matchedProject) {
             const dbProject = await getCreationsProject(projectId);
             if (dbProject) {
-              setCurrentProjectType((dbProject as any).projectType || 'Projet libre');
+              setCurrentProjectType(dbProject.projectType || 'Projet libre');
             }
           }
         }
@@ -1396,12 +1384,15 @@ export default function CreationsAtelierV2({
   }, [isOpen, projectId]);
   
   // Charger les photos du projet sélectionné quand l'Atelier s'ouvre
+  // IMPORTANT: utiliser projectId (prop) et non currentProjectId (état)
+  // car le setState du useEffect précédent n'est pas encore effectif dans ce rendu.
   useEffect(() => {
+    const targetProjectId = projectId ?? null;
     const loadProjectPhotos = async () => {
-      if (isOpen && currentProjectId) {
+      if (isOpen && targetProjectId) {
         try {
           // Charger les photos depuis l'album projet (IndexedDB)
-          const albumData = await db.albums.get(currentProjectId);
+          const albumData = await db.albums.get(targetProjectId);
           if (albumData && albumData.frames) {
             // Filtrer pour ne garder que les frames avec une photoUrl
             const photosWithUrl = albumData.frames.filter((frame: any) => frame.photoUrl);
@@ -1419,7 +1410,7 @@ export default function CreationsAtelierV2({
           }
           
           // Charger les données du canvas sauvegardées
-          const creationsProject = await getCreationsProject(currentProjectId);
+          const creationsProject = await getCreationsProject(targetProjectId);
           if (creationsProject && creationsProject.canvasData) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1489,14 +1480,14 @@ export default function CreationsAtelierV2({
           console.error('Erreur lors du chargement des photos du projet:', error);
           setSourcePhotos([]);
         }
-      } else if (isOpen && !currentProjectId) {
+      } else if (isOpen && !targetProjectId) {
         // Pas de projet sélectionné, réinitialiser
         setSourcePhotos([]);
       }
     };
-    
+
     loadProjectPhotos();
-  }, [isOpen, currentProjectId, language]);
+  }, [isOpen, projectId, language]);
   
   // Raccourcis clavier : Ctrl+A (tout sélectionner), Delete (supprimer sélection), Escape (désélectionner)
   useEffect(() => {
@@ -1671,12 +1662,14 @@ export default function CreationsAtelierV2({
         if (existingProject) {
           existingProject.canvasData = canvasData;
           existingProject.photos = allPhotosForCount;
+          existingProject.projectType = currentProjectType;
           await updateCreationsProject(existingProject);
         } else {
           // Créer le projet s'il n'existe pas encore
           const newProject = await createCreationsProject(currentProjectName, targetProjectId);
           newProject.canvasData = canvasData;
           newProject.photos = allPhotosForCount;
+          newProject.projectType = currentProjectType;
           await updateCreationsProject(newProject);
         }
         
@@ -6428,39 +6421,8 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
+                    onSelectModele={(url, filename) => addToCanvas(url, filename)}
                   />
-                )}
-
-                {/* Bibliothèque de modèles (selon le type de projet) */}
-                {modelesCategories && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden mt-1">
-                    <button
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
-                        isBibliothequeOpen
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                      }`}
-                      onClick={() => setIsBibliothequeOpen(prev => !prev)}
-                    >
-                      <Library className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium flex-1">
-                        {language === "fr" ? "Bibliothèque de modèles" : "Template library"}
-                      </span>
-                      {isBibliothequeOpen ? (
-                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 flex-shrink-0" />
-                      )}
-                    </button>
-                    {isBibliothequeOpen && (
-                      <div className="p-3 bg-white">
-                        <BibliothequeModeles
-                          categories={modelesCategories}
-                          onSelectModele={(url, filename) => addToCanvas(url, filename)}
-                        />
-                      </div>
-                    )}
-                  </div>
                 )}
               </div>
             </div>

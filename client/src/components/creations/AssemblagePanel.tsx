@@ -44,6 +44,7 @@ import { Slider } from "@/components/ui/slider";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { db } from "@/db";
 import { toast } from "sonner";
+import BibliothequeModeles from "./BibliothequeModeles";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,6 +249,10 @@ export interface AssemblagePanelProps {
   lineStrokeWidth?: number;
   /** Callback quand l'utilisateur change l'épaisseur */
   onLineStrokeWidthChange?: (width: number) => void;
+  /** Catégories de modèles à afficher dans les sections passe-partout / pêle-mêle */
+  modelesCategories?: string[] | null;
+  /** Callback quand l'utilisateur sélectionne un modèle */
+  onSelectModele?: (url: string, filename: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1731,7 +1736,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "passe-partout",    labelFr: "Passe-partout modèle",        labelEn: "Mat frame template",        icon: Frame              },
   { id: "montage-pp",       labelFr: "Montage / Passe-partout",     labelEn: "Montage / Mat frame",       icon: Frame              },
-  { id: "pelemele-modele",  labelFr: "Formes",                     labelEn: "Shapes",                    icon: RectangleHorizontal },
+  { id: "pelemele-modele",  labelFr: "Pêle-mêle modèle",           labelEn: "Photo collage template",    icon: RectangleHorizontal },
   { id: "montage-pelemele", labelFr: "Montage / Pêle-mêle",        labelEn: "Montage / Collage",         icon: RectangleHorizontal },
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
@@ -1781,55 +1786,65 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
             {isOpen && (
               <div className="p-3 bg-white">
                 {(section.id === "passe-partout" || section.id === "montage-pp") && (
-                  <PassePartoutSection
-                    canvasFormat={props.canvasFormat}
-                    onAddPassePartout={props.onAddPassePartout}
-                    onReplacePassePartout={props.onReplacePassePartout}
-                    onReplaceColorOnly={props.onReplaceColorOnly}
-                    onReplacePatternOnly={props.onReplacePatternOnly}
-                    hasExistingPassePartout={props.hasExistingPassePartout}
-                    onAddOpening={props.onAddOpening}
-                    onValidateOpening={props.onValidateOpening}
-                    onDeleteOpening={props.onDeleteOpening}
-                    onApplyColorToOpenings={props.onApplyColorToOpenings}
-                    onGenerateFromOpenings={props.onGenerateFromOpenings}
-                    canvasOpenings={props.canvasOpenings}
-                    activeOpeningId={props.activeOpeningId}
-                    selectedCanvasElementId={props.selectedCanvasElementId}
-                    onApplyTemplate={props.onApplyTemplate}
-                    onGetCurrentShapes={props.onGetCurrentShapes}
-                    onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
-                    onExportLaserSVG={props.onExportLaserSVG}
-                    onAddBackground={props.onAddBackground}
-                    hasExistingBackground={props.hasExistingBackground}
-                    onRemoveBackground={props.onRemoveBackground}
-                    showFormatBorder={props.showFormatBorder}
-                    onShowFormatBorderChange={props.onShowFormatBorderChange}
-                    filets={props.filets}
-                    onFiletsChange={props.onFiletsChange}
-                    segmentEditorActive={props.segmentEditorActive}
-                    segmentsRounded={props.segmentsRounded}
-                    onRoundAllSegments={props.onRoundAllSegments}
-                    isNodeEditMode={props.isNodeEditMode}
-                    onToggleNodeEditMode={props.onToggleNodeEditMode}
-                    selectedSegmentIndex={props.selectedSegmentIndex}
-                    onRoundSegmentConcave={props.onRoundSegmentConcave}
-                    onRoundSegmentConvex={props.onRoundSegmentConvex}
-                    onDeleteSegment={props.onDeleteSegment}
-                    onStraightenSegment={props.onStraightenSegment}
-                    isCutMode={props.isCutMode}
-                    onToggleCutMode={props.onToggleCutMode}
-                    isLineDrawMode={props.isLineDrawMode}
-                    onToggleLineDrawMode={props.onToggleLineDrawMode}
-                    lineSelected={props.lineSelected}
-                    lineIsRounded={props.lineIsRounded}
-                    onRoundLine={props.onRoundLine}
-                    lineChainCount={props.lineChainCount}
-                    lineColor={props.lineColor}
-                    onLineColorChange={props.onLineColorChange}
-                    lineStrokeWidth={props.lineStrokeWidth}
-                    onLineStrokeWidthChange={props.onLineStrokeWidthChange}
-                  />
+                  <>
+                    <PassePartoutSection
+                      canvasFormat={props.canvasFormat}
+                      onAddPassePartout={props.onAddPassePartout}
+                      onReplacePassePartout={props.onReplacePassePartout}
+                      onReplaceColorOnly={props.onReplaceColorOnly}
+                      onReplacePatternOnly={props.onReplacePatternOnly}
+                      hasExistingPassePartout={props.hasExistingPassePartout}
+                      onAddOpening={props.onAddOpening}
+                      onValidateOpening={props.onValidateOpening}
+                      onDeleteOpening={props.onDeleteOpening}
+                      onApplyColorToOpenings={props.onApplyColorToOpenings}
+                      onGenerateFromOpenings={props.onGenerateFromOpenings}
+                      canvasOpenings={props.canvasOpenings}
+                      activeOpeningId={props.activeOpeningId}
+                      selectedCanvasElementId={props.selectedCanvasElementId}
+                      onApplyTemplate={props.onApplyTemplate}
+                      onGetCurrentShapes={props.onGetCurrentShapes}
+                      onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
+                      onExportLaserSVG={props.onExportLaserSVG}
+                      onAddBackground={props.onAddBackground}
+                      hasExistingBackground={props.hasExistingBackground}
+                      onRemoveBackground={props.onRemoveBackground}
+                      showFormatBorder={props.showFormatBorder}
+                      onShowFormatBorderChange={props.onShowFormatBorderChange}
+                      filets={props.filets}
+                      onFiletsChange={props.onFiletsChange}
+                      segmentEditorActive={props.segmentEditorActive}
+                      segmentsRounded={props.segmentsRounded}
+                      onRoundAllSegments={props.onRoundAllSegments}
+                      isNodeEditMode={props.isNodeEditMode}
+                      onToggleNodeEditMode={props.onToggleNodeEditMode}
+                      selectedSegmentIndex={props.selectedSegmentIndex}
+                      onRoundSegmentConcave={props.onRoundSegmentConcave}
+                      onRoundSegmentConvex={props.onRoundSegmentConvex}
+                      onDeleteSegment={props.onDeleteSegment}
+                      onStraightenSegment={props.onStraightenSegment}
+                      isCutMode={props.isCutMode}
+                      onToggleCutMode={props.onToggleCutMode}
+                      isLineDrawMode={props.isLineDrawMode}
+                      onToggleLineDrawMode={props.onToggleLineDrawMode}
+                      lineSelected={props.lineSelected}
+                      lineIsRounded={props.lineIsRounded}
+                      onRoundLine={props.onRoundLine}
+                      lineChainCount={props.lineChainCount}
+                      lineColor={props.lineColor}
+                      onLineColorChange={props.onLineColorChange}
+                      lineStrokeWidth={props.lineStrokeWidth}
+                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
+                    />
+                    {section.id === "passe-partout" && props.onSelectModele && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <BibliothequeModeles
+                          categories={["passe-partout"]}
+                          onSelectModele={props.onSelectModele}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
                 {section.id === "pelemele-modele" && (
                   <div className="space-y-2">
@@ -1887,6 +1902,14 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       lineStrokeWidth={props.lineStrokeWidth}
                       onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                     />
+                    {props.onSelectModele && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <BibliothequeModeles
+                          categories={["pele-mele"]}
+                          onSelectModele={props.onSelectModele}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 {section.id === "montage-pelemele" && (

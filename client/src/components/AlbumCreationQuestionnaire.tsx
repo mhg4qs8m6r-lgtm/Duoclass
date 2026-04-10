@@ -261,7 +261,7 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
     try {
       const project = await createCreationsProject(newProjectName.trim());
       // Stocker la catégorie (en_cours) et le type du projet
-      await db.creations_projects.update(project.id, { projectCategory: newProjectCategory, projectType: newProjectType } as any);
+      await db.creations_projects.update(project.id, { projectCategory: newProjectCategory, projectType: newProjectType });
       toast.success(language === "fr" ? "Projet créé avec succès" : "Project created successfully");
       setNewProjectName("");
       setNewProjectType("Projet libre");

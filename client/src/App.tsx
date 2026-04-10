@@ -32,6 +32,7 @@ import TestCanvas from "@/pages/TestCanvas";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { initCategories, db, AlbumMeta } from "./db";
 import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
+import SyncInitializer from "./components/SyncInitializer";
 
 function Router() {
   const [zoomLevel, setZoomLevel] = useState(0);
@@ -189,6 +190,7 @@ function App() {
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
             <Toaster position="top-center" toastOptions={{ style: { marginTop: '50px' } }} />
+            <SyncInitializer />
             <Router />
           </TooltipProvider>
         </ThemeProvider>

@@ -10,7 +10,7 @@ const SYNC_QUEUE_KEY = 'duoclass_sync_queue';
 // Types pour la synchronisation
 export interface SyncQueueItem {
   id: string;
-  entityType: 'category' | 'album' | 'photo' | 'settings';
+  entityType: 'category' | 'album' | 'photo' | 'settings' | 'project' | 'bibliotheque';
   action: 'create' | 'update' | 'delete';
   data: any;
   timestamp: number;
@@ -103,11 +103,6 @@ export function addToSyncQueue(item: Omit<SyncQueueItem, 'id' | 'timestamp' | 'r
   }
   
   saveSyncQueue(queue);
-  
-  // Tenter de synchroniser immédiatement si en ligne
-  if (navigator.onLine) {
-    processSyncQueue();
-  }
 }
 
 /**

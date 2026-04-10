@@ -3,7 +3,7 @@ import { Folder, Image, Frame, Square, Circle, Trash2, Upload } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { db, BibliothequeItemDB } from "@/db";
+import { db, BibliothequeItemDB, addBibliothequeItem, deleteBibliothequeItemSync } from "@/db";
 import { toast } from "sonner";
 
 interface BibliothequeToolsPanelProps {
@@ -126,7 +126,7 @@ export default function BibliothequeToolsPanel({
           createdAt: Date.now(),
         };
 
-        await db.bibliotheque_items.add(newItem);
+        await addBibliothequeItem(newItem);
         setUserItems(prev => [...prev, newItem]);
         imported++;
       } catch (err) {
@@ -185,7 +185,7 @@ export default function BibliothequeToolsPanel({
       : `Delete "${item.name}" from your library?`;
     if (window.confirm(confirmMsg)) {
       try {
-        await db.bibliotheque_items.delete(item.id!);
+        await deleteBibliothequeItemSync(item.id!);
         setUserItems(prev => prev.filter(i => i.id !== item.id));
         toast.success(language === "fr" ? "Élément supprimé" : "Item deleted");
       } catch (err) {

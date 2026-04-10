@@ -265,14 +265,12 @@ export default function modelesIndexPlugin(): Plugin {
       });
 
       // ── Polling: sync Desktop → public every 2s ──────────────────────
+      // Note: pas de full-reload HMR — BibliothequeModeles re-fetch l'index
+      // toutes les 3s, donc les nouveaux fichiers apparaissent automatiquement
+      // sans recharger la page (ce qui perdrait l'état du canvas).
       setInterval(() => {
         if (syncAll()) {
           writeIndex();
-          try {
-            server.ws.send({ type: "full-reload" });
-          } catch {
-            // server not ready
-          }
         }
       }, 2000);
     },

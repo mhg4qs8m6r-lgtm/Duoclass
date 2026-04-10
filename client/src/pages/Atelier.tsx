@@ -248,7 +248,7 @@ export default function Atelier() {
                   </div>
                   <span className="font-normal text-gray-800 text-sm flex-1 break-words">
                     {language === 'fr' ? 'Projets en cours' : 'Current projects'}
-                    <span className="text-gray-400 ml-1">({creationsProjects.filter(p => ((p as any).projectCategory || 'en_cours') === 'en_cours').length})</span>
+                    <span className="text-gray-400 ml-1">({creationsProjects.filter(p => (p.projectCategory || 'en_cours') === 'en_cours').length})</span>
                   </span>
                 </div>
                 <div
@@ -272,7 +272,7 @@ export default function Atelier() {
                   </div>
                   <span className="font-normal text-gray-800 text-sm flex-1 break-words">
                     {language === 'fr' ? 'Projets finis' : 'Finished projects'}
-                    <span className="text-gray-400 ml-1">({creationsProjects.filter(p => (p as any).projectCategory === 'finis').length})</span>
+                    <span className="text-gray-400 ml-1">({creationsProjects.filter(p => p.projectCategory === 'finis').length})</span>
                   </span>
                 </div>
               </div>
@@ -290,7 +290,7 @@ export default function Atelier() {
                   </p>
                 ) : (() => {
                   const filteredProjects = creationsProjects.filter(p =>
-                    ((p as any).projectCategory || 'en_cours') === selectedProjectCategory
+                    (p.projectCategory || 'en_cours') === selectedProjectCategory
                   );
                   return filteredProjects.length === 0 ? (
                     <p className="text-gray-400 text-center py-4 text-sm">

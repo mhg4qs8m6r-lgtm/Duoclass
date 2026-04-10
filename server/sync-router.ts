@@ -22,6 +22,14 @@ import {
   deletePhotoMetadata,
   getUserSettings,
   upsertUserSettings,
+  getUserProjects,
+  getProjectsSince,
+  upsertProject,
+  deleteProject,
+  getUserBibliothequeItems,
+  getBibliothequeItemsSince,
+  upsertBibliothequeItem,
+  deleteBibliothequeItem,
   getSyncLogSince,
   logSyncAction,
 } from "./sync-db";
@@ -88,6 +96,32 @@ const userSettingsSchema = z.object({
   detectDuplicates: z.boolean().optional(),
   readExifData: z.boolean().optional(),
   additionalSettings: z.string().optional(),
+});
+
+const projectSchema = z.object({
+  localId: z.string(),
+  name: z.string(),
+  canvasElements: z.string().optional(),
+  canvasData: z.string().optional(),
+  photos: z.string().optional(),
+  canvasFormat: z.string().optional(),
+  canvasFormatWidth: z.number().optional(),
+  canvasFormatHeight: z.number().optional(),
+  thumbnail: z.string().optional(),
+  projectType: z.string().optional(),
+  projectCategory: z.string().optional(),
+});
+
+const bibliothequeItemSchema = z.object({
+  localId: z.string(),
+  category: z.string(),
+  type: z.string().optional(),
+  name: z.string(),
+  url: z.string().optional(),
+  thumbnail: z.string().optional(),
+  fullImage: z.string().optional(),
+  sourcePhotoId: z.string().optional(),
+  addedAt: z.number().optional(),
 });
 
 export const syncRouter = router({
@@ -349,6 +383,112 @@ export const syncRouter = router({
       }),
   }),
 
+  // ==================== PROJETS ====================
+
+  projects: router({
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const items = await getUserProjects(ctx.user.id);
+      return { projects: items, timestamp: Date.now() };
+    }),
+
+    upsert: protectedProcedure
+      .input(projectSchema)
+      .mutation(async ({ ctx, input }) => {
+        const project = await upsertProject({ ...input, userId: ctx.user.id });
+        if (project) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "project",
+            entityLocalId: input.localId,
+            action: "update",
+            newData: JSON.stringify({ name: input.name }),
+          });
+        }
+        return { success: !!project, project };
+      }),
+
+    syncBatch: protectedProcedure
+      .input(z.object({ projects: z.array(projectSchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const results = await Promise.all(
+          input.projects.map(p => upsertProject({ ...p, userId: ctx.user.id }))
+        );
+        return {
+          success: results.filter(r => r !== null).length,
+          failed: results.filter(r => r === null).length,
+          timestamp: Date.now(),
+        };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ localId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await deleteProject(ctx.user.id, input.localId);
+        if (success) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "project",
+            entityLocalId: input.localId,
+            action: "delete",
+          });
+        }
+        return { success };
+      }),
+  }),
+
+  // ==================== BIBLIOTHÈQUE ====================
+
+  bibliotheque: router({
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const items = await getUserBibliothequeItems(ctx.user.id);
+      return { items, timestamp: Date.now() };
+    }),
+
+    upsert: protectedProcedure
+      .input(bibliothequeItemSchema)
+      .mutation(async ({ ctx, input }) => {
+        const item = await upsertBibliothequeItem({ ...input, userId: ctx.user.id });
+        if (item) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "bibliotheque",
+            entityLocalId: input.localId,
+            action: "update",
+            newData: JSON.stringify({ name: input.name, category: input.category }),
+          });
+        }
+        return { success: !!item, item };
+      }),
+
+    syncBatch: protectedProcedure
+      .input(z.object({ items: z.array(bibliothequeItemSchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const results = await Promise.all(
+          input.items.map(item => upsertBibliothequeItem({ ...item, userId: ctx.user.id }))
+        );
+        return {
+          success: results.filter(r => r !== null).length,
+          failed: results.filter(r => r === null).length,
+          timestamp: Date.now(),
+        };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ localId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await deleteBibliothequeItem(ctx.user.id, input.localId);
+        if (success) {
+          await logSyncAction({
+            userId: ctx.user.id,
+            entityType: "bibliotheque",
+            entityLocalId: input.localId,
+            action: "delete",
+          });
+        }
+        return { success };
+      }),
+  }),
+
   // ==================== MINIATURES ====================
   
   thumbnails: router({
@@ -459,11 +599,13 @@ export const syncRouter = router({
    * Récupère toutes les données pour une synchronisation initiale
    */
   getFullSync: protectedProcedure.query(async ({ ctx }) => {
-    const [categories, albums, photos, settings] = await Promise.all([
+    const [categories, albums, photos, settings, projects, bibliothequeItems] = await Promise.all([
       getUserCategories(ctx.user.id),
       getUserAlbums(ctx.user.id),
       getUserPhotosMetadata(ctx.user.id),
       getUserSettings(ctx.user.id),
+      getUserProjects(ctx.user.id),
+      getUserBibliothequeItems(ctx.user.id),
     ]);
 
     return {
@@ -471,6 +613,8 @@ export const syncRouter = router({
       albums,
       photos,
       settings,
+      projects,
+      bibliothequeItems,
       timestamp: Date.now(),
     };
   }),
@@ -481,10 +625,12 @@ export const syncRouter = router({
   getChangesSince: protectedProcedure
     .input(z.object({ since: z.number() }))
     .query(async ({ ctx, input }) => {
-      const [categories, albums, photos, syncLog] = await Promise.all([
+      const [categories, albums, photos, projectsList, biblioItems, syncLogEntries] = await Promise.all([
         getCategoriesSince(ctx.user.id, input.since),
         getAlbumsSince(ctx.user.id, input.since),
         getPhotosMetadataSince(ctx.user.id, input.since),
+        getProjectsSince(ctx.user.id, input.since),
+        getBibliothequeItemsSince(ctx.user.id, input.since),
         getSyncLogSince(ctx.user.id, input.since),
       ]);
 
@@ -492,7 +638,9 @@ export const syncRouter = router({
         categories,
         albums,
         photos,
-        syncLog,
+        projects: projectsList,
+        bibliothequeItems: biblioItems,
+        syncLog: syncLogEntries,
         timestamp: Date.now(),
       };
     }),
@@ -506,12 +654,16 @@ export const syncRouter = router({
       albums: z.array(albumSchema).optional(),
       photos: z.array(photoMetadataSchema).optional(),
       settings: userSettingsSchema.optional(),
+      projects: z.array(projectSchema).optional(),
+      bibliothequeItems: z.array(bibliothequeItemSchema).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const results = {
         categories: { success: 0, failed: 0 },
         albums: { success: 0, failed: 0 },
         photos: { success: 0, failed: 0 },
+        projects: { success: 0, failed: 0 },
+        bibliothequeItems: { success: 0, failed: 0 },
         settings: false,
       };
 
@@ -551,6 +703,24 @@ export const syncRouter = router({
           userId: ctx.user.id,
         });
         results.settings = !!settingsResult;
+      }
+
+      // Synchroniser les projets
+      if (input.projects) {
+        for (const p of input.projects) {
+          const result = await upsertProject({ ...p, userId: ctx.user.id });
+          if (result) results.projects.success++;
+          else results.projects.failed++;
+        }
+      }
+
+      // Synchroniser la bibliothèque
+      if (input.bibliothequeItems) {
+        for (const item of input.bibliothequeItems) {
+          const result = await upsertBibliothequeItem({ ...item, userId: ctx.user.id });
+          if (result) results.bibliothequeItems.success++;
+          else results.bibliothequeItems.failed++;
+        }
       }
 
       return { results, timestamp: Date.now() };

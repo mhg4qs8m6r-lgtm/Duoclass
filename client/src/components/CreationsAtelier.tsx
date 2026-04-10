@@ -10,7 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoFrame } from "@/types/photo";
-import { db, BibliothequeItemDB } from "@/db";
+import { db, BibliothequeItemDB, addBibliothequeItem, deleteBibliothequeItemSync } from "@/db";
 import { toast } from "sonner";
 
 // Import des sous-composants (pour les modales)
@@ -158,8 +158,8 @@ export default function CreationsAtelier({
         createdAt: item.createdAt,
         sourcePhotoId: item.sourcePhotoId,
       };
-      await db.bibliotheque_items.add(dbItem);
-      
+      await addBibliothequeItem(dbItem);
+
       // Ajouter aussi à la colonne de droite
       setRightPanelItems(prev => [...prev, {
         id: item.id,
@@ -704,7 +704,7 @@ export default function CreationsAtelier({
               items={bibliothequeItems}
               onRemove={async (id) => {
                 setBibliothequeItems(prev => prev.filter(item => item.id !== id));
-                await db.bibliotheque_items.delete(id);
+                await deleteBibliothequeItemSync(id);
                 toast.success(language === "fr" ? "Élément supprimé" : "Item deleted");
               }}
               onAddToCollage={(element) => {

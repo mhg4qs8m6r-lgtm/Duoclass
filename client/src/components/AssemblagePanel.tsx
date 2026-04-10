@@ -46,7 +46,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { db, BibliothequeItemDB, MODELES_STICKERS_ALBUM_ID } from "@/db";
+import { db, BibliothequeItemDB, MODELES_STICKERS_ALBUM_ID, addBibliothequeItem, deleteBibliothequeItemSync } from "@/db";
 import type { PhotoFrame } from "@/types/photo";
 import { toast } from "sonner";
 
@@ -1291,7 +1291,7 @@ function CadresBorduresSection({
         addedAt: Date.now(),
         createdAt: Date.now(),
       };
-      await db.bibliotheque_items.add(item);
+      await addBibliothequeItem(item);
       setUserFrames((prev) => [...prev, item]);
       toast.success(language === "fr" ? `Cadre "${name}" ajouté` : `Frame "${name}" added`);
     },
@@ -1344,7 +1344,7 @@ function CadresBorduresSection({
   const handleDelete = async (item: BibliothequeItemDB, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(language === "fr" ? `Supprimer "${item.name}" ?` : `Delete "${item.name}"?`)) return;
-    await db.bibliotheque_items.delete(item.id!);
+    await deleteBibliothequeItemSync(item.id!);
     setUserFrames((prev) => prev.filter((f) => f.id !== item.id));
     toast.success(language === "fr" ? "Cadre supprimé" : "Frame deleted");
   };

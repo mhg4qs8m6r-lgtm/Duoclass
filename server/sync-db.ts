@@ -5,20 +5,26 @@
 
 import { eq, and, gt, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { 
-  categories, 
-  albums, 
-  photoMetadata, 
-  userSettings, 
+import {
+  categories,
+  albums,
+  photoMetadata,
+  userSettings,
   syncLog,
+  projects,
+  bibliothequeItems,
   InsertCategory,
   InsertAlbum,
   InsertPhotoMetadata,
   InsertUserSettings,
+  InsertProject,
+  InsertBibliothequeItem,
   Category,
   Album,
   PhotoMetadata,
-  UserSettings
+  UserSettings,
+  Project,
+  BibliothequeItem
 } from "../drizzle/schema";
 
 // ==================== CATÉGORIES ====================
@@ -481,6 +487,139 @@ export async function upsertUserSettings(data: InsertUserSettings): Promise<User
   }
 }
 
+// ==================== PROJETS ====================
+
+export async function getUserProjects(userId: number): Promise<Project[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(projects).where(eq(projects.userId, userId));
+  } catch (error) {
+    console.error("[Sync] Failed to get projects:", error);
+    return [];
+  }
+}
+
+export async function getProjectsSince(userId: number, since: number): Promise<Project[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(projects).where(and(
+      eq(projects.userId, userId),
+      gt(projects.syncTimestamp, since)
+    ));
+  } catch (error) {
+    console.error("[Sync] Failed to get projects since:", error);
+    return [];
+  }
+}
+
+export async function upsertProject(data: InsertProject): Promise<Project | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+    const existing = await db.select().from(projects)
+      .where(and(eq(projects.userId, data.userId), eq(projects.localId, data.localId)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db.update(projects).set(values).where(eq(projects.id, existing[0].id));
+      return { ...existing[0], ...values } as Project;
+    } else {
+      await db.insert(projects).values(values);
+      const created = await db.select().from(projects)
+        .where(and(eq(projects.userId, data.userId), eq(projects.localId, data.localId)))
+        .limit(1);
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert project:", error);
+    return null;
+  }
+}
+
+export async function deleteProject(userId: number, localId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.delete(projects).where(and(eq(projects.userId, userId), eq(projects.localId, localId)));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete project:", error);
+    return false;
+  }
+}
+
+// ==================== BIBLIOTHÈQUE ====================
+
+export async function getUserBibliothequeItems(userId: number): Promise<BibliothequeItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(bibliothequeItems).where(eq(bibliothequeItems.userId, userId));
+  } catch (error) {
+    console.error("[Sync] Failed to get bibliotheque items:", error);
+    return [];
+  }
+}
+
+export async function getBibliothequeItemsSince(userId: number, since: number): Promise<BibliothequeItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(bibliothequeItems).where(and(
+      eq(bibliothequeItems.userId, userId),
+      gt(bibliothequeItems.syncTimestamp, since)
+    ));
+  } catch (error) {
+    console.error("[Sync] Failed to get bibliotheque items since:", error);
+    return [];
+  }
+}
+
+export async function upsertBibliothequeItem(data: InsertBibliothequeItem): Promise<BibliothequeItem | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const now = Date.now();
+    const values = { ...data, syncTimestamp: now };
+    const existing = await db.select().from(bibliothequeItems)
+      .where(and(eq(bibliothequeItems.userId, data.userId), eq(bibliothequeItems.localId, data.localId)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db.update(bibliothequeItems).set(values).where(eq(bibliothequeItems.id, existing[0].id));
+      return { ...existing[0], ...values } as BibliothequeItem;
+    } else {
+      await db.insert(bibliothequeItems).values(values);
+      const created = await db.select().from(bibliothequeItems)
+        .where(and(eq(bibliothequeItems.userId, data.userId), eq(bibliothequeItems.localId, data.localId)))
+        .limit(1);
+      return created[0] || null;
+    }
+  } catch (error) {
+    console.error("[Sync] Failed to upsert bibliotheque item:", error);
+    return null;
+  }
+}
+
+export async function deleteBibliothequeItem(userId: number, localId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.delete(bibliothequeItems).where(and(
+      eq(bibliothequeItems.userId, userId),
+      eq(bibliothequeItems.localId, localId)
+    ));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete bibliotheque item:", error);
+    return false;
+  }
+}
+
 // ==================== JOURNAL DE SYNCHRONISATION ====================
 
 /**
@@ -488,7 +627,7 @@ export async function upsertUserSettings(data: InsertUserSettings): Promise<User
  */
 export async function logSyncAction(data: {
   userId: number;
-  entityType: "category" | "album" | "photo" | "settings";
+  entityType: "category" | "album" | "photo" | "settings" | "project" | "bibliotheque";
   entityLocalId: string;
   action: "create" | "update" | "delete";
   previousData?: string;
