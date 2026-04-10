@@ -264,7 +264,12 @@ export default function Layout(props: LayoutProps) {
                 draggable={false}
               />
               <div className="flex flex-col">
-                <div className="text-xl font-semibold text-blue-700 leading-tight">DuoClass</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-semibold text-blue-700 leading-tight">DuoClass</div>
+                  {user?.email === 'caron7501@gmail.com' && (
+                    <span className="text-xs font-bold text-red-600">Version Admin</span>
+                  )}
+                </div>
                 <div className="text-[10px] text-gray-600 font-light whitespace-nowrap">{t('app.subtitle')}</div>
               </div>
             </div>
