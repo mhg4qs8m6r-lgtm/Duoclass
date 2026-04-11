@@ -223,3 +223,17 @@ export const passwordResetTokens = pgTable("passwordResetTokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+// ==================== MODÈLES PARTAGÉS ====================
+
+export const sharedModeles = pgTable("sharedModeles", {
+  id: serial("id").primaryKey(),
+  category: varchar("category", { length: 64 }).notNull(), // "passe-partout" | "pele-mele"
+  filename: varchar("filename", { length: 255 }).notNull(),
+  imageData: text("imageData").notNull(), // base64 data URL
+  uploadedBy: integer("uploadedBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SharedModele = typeof sharedModeles.$inferSelect;
+export type InsertSharedModele = typeof sharedModeles.$inferInsert;

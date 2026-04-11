@@ -10,6 +10,8 @@ export interface CollecteurItem {
   src: string;
   name: string;
   thumbnail?: string;
+  widthCm?: number;
+  heightCm?: number;
 }
 
 interface CollecteurProps {
@@ -79,7 +81,17 @@ export default function Collecteur({ items, onRemoveItem, onClearAll }: Collecte
           {items.map((item) => (
             <div
               key={item.id}
-              className="relative bg-white rounded border border-gray-200 shadow-sm cursor-pointer transition-all duration-200 group w-28"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", JSON.stringify({
+                  src: item.src,
+                  name: item.name,
+                  widthCm: item.widthCm,
+                  heightCm: item.heightCm,
+                }));
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              className="relative bg-white rounded border border-gray-200 shadow-sm cursor-grab active:cursor-grabbing transition-all duration-200 group w-28"
             >
               <CrispThumbnail
                 src={item.thumbnail || item.src}

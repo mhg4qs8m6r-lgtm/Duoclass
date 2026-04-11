@@ -13,6 +13,7 @@ import {
   syncLog,
   projects,
   bibliothequeItems,
+  sharedModeles,
   InsertCategory,
   InsertAlbum,
   InsertPhotoMetadata,
@@ -24,7 +25,8 @@ import {
   PhotoMetadata,
   UserSettings,
   Project,
-  BibliothequeItem
+  BibliothequeItem,
+  SharedModele,
 } from "../drizzle/schema";
 
 // ==================== CATÉGORIES ====================
@@ -669,5 +671,47 @@ export async function getSyncLogSince(userId: number, since: number) {
   } catch (error) {
     console.error("[Sync] Failed to get sync log:", error);
     return [];
+  }
+}
+
+// ==================== MODÈLES PARTAGÉS ====================
+
+export async function getAllSharedModeles(): Promise<SharedModele[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(sharedModeles).orderBy(sharedModeles.createdAt);
+  } catch (error) {
+    console.error("[Sync] Failed to get shared modeles:", error);
+    return [];
+  }
+}
+
+export async function createSharedModele(data: {
+  category: string;
+  filename: string;
+  imageData: string;
+  uploadedBy: number;
+}): Promise<SharedModele | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const result = await db.insert(sharedModeles).values(data).returning();
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Sync] Failed to create shared modele:", error);
+    return null;
+  }
+}
+
+export async function deleteSharedModele(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.delete(sharedModeles).where(eq(sharedModeles.id, id));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete shared modele:", error);
+    return false;
   }
 }

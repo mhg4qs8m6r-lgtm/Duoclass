@@ -67,6 +67,8 @@ export interface CollecteurItem {
   albumId?: string;
   albumName?: string;
   projectId?: string;
+  widthCm?: number;
+  heightCm?: number;
   addedAt: number;
 }
 

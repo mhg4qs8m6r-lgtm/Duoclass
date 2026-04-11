@@ -11,6 +11,7 @@ import { PhotoFrame } from "@/types/photo";
 import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, createCreationsProject, getCreationsProject, updateCreationsProject, deleteCreationsProject, saveCollageToAlbum, addToCollecteur, removeFromCollecteur, clearCollecteur } from "@/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
@@ -37,7 +38,8 @@ const PAPER_FORMATS = [
   { id: "13x18", width: 13, height: 18, label: "13 x 18 cm" },
   { id: "18x24", width: 18, height: 24, label: "18 x 24 cm" },
   { id: "20x25", width: 20, height: 25, label: "20 x 25 cm" },
-  { id: "24x30", width: 24, height: 29.7, label: "24 x 29,7 cm" },
+  { id: "A4", width: 21, height: 29.7, label: "A4 (21 x 29,7 cm)" },
+  { id: "24x30", width: 24, height: 30, label: "24 x 30 cm" },
   { id: "30x40", width: 30, height: 40, label: "30 x 40 cm" },
   { id: "40x50", width: 40, height: 50, label: "40 x 50 cm" },
   { id: "custom", width: 20, height: 20, label: "Personnalisé" },
@@ -708,20 +710,21 @@ export default function CreationsAtelierV2({
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  // Épaisseurs selon le rôle : admin = traits épais pour gabarits, user = traits fins élégants
-  const STROKE_THICK = isAdmin ? 5 : 1.5;    // formes standard (canvas 2D)
-  const STROKE_PUZZLE = isAdmin ? 5 : 1.5;   // puzzle (canvas 2D)
-  const STROKE_LINE = isAdmin ? 4 : 1.5;     // lignes (canvas 2D)
-  const STROKE_SVG = isAdmin ? 4 : 1.5;      // formes SVG overlay (non sélectionné)
-  const STROKE_SVG_SEL = isAdmin ? 5 : 2;    // formes SVG overlay (sélectionné)
-  const STROKE_FILET_MIN = isAdmin ? 4 : 1;  // filets min
-  const STROKE_THUMB = isAdmin ? 20 : 6;     // contours vignettes passe-partout
+  const uploadModeleMut = trpc.sync.sharedModeles.upload.useMutation();
+  // Épaisseurs selon le rôle : admin = traits épais pour gabarits, user = traits nets et visibles
+  const STROKE_THICK = isAdmin ? 5 : 2.5;    // formes standard (canvas 2D)
+  const STROKE_PUZZLE = isAdmin ? 5 : 2.5;   // puzzle (canvas 2D)
+  const STROKE_LINE = isAdmin ? 4 : 2.5;     // lignes (canvas 2D)
+  const STROKE_SVG = isAdmin ? 4 : 2.5;      // formes SVG overlay (non sélectionné)
+  const STROKE_SVG_SEL = isAdmin ? 5 : 3;    // formes SVG overlay (sélectionné)
+  const STROKE_FILET_MIN = isAdmin ? 4 : 1.5;  // filets min
+  const STROKE_THUMB = isAdmin ? 20 : 8;     // contours vignettes passe-partout
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   
   // État du canvas
-  const [paperFormat, setPaperFormat] = useState(PAPER_FORMATS[4]); // 24x29.7 par défaut
+  const [paperFormat, setPaperFormat] = useState(PAPER_FORMATS[4]); // A4 (21x29,7) par défaut
   // Dimensions du format personnalisé (en cm, saisie libre)
   const [customWidth, setCustomWidth] = useState(20);
   const [customHeight, setCustomHeight] = useState(20);
@@ -1057,6 +1060,8 @@ export default function CreationsAtelierV2({
       src: dbItem.photoUrl,
       name: dbItem.name,
       thumbnail: dbItem.thumbnail,
+      widthCm: dbItem.widthCm,
+      heightCm: dbItem.heightCm,
     }));
 
     // Toujours forcer la mise à jour — pas d'optimisation qui pourrait bloquer
@@ -2358,6 +2363,11 @@ export default function CreationsAtelierV2({
       const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
       const outW = Math.round(fmtW * PX_PER_CM);
       const outH = Math.round(fmtH * PX_PER_CM);
+
+      // Épaisseurs de trait pour l'export (en cm → px), indépendantes de la résolution écran
+      const EXP_STROKE_THICK  = Math.max(2.5, (isAdmin ? 0.085 : 0.05) * PX_PER_CM);
+      const EXP_STROKE_PUZZLE = Math.max(2.5, (isAdmin ? 0.085 : 0.05) * PX_PER_CM);
+      const EXP_STROKE_LINE   = Math.max(2.5, (isAdmin ? 0.07  : 0.05) * PX_PER_CM);
       
       const offscreen = document.createElement('canvas');
       offscreen.width = outW;
@@ -2400,7 +2410,7 @@ export default function CreationsAtelierV2({
 
           const fillColor = element.openingColor || '#ffffff';
           const strokeColor = '#000000';
-          const strokeWidth = STROKE_THICK;
+          const strokeWidth = EXP_STROKE_THICK;
 
           if (element.shape === 'puzzle') {
             const edges = element.puzzleEdges || { top: 0, right: 0, bottom: 0, left: 0 };
@@ -2411,7 +2421,7 @@ export default function CreationsAtelierV2({
             ctx.fill(path2d);
             // Trait de découpe laser
             ctx.strokeStyle = '#000000';
-            ctx.lineWidth = STROKE_PUZZLE;
+            ctx.lineWidth = EXP_STROKE_PUZZLE;
             ctx.lineJoin = 'round';
             ctx.stroke(path2d);
             if (element.puzzleShowNumber && element.openingIndex != null) {
@@ -2522,7 +2532,7 @@ export default function CreationsAtelierV2({
                 ctx.lineTo(lx2, ly2);
               }
               ctx.strokeStyle = lineStrokeColor;
-              ctx.lineWidth = STROKE_LINE;
+              ctx.lineWidth = EXP_STROKE_LINE;
               ctx.lineCap = 'round';
               ctx.stroke();
               ctx.restore();
@@ -2965,58 +2975,20 @@ export default function CreationsAtelierV2({
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      // Generate unique filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = `${baseName}_${timestamp}.png`;
-      const resp = await fetch(`/api/modeles/${encodeURIComponent(saveAsModeleCategory)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename, dataUrl }),
+      await uploadModeleMut.mutateAsync({
+        category: saveAsModeleCategory as "passe-partout" | "pele-mele" | "cadres" | "bordures",
+        filename,
+        imageData: dataUrl,
       });
-      if (!resp.ok) throw new Error("Server error");
       toast.success(
         language === "fr"
-          ? `Modèle "${filename}" sauvegardé dans ${saveAsModeleCategory}/`
-          : `Template "${filename}" saved to ${saveAsModeleCategory}/`
+          ? `Modèle "${filename}" envoyé dans l'appli !`
+          : `Template "${filename}" sent to app!`
       );
     } catch (err) {
       console.error("Erreur sauver comme modèle:", err);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleSaveToDesktop = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    const baseName = currentProjectName || (language === "fr" ? "Image" : "Image");
-    try {
-      const canvas = await captureCanvas(3);
-      if (!canvas) return;
-      const blob = await canvasToBlob(canvas, "image/png");
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const filename = `${baseName}_${timestamp}.png`;
-      const resp = await fetch("/api/save-to-desktop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename, dataUrl }),
-      });
-      if (!resp.ok) throw new Error("Server error");
-      toast.success(
-        language === "fr"
-          ? `"${filename}" déposée sur le Bureau !`
-          : `"${filename}" saved to Desktop!`
-      );
-    } catch (err) {
-      console.error("Erreur sauvegarde Bureau:", err);
       const errMsg = err instanceof Error ? err.message : String(err);
       toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
     } finally {
@@ -3389,7 +3361,7 @@ export default function CreationsAtelierV2({
     ctx.restore();
   };
 
-  const addToCanvas = (src: string, name?: string, dropPositionCmOrGroupId?: { x: number; y: number } | string, groupIdArg?: string) => {
+  const addToCanvas = (src: string, name?: string, dropPositionCmOrGroupId?: { x: number; y: number } | string, groupIdArg?: string, knownSizeCm?: { w: number; h: number }) => {
     // Surcharge : (src, name, groupId) ou (src, name, dropPosition, groupId)
     let dropPositionCm: { x: number; y: number } | undefined;
     let assignGroupId: string | undefined;
@@ -3402,21 +3374,31 @@ export default function CreationsAtelierV2({
     // Charger l'image pour obtenir ses dimensions réelles en pixels
     const img = document.createElement('img');
     img.onload = () => {
-      // Convertir les dimensions de l'image de pixels vers cm (résolution standard 96 DPI)
-      let widthCm = img.naturalWidth / PX_PER_CM_STANDARD;
-      let heightCm = img.naturalHeight / PX_PER_CM_STANDARD;
+      // Si les dimensions cm sont connues (Collecteur), les utiliser directement
+      let widthCm: number;
+      let heightCm: number;
+      if (knownSizeCm) {
+        widthCm = knownSizeCm.w;
+        heightCm = knownSizeCm.h;
+      } else {
+        // Convertir les dimensions de l'image de pixels vers cm (résolution standard 96 DPI)
+        widthCm = img.naturalWidth / PX_PER_CM_STANDARD;
+        heightCm = img.naturalHeight / PX_PER_CM_STANDARD;
+      }
 
-      // Dimensions max en cm (80% du format papier)
       const formatWidthCm = orientation === "portrait" ? paperFormat.width : paperFormat.height;
       const formatHeightCm = orientation === "portrait" ? paperFormat.height : paperFormat.width;
-      const maxWidthCm = formatWidthCm * 0.8;
-      const maxHeightCm = formatHeightCm * 0.8;
 
-      // Redimensionner si nécessaire tout en gardant les proportions
-      if (widthCm > maxWidthCm || heightCm > maxHeightCm) {
-        const ratio = Math.min(maxWidthCm / widthCm, maxHeightCm / heightCm);
-        widthCm = widthCm * ratio;
-        heightCm = heightCm * ratio;
+      // Si les dimensions sont connues (Collecteur / modèle), les conserver telles quelles.
+      // Sinon (import photo), limiter à 80% du format papier.
+      if (!knownSizeCm) {
+        const maxWidthCm = formatWidthCm * 0.8;
+        const maxHeightCm = formatHeightCm * 0.8;
+        if (widthCm > maxWidthCm || heightCm > maxHeightCm) {
+          const ratio = Math.min(maxWidthCm / widthCm, maxHeightCm / heightCm);
+          widthCm = widthCm * ratio;
+          heightCm = heightCm * ratio;
+        }
       }
 
       // Position : utiliser le point de drop (centré sur l'image) ou centrer sur la page
@@ -6421,7 +6403,12 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
-                    onSelectModele={(url, filename) => addToCanvas(url, filename)}
+                    onSelectModele={(url, filename) => {
+                      // Les modèles de la bibliothèque sont des gabarits pleine page
+                      const fmtW = orientation === "portrait" ? paperFormat.width : paperFormat.height;
+                      const fmtH = orientation === "portrait" ? paperFormat.height : paperFormat.width;
+                      addToCanvas(url, filename, undefined, undefined, { w: fmtW, h: fmtH });
+                    }}
                   />
                 )}
               </div>
@@ -6909,7 +6896,10 @@ export default function CreationsAtelierV2({
                     try {
                       const item = JSON.parse(data);
                       if (item.src) {
-                        addToCanvas(item.src, item.name, dropPositionCm);
+                        const sizeCm = item.widthCm && item.heightCm
+                          ? { w: item.widthCm, h: item.heightCm }
+                          : undefined;
+                        addToCanvas(item.src, item.name, dropPositionCm, undefined, sizeCm);
                       }
                     } catch {
                       if (data.startsWith("data:") || data.startsWith("http")) {
@@ -7302,9 +7292,10 @@ export default function CreationsAtelierV2({
                             <path
                               d={localPath}
                               fill={fillColor}
-                              stroke="#6366f1"
-                              strokeWidth="1.5"
-                              strokeDasharray="4 2"
+                              stroke="#000000"
+                              strokeWidth={STROKE_SVG}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             />
                           </svg>
                         );
@@ -7466,7 +7457,6 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={!isSelected && element.shape !== 'puzzle' ? '4 3' : undefined}
                           />
                           {/* Numéro de pièce au centre (optionnel, pour puzzles enfants) */}
                           {element.shape === 'puzzle' && element.puzzleShowNumber && element.openingIndex != null && (
@@ -8872,10 +8862,12 @@ export default function CreationsAtelierV2({
               <Save className="w-3.5 h-3.5" />
               {language === "fr" ? "Sauvegarder le projet" : "Save project"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-cyan-400 text-cyan-600 hover:bg-cyan-50" onClick={handleSaveToDesktop} disabled={isExporting}>
-              <Download className="w-3.5 h-3.5" />
-              {language === "fr" ? "Bureau" : "Desktop"}
-            </Button>
+            {isAdmin && saveAsModeleCategory && (
+              <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-green-400 text-green-600 hover:bg-green-50" onClick={handleSaveAsModele} disabled={isExporting}>
+                <Download className="w-3.5 h-3.5" />
+                {language === "fr" ? "Envoyer dans l'appli" : "Send to app"}
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>

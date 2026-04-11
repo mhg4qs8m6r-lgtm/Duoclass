@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { db, Category, AlbumData, AlbumMeta, createCreationsProject } from "../db";
+import { db, Category, AlbumData, AlbumMeta, createCreationsProject, updateCreationsProject } from "../db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v4 as uuidv4 } from 'uuid';
 import { Trash2, Lock, Camera, Video, Layers, FileText } from "lucide-react";
@@ -260,8 +260,8 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
     }
     try {
       const project = await createCreationsProject(newProjectName.trim());
-      // Stocker la catégorie (en_cours) et le type du projet
-      await db.creations_projects.update(project.id, { projectCategory: newProjectCategory, projectType: newProjectType });
+      // Stocker la catégorie (en_cours) et le type du projet — via updateCreationsProject pour sync serveur
+      await updateCreationsProject(project.id, { projectCategory: newProjectCategory, projectType: newProjectType });
       toast.success(language === "fr" ? "Projet créé avec succès" : "Project created successfully");
       setNewProjectName("");
       setNewProjectType("Projet libre");

@@ -69,6 +69,28 @@ function writeIndex() {
 // ── Desktop → public sync ────────────────────────────────────────────────────
 
 function ensureDesktopFolders() {
+  // Nettoyage défensif : fusionner "DuoClass-Modèles" (avec accent) vers "DuoClass-Modeles" si présent
+  const accentedDir = path.join(os.homedir(), "Desktop/DuoClass-Modèles");
+  if (fs.existsSync(accentedDir)) {
+    console.log("[modeles-index] Détection du dossier accentué DuoClass-Modèles — fusion vers DuoClass-Modeles");
+    for (const cat of CATEGORIES) {
+      const src = path.join(accentedDir, cat);
+      if (!fs.existsSync(src)) continue;
+      const dest = path.join(DESKTOP_DIR, cat);
+      if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+      for (const file of fs.readdirSync(src)) {
+        if (!ALLOWED_EXT.has(path.extname(file).toLowerCase())) continue;
+        const srcFile = path.join(src, file);
+        if (!fs.statSync(srcFile).isFile()) continue;
+        const destFile = path.join(dest, file);
+        if (!fs.existsSync(destFile)) fs.renameSync(srcFile, destFile);
+      }
+    }
+    // Supprimer le dossier accentué après fusion
+    fs.rmSync(accentedDir, { recursive: true, force: true });
+    console.log("[modeles-index] Dossier accentué DuoClass-Modèles supprimé après fusion");
+  }
+
   for (const cat of CATEGORIES) {
     const dir = path.join(DESKTOP_DIR, cat);
     if (!fs.existsSync(dir)) {

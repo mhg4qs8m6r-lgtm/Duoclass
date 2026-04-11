@@ -1977,6 +1977,14 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         ? "Composition libre. Glissez des photos sur le canvas et disposez-les comme vous le souhaitez."
                         : "Free composition. Drag photos onto the canvas and arrange them as you like."}
                     </p>
+                    {props.onSelectModele && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <BibliothequeModeles
+                          categories={["cadres", "bordures"]}
+                          onSelectModele={props.onSelectModele}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 {section.id === "texte" && (

@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
 import {
   getUserCategories,
   getCategoriesSince,
@@ -32,6 +32,9 @@ import {
   deleteBibliothequeItem,
   getSyncLogSince,
   logSyncAction,
+  getAllSharedModeles,
+  createSharedModele,
+  deleteSharedModele,
 } from "./sync-db";
 import { uploadThumbnail, uploadThumbnailsBatch } from "./thumbnails";
 
@@ -725,6 +728,46 @@ export const syncRouter = router({
 
       return { results, timestamp: Date.now() };
     }),
+
+  // ==================== MODÈLES PARTAGÉS ====================
+
+  sharedModeles: router({
+    /** Tous les utilisateurs authentifiés peuvent lister les modèles */
+    getAll: protectedProcedure.query(async () => {
+      const items = await getAllSharedModeles();
+      const grouped: Record<string, Array<{ id: number; filename: string; imageData: string }>> = {};
+      for (const item of items) {
+        if (!grouped[item.category]) grouped[item.category] = [];
+        grouped[item.category].push({ id: item.id, filename: item.filename, imageData: item.imageData });
+      }
+      return grouped;
+    }),
+
+    /** Admin uniquement : uploader un nouveau modèle */
+    upload: adminProcedure
+      .input(z.object({
+        category: z.enum(["passe-partout", "pele-mele", "cadres", "bordures"]),
+        filename: z.string(),
+        imageData: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const modele = await createSharedModele({
+          category: input.category,
+          filename: input.filename,
+          imageData: input.imageData,
+          uploadedBy: ctx.user.id,
+        });
+        return { success: !!modele, modele };
+      }),
+
+    /** Admin uniquement : supprimer un modèle */
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const success = await deleteSharedModele(input.id);
+        return { success };
+      }),
+  }),
 });
 
 export type SyncRouter = typeof syncRouter;

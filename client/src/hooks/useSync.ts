@@ -22,10 +22,11 @@ import { db } from '../lib/db';
  * Peuple IndexedDB avec les projets et éléments bibliothèque du serveur
  */
 async function populateLocalFromServer(data: any) {
-  // Projets
+  // Projets — fusionner avec les données locales pour ne pas écraser projectType/canvasData
   if (data.projects?.length) {
     for (const p of data.projects) {
-      await db.creations_projects.put({
+      const existing = await db.creations_projects.get(p.localId);
+      const serverData = {
         id: p.localId,
         name: p.name,
         canvasElements: p.canvasElements ? JSON.parse(p.canvasElements) : [],
@@ -39,7 +40,19 @@ async function populateLocalFromServer(data: any) {
         projectCategory: p.projectCategory ?? undefined,
         createdAt: new Date(p.createdAt).getTime(),
         updatedAt: new Date(p.updatedAt).getTime(),
-      });
+      };
+      if (existing) {
+        // Conserver les valeurs locales si le serveur n'en a pas
+        await db.creations_projects.put({
+          ...existing,
+          ...serverData,
+          projectType: serverData.projectType || existing.projectType,
+          projectCategory: serverData.projectCategory || existing.projectCategory,
+          canvasData: serverData.canvasData || existing.canvasData,
+        });
+      } else {
+        await db.creations_projects.put(serverData);
+      }
     }
     console.log(`[useSync] Populated ${data.projects.length} projects from server`);
   }
