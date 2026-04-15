@@ -248,7 +248,7 @@ export default function Layout(props: LayoutProps) {
           style={{ borderColor: customBorderColor || '#e5e7eb' }}
         >
           {/* Window Controls & Logo Section (Left) */}
-          <div className="flex items-center gap-4 w-[350px]">
+          <div className="flex items-center gap-4 shrink-0">
             {/* Window Controls (Mac-style) */}
             <div className="flex gap-2 shrink-0">
               <div className="w-3.5 h-3.5 rounded-full bg-red-500 border border-red-600 shadow-sm"></div>
@@ -257,9 +257,9 @@ export default function Layout(props: LayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <img 
-                src="/assets/logo-duoclass.png" 
-                alt="DuoClass Logo" 
+              <img
+                src="/assets/logo-duoclass.png"
+                alt="DuoClass Logo"
                 className="w-[55px] h-[55px] object-contain shrink-0"
                 draggable={false}
               />
@@ -276,19 +276,18 @@ export default function Layout(props: LayoutProps) {
           </div>
 
           {/* Center Title */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1">
-            <div className="bg-white px-8 py-1 shadow-sm min-w-[200px] text-center relative">
+          <div className="flex-1 flex justify-center min-w-0">
+            <div className="bg-white px-8 py-1 shadow-sm min-w-[200px] text-center">
               <h1 className="text-3xl font-bold text-[#00AEEF] whitespace-nowrap">
-                {location.startsWith('/photoclass') ? 'PhotoClass' : 
-                 location.startsWith('/classpapiers') ? 'Documents' : 
+                {location.startsWith('/photoclass') ? 'PhotoClass' :
+                 location.startsWith('/classpapiers') ? 'Documents' :
                  title}
               </h1>
-              {/* Indicateur Admin supprimé du titre */}
             </div>
           </div>
 
           {/* Right Section: Admin + Help + Avatar + Language */}
-          <div className="flex items-center gap-3 w-[350px] justify-end">
+          <div className="flex items-center gap-3 shrink-0">
             {/* Indicateur utilisateur + Bouton Déconnexion */}
             {isAuthenticated && (
               <div className={`flex items-center gap-2 mr-1 px-4 py-2 rounded-full shadow-sm ${

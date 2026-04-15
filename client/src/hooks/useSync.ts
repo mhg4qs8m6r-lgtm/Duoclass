@@ -22,6 +22,36 @@ import { db } from '../lib/db';
  * Peuple IndexedDB avec les projets et éléments bibliothèque du serveur
  */
 async function populateLocalFromServer(data: any) {
+  // Catégories
+  if (data.categories?.length) {
+    for (const cat of data.categories) {
+      await db.categories.put({
+        id: cat.localId,
+        label: cat.name,
+        color: cat.color || '#6366f1',
+        isDefault: cat.isSystem ?? false,
+        accessType: cat.localId?.includes('sec_') ? 'secure' : 'standard',
+        series: cat.contentType === 'documents' ? 'classpapiers' : 'photoclass',
+      });
+    }
+    console.log(`[useSync] Populated ${data.categories.length} categories from server`);
+  }
+
+  // Albums
+  if (data.albums?.length) {
+    for (const album of data.albums) {
+      await db.album_metas.put({
+        id: album.localId,
+        title: album.name,
+        type: album.isPrivate ? 'secure' : 'standard',
+        series: album.contentType === 'documents' ? 'classpapiers' : 'photoclass',
+        createdAt: new Date(album.createdAt).getTime(),
+        categoryId: album.categoryLocalId ?? undefined,
+      });
+    }
+    console.log(`[useSync] Populated ${data.albums.length} albums from server`);
+  }
+
   // Projets — fusionner avec les données locales pour ne pas écraser projectType/canvasData
   if (data.projects?.length) {
     for (const p of data.projects) {

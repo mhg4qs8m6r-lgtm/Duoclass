@@ -191,7 +191,10 @@ export default function Atelier() {
                 {/* Images projets (albums de cat_mes_projets) */}
                 {selectedCategory === 'cat_mes_projets' ? (
                   displayedAlbums.length === 0 ? (
-                    <div className="w-full max-w-[180px] rounded-lg px-3 py-1.5 flex items-center h-10 bg-gray-50 border border-gray-200">
+                    <div
+                      onClick={() => setShowCreationForm(true)}
+                      className="w-full max-w-[180px] rounded-lg cursor-pointer transition-all duration-200 px-3 py-1.5 flex items-center h-10 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300"
+                    >
                       <span className="font-normal text-gray-800 text-sm flex-1 break-words">
                         {language === 'fr' ? 'Images projets' : 'Project images'}
                       </span>

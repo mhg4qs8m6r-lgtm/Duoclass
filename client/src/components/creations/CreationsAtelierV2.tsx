@@ -4490,14 +4490,19 @@ export default function CreationsAtelierV2({
                 </h2>
                 <span className="text-gray-400">•</span>
                 <div className="flex flex-col">
-                  <input
-                    type="text"
-                    value={currentProjectName}
-                    onChange={(e) => setCurrentProjectName(e.target.value)}
-                    placeholder={language === 'fr' ? 'Nom du collage...' : 'Collage name...'}
-                    className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
-                    title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={currentProjectName}
+                      onChange={(e) => setCurrentProjectName(e.target.value)}
+                      placeholder={language === 'fr' ? 'Nom du collage...' : 'Collage name...'}
+                      className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
+                      title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
+                    />
+                    {user?.email === 'caron7501@gmail.com' && (
+                      <span className="text-sm font-bold" style={{ color: '#f97316' }}>Version Admin</span>
+                    )}
+                  </div>
                   <p className="text-sm text-purple-500 font-medium ml-3 mt-0.5">
                     {currentProjectType || 'Projet libre'}
                   </p>
