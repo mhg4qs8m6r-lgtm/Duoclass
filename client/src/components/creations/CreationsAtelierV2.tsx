@@ -733,6 +733,8 @@ export default function CreationsAtelierV2({
   const [customWidthText, setCustomWidthText] = useState('20');
   const [customHeightText, setCustomHeightText] = useState('20');
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
+  // Ref pour tracker les dimensions précédentes du format (pour redimensionner les éléments)
+  const prevFormatDimsRef = useRef<{ w: number; h: number } | null>(null);
   const [imageZoom, setImageZoom] = useState(100); // Zoom de l'image sélectionnée (100% = taille normale)
   const [showGrid, setShowGrid] = useState(true);
   const [showRulers, setShowRulers] = useState(true);
@@ -816,6 +818,44 @@ export default function CreationsAtelierV2({
 
   // Garder la ref synchrone
   useEffect(() => { canvasElementsRef.current = canvasElements; }, [canvasElements]);
+
+  // ── Redimensionnement proportionnel des éléments lors d'un changement de format ──
+  // Appelé explicitement par les handlers de changement de format / orientation.
+  const rescaleElementsToNewFormat = useCallback((newWidthCm: number, newHeightCm: number) => {
+    const prev = prevFormatDimsRef.current;
+    // Mettre à jour la ref avec les nouvelles dimensions
+    prevFormatDimsRef.current = { w: newWidthCm, h: newHeightCm };
+
+    if (!prev) return;
+
+    const scaleX = newWidthCm / prev.w;
+    const scaleY = newHeightCm / prev.h;
+
+    // Si les dimensions n'ont pas changé, rien à faire
+    if (Math.abs(scaleX - 1) < 0.001 && Math.abs(scaleY - 1) < 0.001) return;
+
+    // Échelle uniforme pour garder les proportions des formes
+    const scale = Math.min(scaleX, scaleY);
+
+    setCanvasElements(elems =>
+      elems.map(el => ({
+        ...el,
+        x: el.x * scaleX,
+        y: el.y * scaleY,
+        width: el.width * scale,
+        height: el.height * scale,
+      }))
+    );
+  }, [setCanvasElements]);
+
+  // Initialiser prevFormatDimsRef au premier rendu
+  useEffect(() => {
+    if (!prevFormatDimsRef.current) {
+      const w = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
+      const h = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+      prevFormatDimsRef.current = { w, h };
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Undo : restaurer le dernier snapshot
   const handleUndo = useCallback(() => {
@@ -1435,7 +1475,6 @@ export default function CreationsAtelierV2({
                 const format = PAPER_FORMATS.find(f => f.id === savedData.paperFormat);
                 if (format) {
                   if (format.id === 'custom' && savedData.customWidth && savedData.customHeight) {
-                    // Restaurer les dimensions personnalisées
                     const cw = Number(savedData.customWidth);
                     const ch = Number(savedData.customHeight);
                     setCustomWidth(cw);
@@ -1448,10 +1487,27 @@ export default function CreationsAtelierV2({
                   }
                 }
               }
-              
+
               // Restaurer l'orientation
               if (savedData.orientation) {
                 setOrientation(savedData.orientation);
+              }
+
+              // Synchroniser prevFormatDimsRef avec le format restauré pour que le
+              // prochain changement de format calcule le bon ratio de redimensionnement
+              {
+                const restoredFormat = savedData.paperFormat
+                  ? PAPER_FORMATS.find(f => f.id === savedData.paperFormat) || PAPER_FORMATS[4]
+                  : PAPER_FORMATS[4];
+                const rw = restoredFormat.id === 'custom' && savedData.customWidth
+                  ? Number(savedData.customWidth) : restoredFormat.width;
+                const rh = restoredFormat.id === 'custom' && savedData.customHeight
+                  ? Number(savedData.customHeight) : restoredFormat.height;
+                const ori = savedData.orientation || 'portrait';
+                prevFormatDimsRef.current = {
+                  w: ori === 'portrait' ? rw : rh,
+                  h: ori === 'portrait' ? rh : rw,
+                };
               }
               
               // Restaurer le zoom
@@ -4520,14 +4576,18 @@ export default function CreationsAtelierV2({
                 value={paperFormat.id}
                 onChange={(e) => {
                   const selected = PAPER_FORMATS.find(f => f.id === e.target.value) || PAPER_FORMATS[0];
+                  const newW = selected.id === 'custom' ? customWidth : selected.width;
+                  const newH = selected.id === 'custom' ? customHeight : selected.height;
+                  const newWidthCm = orientation === 'portrait' ? newW : newH;
+                  const newHeightCm = orientation === 'portrait' ? newH : newW;
                   if (selected.id === 'custom') {
-                    // Appliquer les dimensions personnalisées actuelles et synchroniser les textes
                     setCustomWidthText(String(customWidth));
                     setCustomHeightText(String(customHeight));
                     setPaperFormat({ ...selected, width: customWidth, height: customHeight });
                   } else {
                     setPaperFormat(selected);
                   }
+                  rescaleElementsToNewFormat(newWidthCm, newHeightCm);
                 }}
                 className="text-sm border rounded px-2 py-1"
               >
@@ -4555,15 +4615,20 @@ export default function CreationsAtelierV2({
                       const rounded = Math.round(v * 10) / 10;
                       setCustomWidthText(String(rounded));
                       setCustomWidth(rounded);
+                      let finalW = rounded;
+                      let finalH = customHeight;
                       if (lockAspectRatio && customWidth > 0) {
                         const ratio = customHeight / customWidth;
-                        const newH = Math.min(100, Math.max(5, Math.round(rounded * ratio * 10) / 10));
-                        setCustomHeight(newH);
-                        setCustomHeightText(String(newH));
-                        setPaperFormat(f => ({ ...f, width: rounded, height: newH }));
+                        finalH = Math.min(100, Math.max(5, Math.round(rounded * ratio * 10) / 10));
+                        setCustomHeight(finalH);
+                        setCustomHeightText(String(finalH));
+                        setPaperFormat(f => ({ ...f, width: rounded, height: finalH }));
                       } else {
                         setPaperFormat(f => ({ ...f, width: rounded }));
                       }
+                      const newWidthCm = orientation === 'portrait' ? finalW : finalH;
+                      const newHeightCm = orientation === 'portrait' ? finalH : finalW;
+                      rescaleElementsToNewFormat(newWidthCm, newHeightCm);
                     }}
                     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     className="w-14 text-xs border rounded px-1 py-0.5 text-center"
@@ -4605,15 +4670,20 @@ export default function CreationsAtelierV2({
                       const rounded = Math.round(v * 10) / 10;
                       setCustomHeightText(String(rounded));
                       setCustomHeight(rounded);
+                      let finalW = customWidth;
+                      let finalH = rounded;
                       if (lockAspectRatio && customHeight > 0) {
                         const ratio = customWidth / customHeight;
-                        const newW = Math.min(100, Math.max(5, Math.round(rounded * ratio * 10) / 10));
-                        setCustomWidth(newW);
-                        setCustomWidthText(String(newW));
-                        setPaperFormat(f => ({ ...f, width: newW, height: rounded }));
+                        finalW = Math.min(100, Math.max(5, Math.round(rounded * ratio * 10) / 10));
+                        setCustomWidth(finalW);
+                        setCustomWidthText(String(finalW));
+                        setPaperFormat(f => ({ ...f, width: finalW, height: rounded }));
                       } else {
                         setPaperFormat(f => ({ ...f, height: rounded }));
                       }
+                      const newWidthCm = orientation === 'portrait' ? finalW : finalH;
+                      const newHeightCm = orientation === 'portrait' ? finalH : finalW;
+                      rescaleElementsToNewFormat(newWidthCm, newHeightCm);
                     }}
                     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     className="w-14 text-xs border rounded px-1 py-0.5 text-center"
@@ -4744,7 +4814,14 @@ export default function CreationsAtelierV2({
               <Button
                 variant={orientation === "portrait" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setOrientation("portrait")}
+                onClick={() => {
+                  if (orientation !== "portrait") {
+                    const newW = paperFormat.width;
+                    const newH = paperFormat.height;
+                    rescaleElementsToNewFormat(newW, newH);
+                    setOrientation("portrait");
+                  }
+                }}
                 className={`text-xs px-3 h-6 ${orientation === "portrait" ? "bg-blue-600 text-white" : "text-gray-900 bg-white border-gray-300 hover:bg-gray-50"}`}
               >
                 Portrait
@@ -4752,7 +4829,14 @@ export default function CreationsAtelierV2({
               <Button
                 variant={orientation === "landscape" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setOrientation("landscape")}
+                onClick={() => {
+                  if (orientation !== "landscape") {
+                    const newW = paperFormat.height;
+                    const newH = paperFormat.width;
+                    rescaleElementsToNewFormat(newW, newH);
+                    setOrientation("landscape");
+                  }
+                }}
                 className={`text-xs px-3 h-6 ${orientation === "landscape" ? "bg-blue-600 text-white" : "text-gray-900 bg-white border-gray-300 hover:bg-gray-50"}`}
               >
                 Paysage

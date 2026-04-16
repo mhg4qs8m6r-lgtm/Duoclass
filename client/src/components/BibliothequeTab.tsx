@@ -277,6 +277,7 @@ export default function BibliothequeTab({
                       src={item.thumbnail}
                       alt={item.name}
                       className="max-w-full max-h-full object-contain"
+                      style={{ filter: 'contrast(200%) brightness(0.8)' }}
                       draggable={false}
                     />
                   </div>

@@ -341,6 +341,7 @@ export default function BibliothequeToolsPanel({
                 src={item.thumbnail || item.src}
                 alt={item.name}
                 className="w-full h-full object-contain"
+                style={{ filter: 'contrast(200%) brightness(0.8)' }}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "/images/placeholder.png";
                 }}

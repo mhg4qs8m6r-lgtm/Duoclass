@@ -978,7 +978,58 @@ function PassePartoutSection({
         )}
       </div>
 
+      {/* ======================================================
+           CADRE EXTÉRIEUR + EXPORT SVG
+           ====================================================== */}
+      <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
+        {/* Toggle Avec/Sans cadre extérieur */}
+        {onShowFormatBorderChange && (
+          <button
+            className={`w-full flex items-center justify-center gap-2 py-2 rounded border text-xs font-semibold transition-colors ${
+              showFormatBorder
+                ? 'border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+            onClick={() => onShowFormatBorderChange(!showFormatBorder)}
+            title={fr ? 'Afficher ou masquer le cadre extérieur de la page' : 'Show or hide the outer page frame'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+            </svg>
+            {showFormatBorder
+              ? (fr ? 'Avec cadre extérieur' : 'With outer frame')
+              : (fr ? 'Sans cadre extérieur' : 'Without outer frame')}
+          </button>
+        )}
 
+        {/* Bouton Télécharger en SVG */}
+        {onExportLaserSVG && (
+          <button
+            className={`w-full flex items-center justify-center gap-2 py-2 rounded border text-xs font-semibold transition-colors ${
+              canvasOpenings && canvasOpenings.length > 0
+                ? 'border-indigo-400 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+            }`}
+            onClick={() => {
+              if (canvasOpenings && canvasOpenings.length > 0) {
+                onExportLaserSVG();
+              }
+            }}
+            title={
+              canvasOpenings && canvasOpenings.length > 0
+                ? (fr ? 'Télécharger le fichier SVG de découpe' : 'Download the SVG cut file')
+                : (fr ? 'Ajoutez des ouvertures d\'abord' : 'Add openings first')
+            }
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {fr ? 'Télécharger en SVG' : 'Download as SVG'}
+          </button>
+        )}
+      </div>
 
     </div>
   );
