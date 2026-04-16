@@ -2420,10 +2420,13 @@ export default function CreationsAtelierV2({
       const outW = Math.round(fmtW * PX_PER_CM);
       const outH = Math.round(fmtH * PX_PER_CM);
 
-      // Épaisseurs de trait pour l'export (en cm → px), indépendantes de la résolution écran
-      const EXP_STROKE_THICK  = Math.max(2.5, (isAdmin ? 0.085 : 0.05) * PX_PER_CM);
-      const EXP_STROKE_PUZZLE = Math.max(2.5, (isAdmin ? 0.085 : 0.05) * PX_PER_CM);
-      const EXP_STROKE_LINE   = Math.max(2.5, (isAdmin ? 0.07  : 0.05) * PX_PER_CM);
+      // Épaisseurs de trait pour l'export (en cm → px), proportionnelles à la taille du canvas
+      // Admin : traits épais pour gabarits bien visibles (min 8px, ~0.14 cm)
+      // User  : traits fins pour utilisation (min 2.5px, ~0.05 cm)
+      const expStrokeMin = isAdmin ? 8 : 2.5;
+      const EXP_STROKE_THICK  = Math.max(expStrokeMin, (isAdmin ? 0.14 : 0.05) * PX_PER_CM);
+      const EXP_STROKE_PUZZLE = Math.max(expStrokeMin, (isAdmin ? 0.14 : 0.05) * PX_PER_CM);
+      const EXP_STROKE_LINE   = Math.max(expStrokeMin, (isAdmin ? 0.12 : 0.05) * PX_PER_CM);
       
       const offscreen = document.createElement('canvas');
       offscreen.width = outW;
@@ -3492,13 +3495,15 @@ export default function CreationsAtelierV2({
   };
   
   // Ajouter au collecteur (pièces détourées / éléments) — persiste dans IndexedDB
-  const addToCollector = async (src: string, name: string, type: CollectorItem["type"] = "detourage") => {
+  const addToCollector = async (src: string, name: string, type: CollectorItem["type"] = "detourage", widthCm?: number, heightCm?: number) => {
     if (currentProjectId) {
       await addToCollecteur({
         photoUrl: src,
         name,
         thumbnail: src,
         projectId: currentProjectId,
+        widthCm,
+        heightCm,
       });
       // Le useLiveQuery sur collecteurDbItems mettra à jour collectorItems automatiquement
     } else {
@@ -3508,7 +3513,9 @@ export default function CreationsAtelierV2({
         type,
         src,
         name,
-        thumbnail: src
+        thumbnail: src,
+        widthCm,
+        heightCm,
       };
       setCollectorItems(prev => [...prev, newItem]);
     }
@@ -8783,7 +8790,7 @@ export default function CreationsAtelierV2({
           {/* ZONE DROITE : Collecteur */}
           <div className="w-56 border-l relative z-[1100] h-full">
             <Collecteur
-              items={collectorItems.map(i => ({ id: i.id, src: i.src, name: i.name, thumbnail: i.thumbnail }))}
+              items={collectorItems.map(i => ({ id: i.id, src: i.src, name: i.name, thumbnail: i.thumbnail, widthCm: i.widthCm, heightCm: i.heightCm }))}
               onRemoveItem={(id) => {
                 setCollectorItems(prev => prev.filter(i => i.id !== id));
                 removeFromCollecteur(id).catch(() => {});
@@ -9390,6 +9397,8 @@ export default function CreationsAtelierV2({
                             name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
                             thumbnail: element.src!,
                             projectId: currentProjectId,
+                            widthCm: element.width,
+                            heightCm: element.height,
                           });
                         } else {
                           const newItem: CollectorItem = {
@@ -9397,7 +9406,9 @@ export default function CreationsAtelierV2({
                             type: 'detourage',
                             src: element.src!,
                             name: element.name || (language === 'fr' ? 'Pièce détourée' : 'Cutout piece'),
-                            thumbnail: element.src!
+                            thumbnail: element.src!,
+                            widthCm: element.width,
+                            heightCm: element.height,
                           };
                           setCollectorItems(prev => [...prev, newItem]);
                         }

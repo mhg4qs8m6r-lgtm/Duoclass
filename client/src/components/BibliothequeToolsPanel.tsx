@@ -329,11 +329,11 @@ export default function BibliothequeToolsPanel({
       
       {/* Grille d'éléments */}
       <ScrollArea className="h-[300px]">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {currentItems.map((item, index) => (
             <div
               key={`${item.name}-${index}`}
-              className="relative group bg-white rounded border shadow-sm cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all p-1 flex items-center justify-center" style={{ height: '80px' }}
+              className="relative group bg-white rounded border shadow-sm cursor-pointer hover:ring-2 hover:ring-purple-300 transition-all p-1 flex items-center justify-center" style={{ height: '160px' }}
               onClick={() => onSelectItem(item.src ?? '', item.name)}
               title={item.name}
             >

@@ -187,6 +187,15 @@ export async function initCategories(): Promise<void> {
         isDefault: true,
       },
       {
+        id: 'cat_mes_projets',
+        label: 'MES PROJETS',
+        color: '#F59E0B',
+        series: 'photoclass',
+        accessType: 'standard',
+        mediaType: 'mixed',
+        isDefault: true,
+      },
+      {
         id: 'cat_creations',
         label: 'CRÉATIONS',
         color: '#8B5CF6',
