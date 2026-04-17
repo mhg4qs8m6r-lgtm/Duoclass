@@ -897,9 +897,13 @@ export default function CreationsAtelierV2({
   const [activeCanvasPhoto, setActiveCanvasPhoto] = useState<string | null>(null);
   
   // États pour le drag des éléments sur le canvas
+  // Refs synchrones pour éviter le stale closure dans handleMouseMove (useCallback)
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const [elementStartPos, setElementStartPos] = useState<{ x: number; y: number } | null>(null);
+  const elementStartPosRef = useRef<{ x: number; y: number } | null>(null);
   
   // États pour le redimensionnement
   const [isResizing, setIsResizing] = useState(false);
@@ -3939,6 +3943,7 @@ export default function CreationsAtelierV2({
   
   // Gestion du drag pour déplacer les éléments sur le canvas
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
+    console.log('[DRAG] handleMouseDown appelé pour:', elementId, 'type:', canvasElements.find(el => el.id === elementId)?.type, 'shape:', canvasElements.find(el => el.id === elementId)?.shape, 'déjà sélectionné:', selectedElementId === elementId);
     // En mode tracé de ligne, laisser l'événement remonter jusqu'au canvas
     // pour que le onMouseDown du canvas gère le clic (début d'un nouveau segment)
     if (isLineDrawMode) return;
@@ -3982,6 +3987,10 @@ export default function CreationsAtelierV2({
     if (element.src) setActiveCanvasPhoto(element.src);
     
     // Préparer le drag pour tous les éléments de la sélection effective
+    // Écrire les refs synchrones AVANT les states (pour handleMouseMove)
+    isDraggingRef.current = true;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    elementStartPosRef.current = { x: element.x, y: element.y };
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setElementStartPos({ x: element.x, y: element.y });
@@ -4009,20 +4018,17 @@ export default function CreationsAtelierV2({
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     // === Drag du point de contrôle de la courbe de Bézier ===
-    if (isDraggingCtrl && draggingCtrlElementIdRef.current && dragStart) {
+    if (isDraggingCtrl && draggingCtrlElementIdRef.current && dragStartRef.current) {
       const pxPerCm = canvasDimensions.pxPerCm;
       const elId = draggingCtrlElementIdRef.current;
       setCanvasElements(prev => prev.map(el => {
         if (el.id !== elId || !el.customPath) return el;
-        // Parser le customPath courant
         const m = el.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
         if (!m) return el;
         const x1cm = parseFloat(m[1]);
         const y1cm = parseFloat(m[2]);
         const x2cm = parseFloat(m[5]);
         const y2cm = parseFloat(m[6]);
-        // Nouvelle position du point de contrôle en cm (position souris convertie depuis pixels)
-        // On utilise pageRef pour convertir les coordonnées souris en coordonnées page
         const pageEl = pageRef.current;
         if (!pageEl) return el;
         const rect = pageEl.getBoundingClientRect();
@@ -4033,12 +4039,26 @@ export default function CreationsAtelierV2({
       }));
       return;
     }
-    if (!isDragging || !dragStart || !elementStartPos || !selectedElementId) return;
-    
+    // Utiliser les REFS synchrones (pas les states) pour éviter le stale closure
+    const currentDragStart = dragStartRef.current;
+    const currentElementStartPos = elementStartPosRef.current;
+    if (!isDraggingRef.current || !currentDragStart || !currentElementStartPos || !selectedElementId) {
+      // DEBUG: identifier quelle condition bloque le drag
+      if (isDraggingRef.current) {
+        console.warn('[DRAG] handleMouseMove bloqué:', {
+          isDraggingRef: isDraggingRef.current,
+          hasDragStart: !!currentDragStart,
+          hasElementStartPos: !!currentElementStartPos,
+          selectedElementId,
+        });
+      }
+      return;
+    }
+
     // Convertir les deltas de pixels vers cm
     const pxPerCm = canvasDimensions.pxPerCm;
-    const deltaXCm = (e.clientX - dragStart.x) / pxPerCm;
-    const deltaYCm = (e.clientY - dragStart.y) / pxPerCm;
+    const deltaXCm = (e.clientX - currentDragStart.x) / pxPerCm;
+    const deltaYCm = (e.clientY - currentDragStart.y) / pxPerCm;
     
     // Déplacement groupé : déplacer tous les éléments sélectionnés
     console.log('[GROUP] multiDragIds:', Array.from(multiDragStartPositions.current.keys()),
@@ -4074,8 +4094,8 @@ export default function CreationsAtelierV2({
         // Nouveau modèle SVG : x=x1, y=y1, width=x2, height=y2
         // Déplacer les deux extrémités de la même valeur delta
         const updates: Partial<CanvasElement> = {
-          x: elementStartPos.x + deltaXCm,
-          y: elementStartPos.y + deltaYCm,
+          x: currentElementStartPos.x + deltaXCm,
+          y: currentElementStartPos.y + deltaYCm,
           width: elementStartSize.width + deltaXCm,
           height: elementStartSize.height + deltaYCm,
         };
@@ -4083,13 +4103,10 @@ export default function CreationsAtelierV2({
         if (movingEl.customPath) {
           const m = movingEl.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
           if (m) {
-            // Reconstruire le customPath avec les nouvelles coordonnées (toutes décalées)
-            const nx1 = elementStartPos.x + deltaXCm;
-            const ny1 = elementStartPos.y + deltaYCm;
-            // Point de contrôle original (depuis le state initial)
+            const nx1 = currentElementStartPos.x + deltaXCm;
+            const ny1 = currentElementStartPos.y + deltaYCm;
             const origCtrlX = parseFloat(m[3]);
             const origCtrlY = parseFloat(m[4]);
-            // Décalage du point de contrôle = même delta que les extrémités
             const origX1 = parseFloat(m[1]);
             const origY1 = parseFloat(m[2]);
             const ctrlDeltaX = origCtrlX - origX1;
@@ -4104,12 +4121,12 @@ export default function CreationsAtelierV2({
         updateCanvasElement(selectedElementId, updates);
       } else {
         updateCanvasElement(selectedElementId, {
-          x: elementStartPos.x + deltaXCm,
-          y: elementStartPos.y + deltaYCm
+          x: currentElementStartPos.x + deltaXCm,
+          y: currentElementStartPos.y + deltaYCm
         });
       }
     }
-  }, [isDragging, isDraggingCtrl, dragStart, elementStartPos, selectedElementId, canvasDimensions.pxPerCm]);
+  }, [isDraggingCtrl, selectedElementId, canvasDimensions.pxPerCm, elementStartSize]);
   
   // === LASSO DE SÉLECTION ===
   const handleLassoStart = (e: React.MouseEvent) => {
@@ -4236,6 +4253,9 @@ export default function CreationsAtelierV2({
       setDragStart(null);
       return;
     }
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
+    elementStartPosRef.current = null;
     setIsDragging(false);
     setIsResizing(false);
     setIsRotating(false);
@@ -7243,7 +7263,7 @@ export default function CreationsAtelierV2({
                     <div
                       key={element.id}
                       data-canvas-element="true"
-                      className={`absolute ${element.locked ? "cursor-not-allowed" : isDragging && (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"}`}
+                      className={`absolute ${element.locked ? "cursor-not-allowed" : (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"}`}
                       // Bordure appliquée via style pour supporter les pointillés sur les groupes
                       data-grouped={element.groupId ? "true" : undefined}
                       style={{
@@ -7278,6 +7298,7 @@ export default function CreationsAtelierV2({
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
+                        console.log('[DRAG] onMouseDown div atteint pour:', element.id, 'target:', (e.target as HTMLElement).tagName, 'classe:', (e.target as HTMLElement).className?.toString?.()?.slice(0, 60));
                         e.stopPropagation();
                         // Gomme active : démarrer l'effacement au lieu du drag
                         if (isEraserActive && element.type === 'image' && element.src && element.id === selectedElementId) {
