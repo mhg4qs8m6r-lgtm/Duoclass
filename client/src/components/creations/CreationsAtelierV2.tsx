@@ -3079,38 +3079,40 @@ export default function CreationsAtelierV2({
   const getCanvasPixelDimensions = useCallback(() => {
     // Marge minimale autour de la page (pour les crop marks et l'espace visuel)
     const PAGE_MARGIN = 28; // px -- espace réservé pour les crop marks et la lisibilité
-    // Espace disponible pour la zone de travail (moins les règles et la marge)
-    const availableWidth = Math.max(200, canvasContainerSize.width - 40 - 2 * PAGE_MARGIN);
-    const availableHeight = Math.max(200, canvasContainerSize.height - 40 - 2 * PAGE_MARGIN);
-    
+
+    // canvasContainerSize est DÉJÀ net des règles (-40 dans setCanvasContainerSize)
+    // Ne PAS re-soustraire 40 ici.
+    const containerW = Math.max(400, canvasContainerSize.width);
+    const containerH = Math.max(400, canvasContainerSize.height);
+
+    // Espace disponible pour la page (moins les marges autour)
+    const availableWidth = Math.max(200, containerW - 2 * PAGE_MARGIN);
+    const availableHeight = Math.max(200, containerH - 2 * PAGE_MARGIN);
+
     // Dimensions du format papier en cm
     const formatWidthCm = orientation === "portrait" ? paperFormat.width : paperFormat.height;
     const formatHeightCm = orientation === "portrait" ? paperFormat.height : paperFormat.width;
-    
+
     // Calculer le scale pour que la page tienne dans l'espace disponible
     // tout en conservant les proportions exactes
     const scaleX = availableWidth / formatWidthCm;
     const scaleY = availableHeight / formatHeightCm;
-    const pxPerCm = Math.min(scaleX, scaleY); // Pixels par cm
-    
+    const pxPerCm = Math.max(1, Math.min(scaleX, scaleY)); // Pixels par cm, min 1 pour éviter division par 0
+
     // Dimensions de la page en pixels (proportions exactes)
     const pageWidth = formatWidthCm * pxPerCm;
     const pageHeight = formatHeightCm * pxPerCm;
-    
-    // Espace total de la zone de travail (avec marge)
-    const totalWidth = canvasContainerSize.width - 40;
-    const totalHeight = canvasContainerSize.height - 40;
-    
+
     return {
       // Zone de travail complète
-      workspaceWidth: Math.max(400, totalWidth),
-      workspaceHeight: Math.max(400, totalHeight),
+      workspaceWidth: Math.max(400, containerW),
+      workspaceHeight: Math.max(400, containerH),
       // Page intérieure (proportions exactes du format)
       pageWidth: pageWidth,
       pageHeight: pageHeight,
-      // Offset pour centrer la page dans la zone de travail (avec marge garantie)
-      pageOffsetX: Math.max(PAGE_MARGIN, (totalWidth - pageWidth) / 2),
-      pageOffsetY: Math.max(PAGE_MARGIN, (totalHeight - pageHeight) / 2),
+      // Offset pour centrer la page dans la zone de travail (toujours >= PAGE_MARGIN)
+      pageOffsetX: Math.max(PAGE_MARGIN, (containerW - pageWidth) / 2),
+      pageOffsetY: Math.max(PAGE_MARGIN, (containerH - pageHeight) / 2),
       // Pixels par cm (pour convertir les dimensions)
       pxPerCm: pxPerCm,
       // Dimensions du format en cm
@@ -3943,7 +3945,6 @@ export default function CreationsAtelierV2({
   
   // Gestion du drag pour déplacer les éléments sur le canvas
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
-    console.log('[DRAG] handleMouseDown appelé pour:', elementId, 'type:', canvasElements.find(el => el.id === elementId)?.type, 'shape:', canvasElements.find(el => el.id === elementId)?.shape, 'déjà sélectionné:', selectedElementId === elementId);
     // En mode tracé de ligne, laisser l'événement remonter jusqu'au canvas
     // pour que le onMouseDown du canvas gère le clic (début d'un nouveau segment)
     if (isLineDrawMode) return;
@@ -4010,10 +4011,6 @@ export default function CreationsAtelierV2({
       startPositions.set(elementId, { x: element.x, y: element.y });
     }
     multiDragStartPositions.current = startPositions;
-    // DEBUG: vérifier la sélection groupée
-    console.log('[GROUP] clic sur:', elementId, 'groupId:', element.groupId,
-      'effectiveIds:', Array.from(effectiveSelection),
-      'multiDragIds:', Array.from(startPositions.keys()));
   };
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -4042,18 +4039,7 @@ export default function CreationsAtelierV2({
     // Utiliser les REFS synchrones (pas les states) pour éviter le stale closure
     const currentDragStart = dragStartRef.current;
     const currentElementStartPos = elementStartPosRef.current;
-    if (!isDraggingRef.current || !currentDragStart || !currentElementStartPos || !selectedElementId) {
-      // DEBUG: identifier quelle condition bloque le drag
-      if (isDraggingRef.current) {
-        console.warn('[DRAG] handleMouseMove bloqué:', {
-          isDraggingRef: isDraggingRef.current,
-          hasDragStart: !!currentDragStart,
-          hasElementStartPos: !!currentElementStartPos,
-          selectedElementId,
-        });
-      }
-      return;
-    }
+    if (!isDraggingRef.current || !currentDragStart || !currentElementStartPos || !selectedElementId) return;
 
     // Convertir les deltas de pixels vers cm
     const pxPerCm = canvasDimensions.pxPerCm;
@@ -4061,8 +4047,6 @@ export default function CreationsAtelierV2({
     const deltaYCm = (e.clientY - currentDragStart.y) / pxPerCm;
     
     // Déplacement groupé : déplacer tous les éléments sélectionnés
-    console.log('[GROUP] multiDragIds:', Array.from(multiDragStartPositions.current.keys()),
-      'path:', multiDragStartPositions.current.size > 1 ? 'MULTI' : 'SINGLE');
     if (multiDragStartPositions.current.size > 1) {
       setCanvasElements(prev => prev.map(el => {
         const startPos = multiDragStartPositions.current.get(el.id);
@@ -7298,7 +7282,6 @@ export default function CreationsAtelierV2({
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
-                        console.log('[DRAG] onMouseDown div atteint pour:', element.id, 'target:', (e.target as HTMLElement).tagName, 'classe:', (e.target as HTMLElement).className?.toString?.()?.slice(0, 60));
                         e.stopPropagation();
                         // Gomme active : démarrer l'effacement au lieu du drag
                         if (isEraserActive && element.type === 'image' && element.src && element.id === selectedElementId) {
@@ -7576,10 +7559,8 @@ export default function CreationsAtelierV2({
                           height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible' }}
+                          style={{ overflow: 'visible', pointerEvents: 'none' }}
                         >
-                          {/* Zone de clic invisible couvrant toute la forme pour le drag */}
-                          <rect width={w} height={h} fill="transparent" />
                           {/* Couleur de la découpe (transparent pour puzzle = gabarit vierge) */}
                           <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} />
                           <path
