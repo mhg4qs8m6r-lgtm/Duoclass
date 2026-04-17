@@ -6,6 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { X } from "lucide-react";
+import CrispThumbnail from "@/components/ui/CrispThumbnail";
 
 const CATEGORY_LABELS: Record<string, { fr: string; en: string }> = {
   "passe-partout": { fr: "Passe-partout", en: "Mat frames" },
@@ -76,7 +77,7 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
                   title={item.filename}
                 >
                   <div className="w-full aspect-square rounded border border-gray-200 bg-white overflow-hidden flex items-center justify-center">
-                    <img
+                    <CrispThumbnail
                       src={item.imageData}
                       alt={item.filename}
                       className="w-full h-full object-contain rounded"

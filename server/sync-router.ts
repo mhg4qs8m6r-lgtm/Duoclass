@@ -35,6 +35,7 @@ import {
   getAllSharedModeles,
   createSharedModele,
   deleteSharedModele,
+  purgeAllUserData,
 } from "./sync-db";
 import { uploadThumbnail, uploadThumbnailsBatch } from "./thumbnails";
 
@@ -60,6 +61,7 @@ const albumSchema = z.object({
   photoCount: z.number().optional(),
   isSystem: z.boolean().optional(),
   isPrivate: z.boolean().optional(),
+  framesData: z.string().optional(),
 });
 
 const photoMetadataSchema = z.object({
@@ -113,6 +115,7 @@ const projectSchema = z.object({
   thumbnail: z.string().optional(),
   projectType: z.string().optional(),
   projectCategory: z.string().optional(),
+  collecteurData: z.string().optional(),
 });
 
 const bibliothequeItemSchema = z.object({
@@ -596,8 +599,27 @@ export const syncRouter = router({
       }),
   }),
 
+  // ==================== RÉINITIALISATION D'USINE ====================
+
+  /**
+   * Supprime toutes les données de l'utilisateur en base (factory reset serveur)
+   */
+  factoryReset: protectedProcedure.mutation(async ({ ctx }) => {
+    const result = await purgeAllUserData(ctx.user.id);
+    if (result) {
+      await logSyncAction({
+        userId: ctx.user.id,
+        entityType: "settings",
+        entityLocalId: "factory_reset",
+        action: "delete",
+        newData: JSON.stringify({ reason: "factory_reset" }),
+      });
+    }
+    return { success: result };
+  }),
+
   // ==================== SYNCHRONISATION COMPLÈTE ====================
-  
+
   /**
    * Récupère toutes les données pour une synchronisation initiale
    */

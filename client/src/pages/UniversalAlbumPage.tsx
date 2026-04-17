@@ -11,6 +11,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw, X } from 'lucide-react';
 import { toast } from "sonner";
 import { db, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
+import { addToSyncQueue } from '@/lib/syncService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 // DuplicateValidationModal retiré - sera implémenté dans la version Electron
@@ -542,13 +543,31 @@ export default function UniversalAlbumPage({
   useEffect(() => {
     // Ne pas sauvegarder pendant le chargement initial ou si pas d'album
     if (isLoading || !currentAlbumId || frames.length === 0) return;
-    
-    const saveTimeout = setTimeout(() => {
-      db.albums.put({
-        id: currentAlbumId,
-        frames: frames,
-        updatedAt: Date.now()
-      }).catch(err => console.error("Erreur sauvegarde:", err));
+
+    const saveTimeout = setTimeout(async () => {
+      try {
+        await db.albums.put({
+          id: currentAlbumId,
+          frames: frames,
+          updatedAt: Date.now()
+        });
+        // Synchroniser les frames vers le serveur pour les albums "Images projets"
+        if (currentAlbumId === 'album_images_projets') {
+          const meta = await db.album_metas.get(currentAlbumId);
+          addToSyncQueue({
+            entityType: 'album',
+            action: 'update',
+            data: {
+              localId: currentAlbumId,
+              name: meta?.title || 'Images projets',
+              categoryLocalId: meta?.categoryId || 'cat_mes_projets',
+              framesData: JSON.stringify(frames),
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Erreur sauvegarde:", err);
+      }
     }, 500);
     return () => clearTimeout(saveTimeout);
   }, [frames, currentAlbumId, isLoading]);
@@ -1863,6 +1882,12 @@ export default function UniversalAlbumPage({
       }
       await db.albums.delete(currentAlbumId);
       await db.album_metas.delete(currentAlbumId);
+      // Synchroniser la suppression vers le serveur
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'delete',
+        data: { localId: currentAlbumId },
+      });
       toast.success(language === "fr" ? "Album supprimé" : "Album deleted");
       setLocation("/");
     }

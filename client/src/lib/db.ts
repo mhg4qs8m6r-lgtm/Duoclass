@@ -296,8 +296,10 @@ export async function getCreationsProject(id: string): Promise<CreationsProject 
   return db.creations_projects.get(id);
 }
 
-/** Sérialise un projet pour la sync serveur */
-function projectToSyncData(p: CreationsProject) {
+/** Sérialise un projet pour la sync serveur (inclut les items collecteur associés) */
+async function projectToSyncData(p: CreationsProject) {
+  // Récupérer les items collecteur liés à ce projet
+  const collecteurItems = await db.collecteur.where('projectId').equals(p.id).toArray();
   return {
     localId: p.id,
     name: p.name,
@@ -310,6 +312,7 @@ function projectToSyncData(p: CreationsProject) {
     thumbnail: p.thumbnail,
     projectType: p.projectType,
     projectCategory: p.projectCategory,
+    collecteurData: collecteurItems.length > 0 ? JSON.stringify(collecteurItems) : undefined,
   };
 }
 
@@ -328,7 +331,7 @@ export async function createCreationsProject(
         }
       : nameOrProject;
   await db.creations_projects.put(project);
-  addToSyncQueue({ entityType: 'project', action: 'create', data: projectToSyncData(project) });
+  addToSyncQueue({ entityType: 'project', action: 'create', data: await projectToSyncData(project) });
   return project;
 }
 
@@ -339,11 +342,11 @@ export async function updateCreationsProject(
   if (typeof projectOrId === 'string') {
     await db.creations_projects.update(projectOrId, { ...updates, updatedAt: Date.now() });
     const updated = await db.creations_projects.get(projectOrId);
-    if (updated) addToSyncQueue({ entityType: 'project', action: 'update', data: projectToSyncData(updated) });
+    if (updated) addToSyncQueue({ entityType: 'project', action: 'update', data: await projectToSyncData(updated) });
   } else {
     const full = { ...projectOrId, updatedAt: Date.now() };
     await db.creations_projects.put(full);
-    addToSyncQueue({ entityType: 'project', action: 'update', data: projectToSyncData(full) });
+    addToSyncQueue({ entityType: 'project', action: 'update', data: await projectToSyncData(full) });
   }
 }
 

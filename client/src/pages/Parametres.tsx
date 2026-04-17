@@ -14,6 +14,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/contexts/AuthContext";
 import { exportAllData, importAllData, validateBackupFile, ImportResult } from "@/lib/exportUtils";
 import { cleanupUnnecessaryCategories } from "@/lib/cleanupCategories";
+import { trpc } from "@/lib/trpc";
+import { clearSyncQueue, setLastSyncTimestamp } from "@/lib/syncService";
 import { v4 as uuidv4 } from 'uuid';
 import { Check, X, Lock, Unlock, Shield, Save, Info, User, Edit2, Trash2, Upload, AlertTriangle, FileJson, Palette, RotateCcw } from "lucide-react";
 import {
@@ -345,25 +347,38 @@ export default function Parametres() {
   };
 
   // Réinitialisation d'usine
+  const factoryResetMut = trpc.sync.factoryReset.useMutation();
   const handleFactoryReset = async () => {
     if (factoryResetConfirmText !== "REINITIALISER") {
       toast.error(language === "fr" ? "Veuillez taper REINITIALISER pour confirmer" : "Please type RESET to confirm");
       return;
     }
-    
+
     setIsResetting(true);
     try {
-      // Supprimer toutes les données de la base IndexedDB
+      // 1. Supprimer les données côté serveur (PostgreSQL)
+      try {
+        await factoryResetMut.mutateAsync();
+        console.log('[FactoryReset] Données serveur supprimées');
+      } catch (serverErr) {
+        console.error('[FactoryReset] Erreur serveur (on continue le reset local):', serverErr);
+      }
+
+      // 2. Supprimer TOUTES les données IndexedDB
       await db.albums.clear();
       await db.album_metas.clear();
+      await db.album_data.clear();
       await db.categories.clear();
       await db.settings.clear();
-      
-      // Recréer les 4 catégories NON CLASSEE par défaut (non effaçables)
-      // 1. Photos & Vidéos - Standard
-      // 2. Documents - Standard  
-      // 3. Photos & Vidéos - Privé/Sécurisé
-      // 4. Documents - Privé/Sécurisé
+      await db.creations_projects.clear();
+      await db.bibliotheque_items.clear();
+      await db.collecteur.clear();
+
+      // 3. Vider la queue de sync et réinitialiser le timestamp
+      clearSyncQueue();
+      setLastSyncTimestamp(0);
+
+      // 4. Recréer les catégories NON CLASSEE par défaut
       const defaultCategories = [
         {
           id: 'cat_nc_photos',
@@ -402,10 +417,10 @@ export default function Parametres() {
           isDefault: true
         }
       ];
-      
+
       await db.categories.bulkAdd(defaultCategories);
-      
-      // Recréer les albums "Non classées" par défaut
+
+      // 5. Recréer les albums "Non classées" par défaut
       const nowTimestamp = Date.now();
       const defaultAlbumsMeta = [
         {
@@ -425,7 +440,7 @@ export default function Parametres() {
           categoryId: 'cat_nc_docs'
         }
       ];
-      
+
       for (const albumMeta of defaultAlbumsMeta) {
         await db.albums.add({
           id: albumMeta.id,
@@ -434,14 +449,14 @@ export default function Parametres() {
         });
         await db.album_metas.add(albumMeta);
       }
-      
-      // Réinitialiser le mot de passe maître
+
+      // 6. Réinitialiser le mot de passe maître
       await db.settings.put({ key: 'master_code', value: '000000' });
-      
+
       setShowFactoryResetDialog(false);
       setFactoryResetConfirmText("");
       toast.success(t('toast.factoryResetComplete'));
-      
+
       // Rediriger vers l'accueil
       setTimeout(() => {
         window.location.href = '/';

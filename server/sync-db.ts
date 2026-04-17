@@ -674,6 +674,33 @@ export async function getSyncLogSince(userId: number, since: number) {
   }
 }
 
+// ==================== RÉINITIALISATION D'USINE ====================
+
+/**
+ * Supprime TOUTES les données d'un utilisateur (factory reset côté serveur).
+ * Ne touche pas au compte utilisateur lui-même ni aux modèles partagés.
+ */
+export async function purgeAllUserData(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await Promise.all([
+      db.delete(categories).where(eq(categories.userId, userId)),
+      db.delete(albums).where(eq(albums.userId, userId)),
+      db.delete(photoMetadata).where(eq(photoMetadata.userId, userId)),
+      db.delete(projects).where(eq(projects.userId, userId)),
+      db.delete(bibliothequeItems).where(eq(bibliothequeItems.userId, userId)),
+      db.delete(userSettings).where(eq(userSettings.userId, userId)),
+      db.delete(syncLog).where(eq(syncLog.userId, userId)),
+    ]);
+    console.log(`[Sync] Factory reset: purged all data for userId=${userId}`);
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to purge user data:", error);
+    return false;
+  }
+}
+
 // ==================== MODÈLES PARTAGÉS ====================
 
 export async function getAllSharedModeles(): Promise<SharedModele[]> {

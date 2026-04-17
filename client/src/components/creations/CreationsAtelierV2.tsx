@@ -12,6 +12,7 @@ import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, crea
 import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { addToSyncQueue } from "@/lib/syncService";
 import { toast } from "sonner";
 import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
@@ -2966,19 +2967,22 @@ export default function CreationsAtelierV2({
         photoUrl: dataUrl,
         originalName: `${numberedName}.png`,
       };
+      let allFrames: PhotoFrame[];
       if (existingAlbum) {
+        allFrames = [...(existingAlbum.frames ?? []), newFrame];
         await db.albums.update(destAlbumId, {
-          frames: [...(existingAlbum.frames ?? []), newFrame],
+          frames: allFrames,
           updatedAt: Date.now(),
         });
       } else {
+        allFrames = [newFrame];
         await db.albums.put({
           id: destAlbumId,
           title: destAlbumName,
           type: 'standard',
           series: 'photoclass',
           createdAt: Date.now(),
-          frames: [newFrame],
+          frames: allFrames,
           updatedAt: Date.now(),
         } as any);
         // Créer aussi le album_meta pour que l'album apparaisse dans la catégorie "Images projets"
@@ -2994,6 +2998,17 @@ export default function CreationsAtelierV2({
           });
         }
       }
+      // Synchroniser l'album (métadonnées + frames) vers le serveur
+      addToSyncQueue({
+        entityType: 'album',
+        action: existingAlbum ? 'update' : 'create',
+        data: {
+          localId: destAlbumId,
+          name: destAlbumName,
+          categoryLocalId: 'cat_mes_projets',
+          framesData: JSON.stringify(allFrames),
+        },
+      });
       toast.success(
         language === 'fr'
           ? `"${numberedName}" sauvegardée dans "${destAlbumName}" !`

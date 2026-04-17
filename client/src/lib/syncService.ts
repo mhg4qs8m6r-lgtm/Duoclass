@@ -3,9 +3,27 @@
  * Gère la synchronisation bidirectionnelle entre IndexedDB (local) et le serveur (MySQL)
  */
 
-// Clé de stockage pour le timestamp de dernière synchronisation
-const LAST_SYNC_KEY = 'duoclass_last_sync_timestamp';
+// Clé de stockage pour le timestamp de dernière synchronisation (scopé par userId)
+const LAST_SYNC_KEY_PREFIX = 'duoclass_last_sync_timestamp';
 const SYNC_QUEUE_KEY = 'duoclass_sync_queue';
+
+// UserId courant pour scoper le timestamp — mis à jour par setCurrentSyncUserId()
+let currentSyncUserId: number | string | null = null;
+
+/**
+ * Définit le userId courant pour scoper les timestamps de sync.
+ * Doit être appelé au login AVANT doInitialSync().
+ */
+export function setCurrentSyncUserId(userId: number | string | null): void {
+  currentSyncUserId = userId;
+}
+
+function getSyncKey(): string {
+  if (currentSyncUserId) {
+    return `${LAST_SYNC_KEY_PREFIX}_${currentSyncUserId}`;
+  }
+  return `${LAST_SYNC_KEY_PREFIX}_default`;
+}
 
 // Types pour la synchronisation
 export interface SyncQueueItem {
@@ -38,20 +56,20 @@ let syncStatus: SyncStatus = {
 const statusListeners: Set<(status: SyncStatus) => void> = new Set();
 
 /**
- * Récupère le timestamp de dernière synchronisation
+ * Récupère le timestamp de dernière synchronisation (scopé par userId)
  */
 export function getLastSyncTimestamp(): number {
   if (typeof localStorage === 'undefined') return 0;
-  const stored = localStorage.getItem(LAST_SYNC_KEY);
+  const stored = localStorage.getItem(getSyncKey());
   return stored ? parseInt(stored, 10) : 0;
 }
 
 /**
- * Sauvegarde le timestamp de dernière synchronisation
+ * Sauvegarde le timestamp de dernière synchronisation (scopé par userId)
  */
 export function setLastSyncTimestamp(timestamp: number): void {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+  localStorage.setItem(getSyncKey(), timestamp.toString());
   syncStatus.lastSyncTime = timestamp;
   notifyStatusChange();
 }

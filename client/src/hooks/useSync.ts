@@ -12,6 +12,7 @@ import {
   addToSyncQueue,
   getLastSyncTimestamp,
   setLastSyncTimestamp,
+  setCurrentSyncUserId,
   markItemProcessed,
   markItemFailed,
 } from '../lib/syncService';
@@ -37,7 +38,7 @@ async function populateLocalFromServer(data: any) {
     console.log(`[useSync] Populated ${data.categories.length} categories from server`);
   }
 
-  // Albums
+  // Albums (métadonnées + frames si présentes)
   if (data.albums?.length) {
     for (const album of data.albums) {
       await db.album_metas.put({
@@ -48,6 +49,37 @@ async function populateLocalFromServer(data: any) {
         createdAt: new Date(album.createdAt).getTime(),
         categoryId: album.categoryLocalId ?? undefined,
       });
+      // Restaurer les frames (images) si le serveur en possède
+      if (album.framesData) {
+        try {
+          const frames = JSON.parse(album.framesData);
+          if (Array.isArray(frames) && frames.length > 0) {
+            const existingAlbum = await db.albums.get(album.localId);
+            if (existingAlbum) {
+              // Fusionner : garder les frames locales non présentes sur le serveur
+              const serverFrameIds = new Set(frames.map((f: any) => f.id));
+              const localOnly = (existingAlbum.frames ?? []).filter((f: any) => !serverFrameIds.has(f.id));
+              await db.albums.put({
+                ...existingAlbum,
+                frames: [...frames, ...localOnly],
+                updatedAt: Date.now(),
+              });
+            } else {
+              await db.albums.put({
+                id: album.localId,
+                title: album.name,
+                type: album.isPrivate ? 'secure' : 'standard',
+                series: album.contentType === 'documents' ? 'classpapiers' : 'photoclass',
+                createdAt: new Date(album.createdAt).getTime(),
+                frames,
+                updatedAt: Date.now(),
+              } as any);
+            }
+          }
+        } catch (e) {
+          console.warn(`[useSync] Failed to parse framesData for album ${album.localId}:`, e);
+        }
+      }
     }
     console.log(`[useSync] Populated ${data.albums.length} albums from server`);
   }
@@ -82,6 +114,24 @@ async function populateLocalFromServer(data: any) {
         });
       } else {
         await db.creations_projects.put(serverData);
+      }
+
+      // Restaurer les items collecteur associés au projet
+      if (p.collecteurData) {
+        try {
+          const items = JSON.parse(p.collecteurData);
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              // Ne pas écraser un item local déjà présent
+              const existingItem = await db.collecteur.get(item.id);
+              if (!existingItem) {
+                await db.collecteur.put(item);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[useSync] Failed to parse collecteurData for project ${p.localId}:`, e);
+        }
       }
     }
     console.log(`[useSync] Populated ${data.projects.length} projects from server`);
@@ -130,10 +180,9 @@ export function useSync() {
 
   // tRPC queries et mutations
   const fullSyncQuery = trpc.sync.getFullSync.useQuery(undefined, { enabled: false });
-  const changesSinceQuery = trpc.sync.getChangesSince.useQuery(
-    { since: getLastSyncTimestamp() },
-    { enabled: false }
-  );
+  // Note: on n'utilise plus changesSinceQuery avec un timestamp figé.
+  // On appelle directement le client tRPC dans doInitialSync pour passer le timestamp frais.
+  const trpcCtx = trpc.useUtils();
 
   // tRPC mutations pour le traitement de la queue
   const upsertProject = trpc.sync.projects.upsert.useMutation();
@@ -211,13 +260,20 @@ export function useSync() {
   ]);
 
   /**
-   * Effectue la synchronisation initiale au chargement
+   * Effectue la synchronisation initiale au chargement.
+   * Accepte un userId optionnel pour scoper le timestamp.
    */
-  const doInitialSync = useCallback(async () => {
+  const doInitialSync = useCallback(async (userId?: number | string) => {
+    // Scoper le timestamp par userId
+    if (userId) {
+      setCurrentSyncUserId(userId);
+    }
+
     const lastSync = getLastSyncTimestamp();
 
     try {
       if (lastSync === 0) {
+        // Première sync : téléchargement complet
         console.log('[useSync] Performing initial full sync...');
         const result = await fullSyncQuery.refetch();
         if (result.data) {
@@ -227,22 +283,35 @@ export function useSync() {
           return result.data;
         }
       } else {
+        // Sync incrémentale : utiliser fetch() avec le timestamp FRAIS (pas celui du render)
         console.log('[useSync] Performing incremental sync since:', new Date(lastSync));
-        const result = await changesSinceQuery.refetch();
+        const data = await trpcCtx.sync.getChangesSince.fetch({ since: lastSync });
+        if (data) {
+          await populateLocalFromServer(data);
+          setLastSyncTimestamp(data.timestamp);
+          setIsInitialSyncDone(true);
+          return data;
+        }
+      }
+    } catch (error) {
+      console.error('[useSync] Sync failed, falling back to full sync:', error);
+      // Fallback : en cas d'échec de la sync incrémentale, tenter une sync complète
+      try {
+        const result = await fullSyncQuery.refetch();
         if (result.data) {
           await populateLocalFromServer(result.data);
           setLastSyncTimestamp(result.data.timestamp);
           setIsInitialSyncDone(true);
           return result.data;
         }
+      } catch (fallbackError) {
+        console.error('[useSync] Full sync fallback also failed:', fallbackError);
       }
-    } catch (error) {
-      console.error('[useSync] Sync failed:', error);
     }
 
     setIsInitialSyncDone(true);
     return null;
-  }, [fullSyncQuery, changesSinceQuery]);
+  }, [fullSyncQuery, trpcCtx]);
 
   /**
    * Synchronise une catégorie

@@ -6,7 +6,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useSync } from '@/hooks/useSync';
-import { getSyncQueue } from '@/lib/syncService';
+import { getSyncQueue, setCurrentSyncUserId } from '@/lib/syncService';
 
 const QUEUE_POLL_INTERVAL = 5000; // 5 secondes
 
@@ -19,11 +19,14 @@ export default function SyncInitializer() {
   useEffect(() => {
     if (isAuthenticated && user && !hasSynced.current) {
       hasSynced.current = true;
-      console.log('[SyncInitializer] User authenticated, starting initial sync...');
-      doInitialSync();
+      // Scoper le timestamp de sync par userId AVANT la sync
+      setCurrentSyncUserId(user.id);
+      console.log('[SyncInitializer] User authenticated (id=%s), starting initial sync...', user.id);
+      doInitialSync(user.id);
     }
     if (!isAuthenticated) {
       hasSynced.current = false;
+      setCurrentSyncUserId(null);
     }
   }, [isAuthenticated, user, doInitialSync]);
 
