@@ -36,6 +36,7 @@ import {
   CheckCircle,
   RotateCcw,
   X as XIcon,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,6 +254,8 @@ export interface AssemblagePanelProps {
   modelesCategories?: string[] | null;
   /** Callback quand l'utilisateur sélectionne un modèle */
   onSelectModele?: (url: string, filename: string) => void;
+  /** Ouvre la modale "Ordre des calques du projet" */
+  onOpenLayerOrder?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1775,7 +1778,8 @@ export type SectionId =
   | "montage-pelemele"
   | "collage"
   | "texte"
-  | "puzzle";
+  | "puzzle"
+  | "calques";
 
 interface SectionDef {
   id: SectionId;
@@ -1792,6 +1796,7 @@ const SECTIONS: SectionDef[] = [
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
   { id: "puzzle",           labelFr: "Puzzle",                      labelEn: "Puzzle",                    icon: Puzzle              },
+  { id: "calques",          labelFr: "Ordre des calques du projet", labelEn: "Project layer order",       icon: Layers              },
 ];
 
 export default function AssemblagePanel(props: AssemblagePanelProps) {
@@ -1799,6 +1804,10 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
 
   const toggle = (id: SectionId) => {
+    if (id === "calques") {
+      props.onOpenLayerOrder?.();
+      return;
+    }
     setOpenSection((prev) => (prev === id ? null : id));
   };
 

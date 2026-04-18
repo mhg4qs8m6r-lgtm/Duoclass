@@ -949,11 +949,11 @@ export default function CreationsAtelierV2({
   const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
     if (showAllTools) return { showDetourage: true, sections: null }; // null = tout afficher
     const map: Record<string, { showDetourage: boolean; sections: SectionId[] }> = {
-      "Collage":                      { showDetourage: true,  sections: ["collage", "texte"] },
-      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte"] },
-      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte"] },
-      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte"] },
-      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte"] },
+      "Collage":                      { showDetourage: true,  sections: ["collage", "texte", "calques"] },
+      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte", "calques"] },
+      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte", "calques"] },
+      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte", "calques"] },
+      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte", "calques"] },
       "Page de stickers":            { showDetourage: true,  sections: [] },
       "Puzzle":                      { showDetourage: true,  sections: ["puzzle", "texte"] },
     };
@@ -2916,6 +2916,7 @@ export default function CreationsAtelierV2({
   // === SAUVER COMME : modale de saisie du nom puis capture et sauvegarde dans l'album ===
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
+  const [showLayerOrderModal, setShowLayerOrderModal] = useState(false);
 
   // Album de destination : "Images projets" (catégorie cat_mes_projets)
   const IMAGES_PROJETS_ALBUM_ID = 'album_images_projets';
@@ -5551,6 +5552,7 @@ export default function CreationsAtelierV2({
                     onLineColorChange={setLineDrawColor}
                     lineStrokeWidth={lineDrawStrokeWidth}
                     onLineStrokeWidthChange={setLineDrawStrokeWidth}
+                    onOpenLayerOrder={() => setShowLayerOrderModal(true)}
                     onRoundLine={() => {
                       if (!selectedElementId) return;
                       const el = canvasElements.find(e => e.id === selectedElementId);
@@ -9777,6 +9779,209 @@ export default function CreationsAtelierV2({
               >
                 {language === "fr" ? "J'ai compris !" : "Got it!"}
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modale Ordre des calques du projet */}
+      {showLayerOrderModal && createPortal(
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-purple-500" />
+                  {language === 'fr' ? 'Ordre des calques du projet' : 'Project layer order'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-1 ml-7">
+                  {language === 'fr' ? 'Du devant (premier plan) à l\'arrière-plan' : 'From front to back'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLayerOrderModal(false)}
+                className="p-1 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Liste des calques */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {(() => {
+                const isSystemElement = (el: CanvasElement) => {
+                  if (el.locked) return true;
+                  const n = (el.name || '').toLowerCase();
+                  return n.includes('découpe') || n.includes('decoupe') || n.includes('fond');
+                };
+                const filtered = isAdmin
+                  ? canvasElements
+                  : canvasElements.filter(el => !isSystemElement(el));
+                const sorted = [...filtered].sort((a, b) => b.zIndex - a.zIndex);
+                if (sorted.length === 0) {
+                  return (
+                    <p className="text-gray-400 text-center py-8 text-sm">
+                      {language === 'fr' ? 'Aucun élément sur le canvas' : 'No elements on canvas'}
+                    </p>
+                  );
+                }
+                return sorted.map((el, idx) => {
+                  const position = sorted.length - idx;
+                  const isBack = idx === sorted.length - 1;
+                  // Déterminer le niveau logique passe-partout
+                  const elName = (el.name || '').toLowerCase();
+                  const isFond = elName === 'fond' || elName === 'background';
+                  const isPP = elName === 'passe-partout' || elName === 'mat frame';
+                  const isDecoupe = elName.startsWith('découpe') || elName.startsWith('decoupe') || elName.startsWith('opening');
+                  const levelLabel = isFond
+                    ? (language === 'fr' ? 'Niv.1 — Zone de travail' : 'Lv.1 — Work area')
+                    : isPP
+                    ? (language === 'fr' ? 'Niv.2 — Cadre extérieur' : 'Lv.2 — Outer frame')
+                    : isDecoupe
+                    ? (language === 'fr' ? 'Niv.3 — Ouverture' : 'Lv.3 — Opening')
+                    : null;
+                  return (
+                    <div
+                      key={el.id}
+                      className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      {/* Miniature */}
+                      <div className="w-12 h-12 rounded border border-gray-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {isBack ? (
+                          <span className="text-[8px] text-gray-400 italic text-center leading-tight px-0.5">Zone de travail</span>
+                        ) : el.type === 'image' && el.src ? (
+                          <img src={el.src} alt={el.name || ''} className="w-full h-full object-contain" />
+                        ) : el.type === 'text' ? (
+                          <span className="text-[10px] text-gray-600 font-medium truncate px-1">Aa</span>
+                        ) : el.type === 'shape' ? (
+                          <div className="w-8 h-8 rounded" style={{ backgroundColor: el.openingColor || '#ccc' }} />
+                        ) : (
+                          <Image className="w-4 h-4 text-gray-300" />
+                        )}
+                      </div>
+
+                      {/* Nom + niveau + position */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : el.type === 'shape' ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`)}
+                        </p>
+                        {levelLabel ? (
+                          <p className="text-[10px] text-purple-500 font-medium">{levelLabel}</p>
+                        ) : (
+                          <p className="text-xs text-gray-400">z-index: {el.zIndex}</p>
+                        )}
+                      </div>
+
+                      {/* Saisie numéro de position */}
+                      <input
+                        type="number"
+                        min={1}
+                        max={canvasElements.length}
+                        value={position}
+                        onChange={(e) => {
+                          const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
+                          const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
+                          const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
+                          withoutCurrent.splice(newPos - 1, 0, el);
+                          setCanvasElements(canvasElements.map(item => {
+                            const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
+                            return { ...item, zIndex: newIdx + 1 };
+                          }));
+                        }}
+                        className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
+                        title={language === 'fr' ? 'Position du calque' : 'Layer position'}
+                      />
+
+                      {/* Boutons de réorganisation */}
+                      <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        {idx === 0 ? (
+                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
+                            {language === 'fr' ? '✓ Devant' : '✓ Front'}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              const maxZ = Math.max(...canvasElements.map(e => e.zIndex));
+                              setCanvasElements(canvasElements.map(item =>
+                                item.id === el.id ? { ...item, zIndex: maxZ + 1 } : item
+                              ));
+                            }}
+                            className="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                            title={language === 'fr' ? 'Premier plan' : 'Bring to front'}
+                          >
+                            {language === 'fr' ? 'Premier' : 'Front'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const above = sorted[idx - 1];
+                            if (above) {
+                              const tempZ = el.zIndex;
+                              setCanvasElements(canvasElements.map(item => {
+                                if (item.id === el.id) return { ...item, zIndex: above.zIndex };
+                                if (item.id === above.id) return { ...item, zIndex: tempZ };
+                                return item;
+                              }));
+                            }
+                          }}
+                          disabled={idx === 0}
+                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-0.5"
+                          title={language === 'fr' ? 'Monter' : 'Move up'}
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                          {language === 'fr' ? 'Monter' : 'Up'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const below = sorted[idx + 1];
+                            if (below) {
+                              const tempZ = el.zIndex;
+                              setCanvasElements(canvasElements.map(item => {
+                                if (item.id === el.id) return { ...item, zIndex: below.zIndex };
+                                if (item.id === below.id) return { ...item, zIndex: tempZ };
+                                return item;
+                              }));
+                            }
+                          }}
+                          disabled={idx === sorted.length - 1}
+                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-0.5"
+                          title={language === 'fr' ? 'Descendre' : 'Move down'}
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                          {language === 'fr' ? 'Descendre' : 'Down'}
+                        </button>
+                        {idx === sorted.length - 1 ? (
+                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
+                            {language === 'fr' ? '✓ Arrière' : '✓ Back'}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              const minZ = Math.min(...canvasElements.map(e => e.zIndex));
+                              setCanvasElements(canvasElements.map(item =>
+                                item.id === el.id ? { ...item, zIndex: minZ - 1 } : item
+                              ));
+                            }}
+                            className="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                            title={language === 'fr' ? 'Arrière-plan' : 'Send to back'}
+                          >
+                            {language === 'fr' ? 'Dernier' : 'Back'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 bg-gray-50 border-t flex justify-end flex-shrink-0">
+              <Button size="sm" variant="outline" onClick={() => setShowLayerOrderModal(false)}>
+                {language === 'fr' ? 'Fermer' : 'Close'}
+              </Button>
             </div>
           </div>
         </div>,

@@ -505,7 +505,7 @@ export default function Albums() {
                           onDragOver={(e) => handleDragOver(e, category.id, 'photo')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, category.id, 'photo')}
-                          style={{ width: '160px', minWidth: '160px' }}
+                          style={{ width: '240px', minWidth: '240px' }}
                           className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
                             selectedPhotoCategory === category.id
                               ? 'bg-blue-100 border-2 border-blue-400'
@@ -572,7 +572,7 @@ export default function Albums() {
                           onDragStart={(e) => handleDragStart(e, album, 'photo')}
                           onDragEnd={handleDragEnd}
                           onClick={() => handleOpenAlbum(album, 'photo')}
-                          style={{ width: '160px', minWidth: '160px' }}
+                          style={{ width: '240px', minWidth: '240px' }}
                           className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-blue-50 hover:bg-blue-100 border border-blue-200 ${
                             !isNonClasseesAlbum(album) ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${draggedAlbum?.id === album.id ? 'opacity-50' : ''}`}
@@ -655,7 +655,7 @@ export default function Albums() {
                           onDragOver={(e) => handleDragOver(e, category.id, 'doc')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, category.id, 'doc')}
-                          style={{ width: '160px', minWidth: '160px' }}
+                          style={{ width: '240px', minWidth: '240px' }}
                           className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 ${
                             selectedDocCategory === category.id
                               ? 'bg-green-100 border-2 border-green-400'
@@ -722,7 +722,7 @@ export default function Albums() {
                           onDragStart={(e) => handleDragStart(e, album, 'doc')}
                           onDragEnd={handleDragEnd}
                           onClick={() => handleOpenAlbum(album, 'doc')}
-                          style={{ width: '160px', minWidth: '160px' }}
+                          style={{ width: '240px', minWidth: '240px' }}
                           className={`rounded-lg cursor-pointer transition-all duration-200 px-2 py-1.5 flex items-center gap-2 h-10 bg-green-50 hover:bg-green-100 border border-green-200 ${
                             !isNonClasseesAlbum(album) ? 'cursor-grab active:cursor-grabbing' : ''
                           } ${draggedAlbum?.id === album.id ? 'opacity-50' : ''}`}
