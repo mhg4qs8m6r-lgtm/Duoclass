@@ -949,19 +949,28 @@ export default function CreationsAtelierV2({
   const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
     if (showAllTools) return { showDetourage: true, sections: null }; // null = tout afficher
     const map: Record<string, { showDetourage: boolean; sections: SectionId[] }> = {
-      "Collage":                      { showDetourage: true,  sections: ["collage", "texte", "calques"] },
-      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte", "calques"] },
-      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte", "calques"] },
-      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte", "calques"] },
-      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte", "calques"] },
+      "Collage":                      { showDetourage: true,  sections: ["collage", "texte", "calques", "bibliotheque"] },
+      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte", "calques", "bibliotheque"] },
+      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte", "calques", "bibliotheque"] },
+      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte", "calques", "bibliotheque"] },
+      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte", "calques", "bibliotheque"] },
       "Page de stickers":            { showDetourage: true,  sections: [] },
       "Puzzle":                      { showDetourage: true,  sections: ["puzzle", "texte"] },
     };
     return map[currentProjectType] || { showDetourage: true, sections: null }; // Projet libre → tout
   }, [currentProjectType, showAllTools]);
 
-  // Catégories de modèles à afficher selon le type de projet
-
+  // Catégories de la bibliothèque de modèles selon le type de projet
+  const bibliothequeCategories = useMemo<string[]>(() => {
+    const map: Record<string, string[]> = {
+      "Passe-partout modèle":         ["passe-partout"],
+      "Montage photos/Passe-partout": ["passe-partout"],
+      "Pêle-mêle modèle":            ["pele-mele"],
+      "Montage photos/Pêle-mêle":    ["pele-mele"],
+      "Collage":                      ["cadres", "bordures"],
+    };
+    return map[currentProjectType] || ["passe-partout", "pele-mele", "cadres", "bordures"];
+  }, [currentProjectType]);
 
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
@@ -1467,11 +1476,30 @@ export default function CreationsAtelierV2({
               const savedData = JSON.parse(creationsProject.canvasData as string) as any;
               console.log('[Créations] Données canvas chargées:', savedData);
               
-              // Restaurer les éléments du canvas
+              // Restaurer les éléments du canvas avec clamping aux limites du format
               if (savedData.canvasElements && Array.isArray(savedData.canvasElements)) {
-                setCanvasElements(savedData.canvasElements);
+                // Calculer les dimensions du format restauré pour le clamping
+                const rf = savedData.paperFormat
+                  ? PAPER_FORMATS.find(f => f.id === savedData.paperFormat) || PAPER_FORMATS[4]
+                  : PAPER_FORMATS[4];
+                const rfW = rf.id === 'custom' && savedData.customWidth ? Number(savedData.customWidth) : rf.width;
+                const rfH = rf.id === 'custom' && savedData.customHeight ? Number(savedData.customHeight) : rf.height;
+                const ori = savedData.orientation || 'portrait';
+                const fmtW = ori === 'portrait' ? rfW : rfH;
+                const fmtH = ori === 'portrait' ? rfH : rfW;
+                const clamped = savedData.canvasElements.map((el: any) => {
+                  if (el.locked || (el.type === 'shape' && el.shape === 'line')) return el;
+                  let { x, y, width, height } = el;
+                  width = Math.min(width, fmtW);
+                  height = Math.min(height, fmtH);
+                  x = Math.max(0, Math.min(x, fmtW - width));
+                  y = Math.max(0, Math.min(y, fmtH - height));
+                  return { ...el, x, y, width, height };
+                });
+                console.log(`[Créations] ${clamped.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
+                setCanvasElements(clamped);
               }
-              
+
               // Les éléments du collecteur sont gérés par la live query IndexedDB
               // (ne PAS restaurer depuis canvasData, sinon les ajouts récents via "Envoyer vers" sont écrasés)
               
@@ -1538,6 +1566,8 @@ export default function CreationsAtelierV2({
               }
               
               toast.info(language === "fr" ? "Projet chargé" : "Project loaded");
+              // Marquer le chargement comme terminé — l'auto-save peut maintenant s'activer
+              isInitialLoadRef.current = false;
             } catch (parseError) {
               console.error('Erreur lors du parsing des données canvas:', parseError);
             }
@@ -1662,11 +1692,13 @@ export default function CreationsAtelierV2({
   // Marquer la fin du chargement initial après un délai
   useEffect(() => {
     if (isOpen && currentProjectId) {
-      // Attendre que le chargement initial soit terminé avant d'activer l'auto-save
+      // Fallback : si le chargement n'a pas désactivé le flag, le faire après 5s
       const timer = setTimeout(() => {
-        isInitialLoadRef.current = false;
-        console.log('[AutoSave] Chargement initial terminé, auto-save activé');
-      }, 2000);
+        if (isInitialLoadRef.current) {
+          isInitialLoadRef.current = false;
+          console.log('[AutoSave] Fallback — chargement initial considéré terminé');
+        }
+      }, 5000);
       return () => clearTimeout(timer);
     } else {
       isInitialLoadRef.current = true;
@@ -1675,8 +1707,9 @@ export default function CreationsAtelierV2({
   
   // Sauvegarde automatique (debounced) - se déclenche à chaque modification du canvas
   useEffect(() => {
-    // Ne pas sauvegarder pendant le chargement initial ou si pas de projet
-    if (isInitialLoadRef.current || !currentProjectId || !isOpen) {
+    // Ne pas sauvegarder pendant le chargement initial, si pas de projet, ou si le canvas est vide
+    // (un canvas vide écraserait les données existantes en base)
+    if (isInitialLoadRef.current || !currentProjectId || !isOpen || canvasElements.length === 0) {
       return;
     }
     
@@ -1747,8 +1780,22 @@ export default function CreationsAtelierV2({
         
         // Réinitialiser le statut après 3 secondes
         setTimeout(() => setAutoSaveStatus('idle'), 3000);
-      } catch (error) {
-        console.error('[AutoSave] Erreur:', error);
+      } catch (error: any) {
+        console.warn('[AutoSave] Erreur:', error);
+        const isQuota = error?.name === 'QuotaExceededError'
+          || error?.message?.includes('quota')
+          || error?.inner?.name === 'QuotaExceededError';
+        if (isQuota) {
+          // Libérer le localStorage d'auto-save pour soulager le quota
+          try { localStorage.removeItem(AUTOSAVE_LS_KEY); } catch {}
+          toast.warning(
+            language === 'fr'
+              ? 'Stockage plein — sauvegarde auto désactivée. Supprimez d\'anciens projets pour libérer de l\'espace.'
+              : 'Storage full — auto-save disabled. Delete old projects to free space.',
+            { duration: 8000 }
+          );
+          setAutoSaveEnabled(false);
+        }
         setAutoSaveStatus('error');
         setTimeout(() => setAutoSaveStatus('idle'), 5000);
       }
@@ -1802,7 +1849,11 @@ export default function CreationsAtelierV2({
           timestamp: Date.now(),
         });
         localStorage.setItem(AUTOSAVE_LS_KEY, snapshot);
-      } catch { /* localStorage plein — on ignore silencieusement */ }
+      } catch (err: any) {
+        if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
+          try { localStorage.removeItem(AUTOSAVE_LS_KEY); } catch {}
+        }
+      }
     }, 120_000); // 2 minutes
     return () => { if (autoSaveIntervalRef.current) clearInterval(autoSaveIntervalRef.current); };
   }, [isOpen, autoSaveEnabled, collectorItems, paperFormat, orientation, imageZoom, currentProjectName, currentProjectId, customWidth, customHeight]);
@@ -3492,6 +3543,11 @@ export default function CreationsAtelierV2({
         xCm = (formatWidthCm - widthCm) / 2;
         yCm = (formatHeightCm - heightCm) / 2;
       }
+      // Clamper dans les limites du format
+      widthCm = Math.min(widthCm, formatWidthCm);
+      heightCm = Math.min(heightCm, formatHeightCm);
+      xCm = Math.max(0, Math.min(xCm, formatWidthCm - widthCm));
+      yCm = Math.max(0, Math.min(yCm, formatHeightCm - heightCm));
 
       const newElement: CanvasElement = {
         id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -4238,6 +4294,23 @@ export default function CreationsAtelierV2({
       setDragStart(null);
       return;
     }
+
+    // Contraindre les éléments dans les limites de la zone de travail (après drag/resize)
+    const maxW = canvasDimensions.formatWidthCm;
+    const maxH = canvasDimensions.formatHeightCm;
+    if (maxW > 0 && maxH > 0) {
+      setCanvasElements(prev => prev.map(el => {
+        if (el.locked || (el.type === 'shape' && el.shape === 'line')) return el;
+        let { x, y, width, height } = el;
+        width = Math.min(width, maxW);
+        height = Math.min(height, maxH);
+        x = Math.max(0, Math.min(x, maxW - width));
+        y = Math.max(0, Math.min(y, maxH - height));
+        if (x === el.x && y === el.y && width === el.width && height === el.height) return el;
+        return { ...el, x, y, width, height };
+      }));
+    }
+
     isDraggingRef.current = false;
     dragStartRef.current = null;
     elementStartPosRef.current = null;
@@ -4252,7 +4325,7 @@ export default function CreationsAtelierV2({
     setElementStartSize(null);
     setResizeHandle(null);
     setRotationCenterRef(null);
-  }, [isDraggingCtrl, undoBatchEnd]);
+  }, [isDraggingCtrl, undoBatchEnd, canvasDimensions.formatWidthCm, canvasDimensions.formatHeightCm]);
 
   // Démarrer la rotation libre
   const handleRotateStart = (e: React.MouseEvent, elementId: string) => {
@@ -6520,6 +6593,7 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
+                    bibliothequeCategories={bibliothequeCategories}
                     onSelectModele={(url, filename) => {
                       // Les modèles de la bibliothèque sont des gabarits pleine page
                       const fmtW = orientation === "portrait" ? paperFormat.width : paperFormat.height;
@@ -7110,6 +7184,9 @@ export default function CreationsAtelierV2({
                     </>
                   )}
                   
+                  {/* Conteneur clippé — empêche les éléments de déborder de la page */}
+                  <div className="absolute inset-0" style={{ overflow: 'hidden' }}>
+
                   {/* Éléments du canvas - positionnés sur la page */}
                   {canvasElements.map((element) => {
                     // Convertir les dimensions de cm vers pixels pour l'affichage
@@ -8232,6 +8309,8 @@ export default function CreationsAtelierV2({
                   );
                 })}
 
+                </div> {/* fin conteneur clippé overflow:hidden */}
+
                 {/* Aperçu SVG de la ligne en cours de tracé (mode tracé libre) */}
                 {isLineDrawMode && lineDrawStartRef.current && lineDrawEnd && (() => {
                   const { pxPerCm } = canvasDimensions;
@@ -9117,7 +9196,21 @@ export default function CreationsAtelierV2({
               </Button>
               <Button size="sm" className="bg-gradient-to-r from-green-500 to-emerald-500 text-white" onClick={() => {
                 const data = pendingRestoreRef.current;
-                if (data.canvasElements) setCanvasElementsRaw(data.canvasElements);
+                if (data.canvasElements) {
+                  // Clamper les éléments restaurés aux limites du format
+                  const fW = canvasDimensions.formatWidthCm;
+                  const fH = canvasDimensions.formatHeightCm;
+                  const clamped = data.canvasElements.map((el: any) => {
+                    if (el.locked || (el.type === 'shape' && el.shape === 'line')) return el;
+                    let { x, y, width, height } = el;
+                    width = Math.min(width, fW);
+                    height = Math.min(height, fH);
+                    x = Math.max(0, Math.min(x, fW - width));
+                    y = Math.max(0, Math.min(y, fH - height));
+                    return { ...el, x, y, width, height };
+                  });
+                  setCanvasElementsRaw(clamped);
+                }
                 if (data.collectorItems) setCollectorItems(data.collectorItems);
                 if (data.projectName) setCurrentProjectName(data.projectName);
                 setShowRestoreModal(false);
@@ -9787,8 +9880,8 @@ export default function CreationsAtelierV2({
 
       {/* Modale Ordre des calques du projet */}
       {showLayerOrderModal && createPortal(
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+        <div className="fixed inset-0 bg-black/30 z-[9999]" onClick={() => setShowLayerOrderModal(false)}>
+          <div className="fixed left-4 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-[420px] max-h-[80vh] overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200 flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex items-center justify-between flex-shrink-0">
               <div>
@@ -9820,6 +9913,28 @@ export default function CreationsAtelierV2({
                   ? canvasElements
                   : canvasElements.filter(el => !isSystemElement(el));
                 const sorted = [...filtered].sort((a, b) => b.zIndex - a.zIndex);
+                // Nommage unique automatique : dédupliquer les noms par z-index croissant
+                const displayNames = new Map<string, string>();
+                const nameCounts = new Map<string, number>();
+                const sortedByZAsc = [...sorted].reverse();
+                for (const el of sortedByZAsc) {
+                  const baseName = el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : el.type === 'shape' ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`);
+                  const count = (nameCounts.get(baseName) || 0) + 1;
+                  nameCounts.set(baseName, count);
+                  displayNames.set(el.id, baseName);
+                }
+                // Pour les noms en doublon, renuméroter
+                const nameOccurrence = new Map<string, number>();
+                for (const el of sortedByZAsc) {
+                  const baseName = displayNames.get(el.id)!;
+                  if ((nameCounts.get(baseName) || 0) > 1) {
+                    const occ = (nameOccurrence.get(baseName) || 0) + 1;
+                    nameOccurrence.set(baseName, occ);
+                    // Retirer le numéro trailing existant et renuméroter
+                    const stripped = baseName.replace(/\s*\d+$/, '');
+                    displayNames.set(el.id, `${stripped} ${occ}`);
+                  }
+                }
                 if (sorted.length === 0) {
                   return (
                     <p className="text-gray-400 text-center py-8 text-sm">
@@ -9827,25 +9942,46 @@ export default function CreationsAtelierV2({
                     </p>
                   );
                 }
+                // Pré-calculer les labels des découpes par surface décroissante
+                const decoupeElements = sorted.filter(el => {
+                  const n = (el.name || '').toLowerCase();
+                  return n.startsWith('découpe') || n.startsWith('decoupe') || n.startsWith('opening');
+                });
+                const decoupeLabelMap = new Map<string, string>();
+                if (decoupeElements.length > 0) {
+                  const bySurfaceDesc = [...decoupeElements].sort((a, b) => (b.width * b.height) - (a.width * a.height));
+                  bySurfaceDesc.forEach((el, i) => {
+                    if (i === 0) {
+                      decoupeLabelMap.set(el.id, language === 'fr' ? 'Contour extérieur du passe-partout' : 'Mat frame outer contour');
+                    } else if (decoupeElements.length === 2 && i === 1) {
+                      decoupeLabelMap.set(el.id, language === 'fr' ? 'Ouverture intérieure du passe-partout' : 'Mat frame inner opening');
+                    } else {
+                      decoupeLabelMap.set(el.id, language === 'fr' ? `Ouverture ${i}` : `Opening ${i}`);
+                    }
+                  });
+                }
+
                 return sorted.map((el, idx) => {
                   const position = sorted.length - idx;
                   const isBack = idx === sorted.length - 1;
-                  // Déterminer le niveau logique passe-partout
+                  const isSelected = selectedElementId === el.id;
+                  // Déterminer le label contextuel
                   const elName = (el.name || '').toLowerCase();
                   const isFond = elName === 'fond' || elName === 'background';
                   const isPP = elName === 'passe-partout' || elName === 'mat frame';
-                  const isDecoupe = elName.startsWith('découpe') || elName.startsWith('decoupe') || elName.startsWith('opening');
+                  const isDecoupe = decoupeLabelMap.has(el.id);
                   const levelLabel = isFond
-                    ? (language === 'fr' ? 'Niv.1 — Zone de travail' : 'Lv.1 — Work area')
+                    ? (language === 'fr' ? 'Fond couleur / Image de fond' : 'Background color / image')
                     : isPP
-                    ? (language === 'fr' ? 'Niv.2 — Cadre extérieur' : 'Lv.2 — Outer frame')
+                    ? (language === 'fr' ? 'Passe-partout généré' : 'Generated mat frame')
                     : isDecoupe
-                    ? (language === 'fr' ? 'Niv.3 — Ouverture' : 'Lv.3 — Opening')
+                    ? decoupeLabelMap.get(el.id)!
                     : null;
                   return (
                     <div
                       key={el.id}
-                      className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
+                      className={`flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer ${isSelected ? 'border-purple-400 bg-purple-50 ring-1 ring-purple-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
+                      onClick={() => setSelectedElementId(el.id)}
                     >
                       {/* Miniature */}
                       <div className="w-12 h-12 rounded border border-gray-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -9865,7 +10001,7 @@ export default function CreationsAtelierV2({
                       {/* Nom + niveau + position */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">
-                          {el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : el.type === 'shape' ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`)}
+                          {displayNames.get(el.id) || el.name || el.type}
                         </p>
                         {levelLabel ? (
                           <p className="text-[10px] text-purple-500 font-medium">{levelLabel}</p>
@@ -9975,6 +10111,24 @@ export default function CreationsAtelierV2({
                   );
                 });
               })()}
+
+              {/* Ligne fixe — Zone de travail (format) */}
+              <div className="flex items-center gap-3 p-2 rounded-lg border border-gray-300 bg-gray-100/80 opacity-75 mt-1">
+                <div className="w-12 h-12 rounded border border-gray-300 bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-gray-500">{paperFormat.label || paperFormat.id.toUpperCase()}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-500">
+                    {language === 'fr' ? `Zone de travail (Format ${paperFormat.label || paperFormat.id.toUpperCase()})` : `Work area (${paperFormat.label || paperFormat.id.toUpperCase()} format)`}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium">
+                    {language === 'fr' ? 'Niv.1 — Base non modifiable' : 'Lv.1 — Fixed base'}
+                  </p>
+                </div>
+                <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-200 text-gray-500 flex-shrink-0">
+                  ⚓ Base
+                </span>
+              </div>
             </div>
 
             {/* Footer */}

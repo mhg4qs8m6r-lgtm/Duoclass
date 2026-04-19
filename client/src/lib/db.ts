@@ -351,7 +351,23 @@ export async function updateCreationsProject(
 }
 
 export async function deleteCreationsProject(id: string): Promise<void> {
+  // Supprimer le projet
   await db.creations_projects.delete(id);
+  // Supprimer les items du collecteur associés à ce projet
+  const collecteurItems = await db.collecteur.where('projectId').equals(id).toArray();
+  if (collecteurItems.length > 0) {
+    await db.collecteur.bulkDelete(collecteurItems.map(item => item.id));
+  }
+  // Nettoyer le localStorage auto-save s'il concerne ce projet
+  try {
+    const autoSave = localStorage.getItem('creations-atelier-autosave');
+    if (autoSave) {
+      const parsed = JSON.parse(autoSave);
+      if (parsed.projectId === id) {
+        localStorage.removeItem('creations-atelier-autosave');
+      }
+    }
+  } catch {}
   addToSyncQueue({ entityType: 'project', action: 'delete', data: { localId: id } });
 }
 

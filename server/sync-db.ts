@@ -3,7 +3,7 @@
  * Gère les opérations CRUD sur les catégories, albums et métadonnées photos
  */
 
-import { eq, and, gt, sql } from "drizzle-orm";
+import { eq, and, gt, sql, desc, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   categories,
@@ -12,6 +12,7 @@ import {
   userSettings,
   syncLog,
   projects,
+  projectVersions,
   bibliothequeItems,
   sharedModeles,
   InsertCategory,
@@ -527,8 +528,47 @@ export async function upsertProject(data: InsertProject): Promise<Project | null
       .limit(1);
 
     if (existing.length > 0) {
-      await db.update(projects).set(values).where(eq(projects.id, existing[0].id));
-      return { ...existing[0], ...values } as Project;
+      const old = existing[0];
+
+      // Sauvegarder la version actuelle avant écrasement (backup)
+      try {
+        await db.insert(projectVersions).values({
+          projectId: old.id,
+          userId: old.userId,
+          localId: old.localId,
+          name: old.name,
+          canvasElements: old.canvasElements,
+          canvasData: old.canvasData,
+          photos: old.photos,
+          canvasFormat: old.canvasFormat,
+          canvasFormatWidth: old.canvasFormatWidth,
+          canvasFormatHeight: old.canvasFormatHeight,
+          thumbnail: old.thumbnail,
+          projectType: old.projectType,
+          projectCategory: old.projectCategory,
+          collecteurData: old.collecteurData,
+        });
+
+        // Ne garder que les 5 dernières versions
+        const allVersions = await db
+          .select({ id: projectVersions.id })
+          .from(projectVersions)
+          .where(and(
+            eq(projectVersions.userId, old.userId),
+            eq(projectVersions.localId, old.localId)
+          ))
+          .orderBy(desc(projectVersions.savedAt));
+
+        if (allVersions.length > 5) {
+          const idsToDelete = allVersions.slice(5).map(v => v.id);
+          await db.delete(projectVersions).where(inArray(projectVersions.id, idsToDelete));
+        }
+      } catch (versionError) {
+        console.warn("[Sync] Failed to save project version (non-blocking):", versionError);
+      }
+
+      await db.update(projects).set(values).where(eq(projects.id, old.id));
+      return { ...old, ...values } as Project;
     } else {
       await db.insert(projects).values(values);
       const created = await db.select().from(projects)
@@ -546,6 +586,7 @@ export async function deleteProject(userId: number, localId: string): Promise<bo
   const db = await getDb();
   if (!db) return false;
   try {
+    await db.delete(projectVersions).where(and(eq(projectVersions.userId, userId), eq(projectVersions.localId, localId)));
     await db.delete(projects).where(and(eq(projects.userId, userId), eq(projects.localId, localId)));
     return true;
   } catch (error) {
@@ -688,6 +729,7 @@ export async function purgeAllUserData(userId: number): Promise<boolean> {
       db.delete(categories).where(eq(categories.userId, userId)),
       db.delete(albums).where(eq(albums.userId, userId)),
       db.delete(photoMetadata).where(eq(photoMetadata.userId, userId)),
+      db.delete(projectVersions).where(eq(projectVersions.userId, userId)),
       db.delete(projects).where(eq(projects.userId, userId)),
       db.delete(bibliothequeItems).where(eq(bibliothequeItems.userId, userId)),
       db.delete(userSettings).where(eq(userSettings.userId, userId)),

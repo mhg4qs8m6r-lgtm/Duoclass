@@ -37,6 +37,7 @@ import {
   RotateCcw,
   X as XIcon,
   Layers,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -252,6 +253,8 @@ export interface AssemblagePanelProps {
   onLineStrokeWidthChange?: (width: number) => void;
   /** Catégories de modèles à afficher dans les sections passe-partout / pêle-mêle */
   modelesCategories?: string[] | null;
+  /** Catégories pour l'accordéon Bibliothèque de modèles (premier accordéon) */
+  bibliothequeCategories?: string[];
   /** Callback quand l'utilisateur sélectionne un modèle */
   onSelectModele?: (url: string, filename: string) => void;
   /** Ouvre la modale "Ordre des calques du projet" */
@@ -1772,6 +1775,7 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 // Composant principal : AssemblagePanel
 // ---------------------------------------------------------------------------
 export type SectionId =
+  | "bibliotheque"
   | "passe-partout"
   | "montage-pp"
   | "pelemele-modele"
@@ -1797,6 +1801,7 @@ const SECTIONS: SectionDef[] = [
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
   { id: "puzzle",           labelFr: "Puzzle",                      labelEn: "Puzzle",                    icon: Puzzle              },
   { id: "calques",          labelFr: "Ordre des calques du projet", labelEn: "Project layer order",       icon: Layers              },
+  { id: "bibliotheque",     labelFr: "Bibliothèque de modèles",     labelEn: "Template library",          icon: BookOpen           },
 ];
 
 export default function AssemblagePanel(props: AssemblagePanelProps) {
@@ -1845,6 +1850,12 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
             {/* Contenu de la section */}
             {isOpen && (
               <div className="p-3 bg-white">
+                {section.id === "bibliotheque" && props.onSelectModele && props.bibliothequeCategories && (
+                  <BibliothequeModeles
+                    categories={props.bibliothequeCategories}
+                    onSelectModele={props.onSelectModele}
+                  />
+                )}
                 {(section.id === "passe-partout" || section.id === "montage-pp") && (
                   <>
                     <PassePartoutSection
@@ -1896,14 +1907,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       lineStrokeWidth={props.lineStrokeWidth}
                       onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                     />
-                    {section.id === "passe-partout" && props.onSelectModele && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <BibliothequeModeles
-                          categories={["passe-partout"]}
-                          onSelectModele={props.onSelectModele}
-                        />
-                      </div>
-                    )}
                   </>
                 )}
                 {section.id === "pelemele-modele" && (
@@ -1962,14 +1965,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       lineStrokeWidth={props.lineStrokeWidth}
                       onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                     />
-                    {props.onSelectModele && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <BibliothequeModeles
-                          categories={["pele-mele"]}
-                          onSelectModele={props.onSelectModele}
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
                 {section.id === "montage-pelemele" && (
@@ -2037,14 +2032,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         ? "Composition libre. Glissez des photos sur le canvas et disposez-les comme vous le souhaitez."
                         : "Free composition. Drag photos onto the canvas and arrange them as you like."}
                     </p>
-                    {props.onSelectModele && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <BibliothequeModeles
-                          categories={["cadres", "bordures"]}
-                          onSelectModele={props.onSelectModele}
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
                 {section.id === "texte" && (

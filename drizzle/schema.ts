@@ -144,6 +144,28 @@ export const projects = pgTable("projects", {
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 
+export const projectVersions = pgTable("projectVersions", {
+  id: serial("id").primaryKey(),
+  projectId: integer("projectId").notNull(),
+  userId: integer("userId").notNull(),
+  localId: varchar("localId", { length: 64 }).notNull(),
+  name: varchar("name", { length: 255 }),
+  canvasElements: text("canvasElements"),
+  canvasData: text("canvasData"),
+  photos: text("photos"),
+  canvasFormat: varchar("canvasFormat", { length: 64 }),
+  canvasFormatWidth: integer("canvasFormatWidth"),
+  canvasFormatHeight: integer("canvasFormatHeight"),
+  thumbnail: text("thumbnail"),
+  projectType: varchar("projectType", { length: 64 }),
+  projectCategory: varchar("projectCategory", { length: 32 }),
+  collecteurData: text("collecteurData"),
+  savedAt: timestamp("savedAt").defaultNow().notNull(),
+});
+
+export type ProjectVersion = typeof projectVersions.$inferSelect;
+export type InsertProjectVersion = typeof projectVersions.$inferInsert;
+
 export const bibliothequeItems = pgTable("bibliothequeItems", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
