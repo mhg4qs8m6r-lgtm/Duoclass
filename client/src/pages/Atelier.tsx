@@ -4,8 +4,9 @@ import { db, AlbumMeta, getAllCreationsProjects, deleteCreationsProject, Creatio
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Trash2 } from 'lucide-react';
+import { Trash2, HardDrive } from 'lucide-react';
 import { toast } from 'sonner';
+import { cleanupAutoSaveEntries } from '@/lib/syncService';
 import MainLayout from '@/components/MainLayout';
 import AlbumCreationQuestionnaire from '@/components/AlbumCreationQuestionnaire';
 import CreationsAtelierV2 from '@/components/creations/CreationsAtelierV2';
@@ -31,6 +32,7 @@ export default function Atelier() {
   const [selectedProjectCategory, setSelectedProjectCategory] = useState<'en_cours' | 'finis' | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<CreationsProject | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<any | null>(null);
+  const [showClearStorageConfirm, setShowClearStorageConfirm] = useState(false);
 
   // Récupérer les catégories et albums depuis IndexedDB
   const categories = useLiveQuery(() => db.categories.toArray());
@@ -151,6 +153,14 @@ export default function Atelier() {
             ← {language === 'fr' ? 'Retour' : 'Back'}
           </button>
         )}
+        <button
+          className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 rounded transition-colors text-sm flex items-center gap-1.5"
+          onClick={() => setShowClearStorageConfirm(true)}
+          title={language === 'fr' ? "Supprimer les sauvegardes automatiques pour libérer de l'espace" : "Delete auto-saves to free up space"}
+        >
+          <HardDrive size={14} />
+          {language === 'fr' ? "Libérer l'espace" : "Free up space"}
+        </button>
         <button
           className="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-1.5 px-4 rounded transition-colors text-sm"
           onClick={() => setShowCreationForm(true)}
@@ -407,6 +417,44 @@ export default function Atelier() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog de confirmation — Libérer l'espace */}
+      <Dialog open={showClearStorageConfirm} onOpenChange={setShowClearStorageConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <HardDrive size={24} />
+              {language === 'fr' ? "Libérer l'espace" : "Free up space"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-gray-600 text-sm">
+              {language === 'fr'
+                ? "Cette action supprime toutes les sauvegardes automatiques temporaires (auto-save, images de détourage). Vos projets sauvegardés ne seront pas affectés."
+                : "This will delete all temporary auto-saves (auto-save snapshots, cutout images). Your saved projects will not be affected."}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowClearStorageConfirm(false)} className="flex-1">
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={() => {
+                  const count = cleanupAutoSaveEntries();
+                  setShowClearStorageConfirm(false);
+                  toast.success(
+                    language === 'fr'
+                      ? `${count} entrée(s) supprimée(s) — espace libéré`
+                      : `${count} entry(ies) removed — space freed`
+                  );
+                }}
+                className="flex-1 bg-orange-500 hover:bg-orange-600"
+              >
+                {language === 'fr' ? 'Confirmer' : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Modale d'aide Atelier */}
       {showAtelierHelp && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setShowAtelierHelp(false)}>
@@ -437,6 +485,18 @@ export default function Atelier() {
                 <p>{"\u2192"} <strong>{language === 'fr' ? '"Exporter l\'image"' : '"Export image"'}</strong> : {language === 'fr' ? "enregistre l'image finale dans votre album" : "saves the final image to your album"}</p>
                 <p>{"\u2192"} <strong>{language === 'fr' ? '"Sauvegarder le projet"' : '"Save project"'}</strong> : {language === 'fr' ? "conserve votre projet pour le reprendre plus tard" : "keeps your project to resume later"}</p>
                 <p>{"\u2192"} <strong>{language === 'fr' ? '"Fermer"' : '"Close"'}</strong> : {language === 'fr' ? "retour à l'Atelier" : "back to Workshop"}</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <h4 className="font-bold text-base text-gray-800 mb-1">{"\uD83D\uDCDA"} {language === 'fr' ? "Les modèles de la Bibliothèque" : "Library templates"}</h4>
+                <p>{language === 'fr'
+                  ? "Les gabarits (passe-partout, pêle-mêle, cadres…) sont des modèles de référence — ils ne sont pas modifiables directement."
+                  : "Templates (mat boards, collages, frames…) are reference models — they cannot be edited directly."}</p>
+                <p className="mt-1">{language === 'fr'
+                  ? "Pour les utiliser : créez un nouveau projet, choisissez votre type, puis sélectionnez un gabarit dans la Bibliothèque de modèles."
+                  : "To use them: create a new project, choose your type, then select a template from the Template Library."}</p>
+                <p className="mt-1 font-medium">{language === 'fr'
+                  ? 'Vos projets personnels (« Projets en cours ») restent entièrement modifiables à tout moment.'
+                  : 'Your personal projects ("Current projects") remain fully editable at any time.'}</p>
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 border-t flex justify-end rounded-b-xl">

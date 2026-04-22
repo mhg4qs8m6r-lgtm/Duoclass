@@ -470,6 +470,54 @@ const helpContent: Record<string, { fr: HelpSection; en: HelpSection }> = {
     }
   },
 
+  // Page Atelier
+  "/atelier": {
+    fr: {
+      title: "Atelier Créations",
+      description: "Créez et personnalisez vos projets à partir de modèles.",
+      sections: [
+        {
+          title: "Les modèles de la Bibliothèque",
+          content: "La Bibliothèque propose des gabarits de référence (passe-partout, pêle-mêle, cadres, bordures). Ces modèles ne sont pas modifiables directement : ils servent de base pour créer vos propres projets."
+        },
+        {
+          title: "Vos projets personnels",
+          content: "Les projets que vous créez (visibles dans « Projets en cours ») sont entièrement modifiables. Vous pouvez les personnaliser, les sauvegarder et les exporter à tout moment."
+        },
+        {
+          title: "Utiliser un modèle",
+          content: "Cliquez sur « + Créer un nouveau projet », choisissez un type (passe-partout, pêle-mêle…), puis utilisez la Bibliothèque de modèles dans l'Atelier pour choisir un gabarit prêt à personnaliser."
+        },
+        {
+          title: "Libérer de l'espace",
+          content: "Si le stockage est plein, utilisez le bouton « Libérer l'espace » dans le bandeau pour supprimer les sauvegardes automatiques temporaires."
+        }
+      ]
+    },
+    en: {
+      title: "Creations Workshop",
+      description: "Create and customize your projects from templates.",
+      sections: [
+        {
+          title: "Library templates",
+          content: "The Library offers reference templates (mat boards, collages, frames, borders). These templates cannot be edited directly — they serve as a starting point for your own projects."
+        },
+        {
+          title: "Your personal projects",
+          content: "Projects you create (shown under \"Current projects\") are fully editable. You can customize, save and export them at any time."
+        },
+        {
+          title: "Using a template",
+          content: "Click \"+ Create a new project\", choose a type (mat board, collage…), then use the Template Library inside the Workshop to pick a ready-made design to customize."
+        },
+        {
+          title: "Free up space",
+          content: "If storage is full, use the \"Free up space\" button in the top bar to delete temporary auto-save data."
+        }
+      ]
+    }
+  },
+
   // Page par défaut
   "default": {
     fr: {

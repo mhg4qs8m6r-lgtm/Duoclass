@@ -12,7 +12,7 @@ import { db, BibliothequeItemDB, CreationsProject, getAllCreationsProjects, crea
 import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { addToSyncQueue } from "@/lib/syncService";
+import { addToSyncQueue, safeLocalStorageSet } from "@/lib/syncService";
 import { toast } from "sonner";
 import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
@@ -876,6 +876,21 @@ export default function CreationsAtelierV2({
   // Modale d'aperçu SVG laser
   const [svgPreviewModal, setSvgPreviewModal] = useState<{ svgContent: string; filename: string } | null>(null);
   
+  // Ref synchrone pour l'élément en cours de drag (évite stale closure dans handleMouseMove)
+  const draggingElementIdRef = useRef<string | null>(null);
+  // Ref synchrone pour savoir si l'élément draggé est une ligne SVG
+  const draggingIsLineRef = useRef(false);
+  // Ref synchrone pour le customPath initial (lignes avec courbes)
+  const draggingCustomPathRef = useRef<string | null>(null);
+  // Ref synchrone pour elementStartSize (lignes SVG)
+  const elementStartSizeRef = useRef<{ width: number; height: number } | null>(null);
+  // Seuil de drag : le drag ne s'active que si la souris a bougé d'au moins DRAG_THRESHOLD px
+  const DRAG_THRESHOLD = 3;
+  // "pending drag" : mouseDown enregistré mais le seuil de distance n'est pas encore atteint
+  const dragPendingRef = useRef(false);
+  // Position souris au mouseDown (en pixels écran) pour calculer la distance avant activation
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+
   // Refs pour le déplacement groupé (multi-sélection)
   const multiDragStartPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
   // Ref pour le redimensionnement groupé : stocke { x, y, width, height } de chaque membre au début du resize
@@ -1848,11 +1863,10 @@ export default function CreationsAtelierV2({
           projectId: currentProjectId,
           timestamp: Date.now(),
         });
-        localStorage.setItem(AUTOSAVE_LS_KEY, snapshot);
+        safeLocalStorageSet(AUTOSAVE_LS_KEY, snapshot);
       } catch (err: any) {
-        if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
-          try { localStorage.removeItem(AUTOSAVE_LS_KEY); } catch {}
-        }
+        // safeLocalStorageSet gère déjà le cleanup, mais si ça échoue quand même :
+        console.warn('[AutoSave] Échec malgré cleanup:', err?.message);
       }
     }, 120_000); // 2 minutes
     return () => { if (autoSaveIntervalRef.current) clearInterval(autoSaveIntervalRef.current); };
@@ -4009,8 +4023,7 @@ export default function CreationsAtelierV2({
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
 
-    // Snapshot undo au début du drag (pas à chaque mousemove)
-    undoBatchStart();
+    // NOTE : undoBatchStart() est désormais appelé dans handleMouseMove quand le seuil de drag est atteint
 
     e.preventDefault();
     e.stopPropagation();
@@ -4044,17 +4057,21 @@ export default function CreationsAtelierV2({
     }
     if (element.src) setActiveCanvasPhoto(element.src);
     
-    // Préparer le drag pour tous les éléments de la sélection effective
-    // Écrire les refs synchrones AVANT les states (pour handleMouseMove)
-    isDraggingRef.current = true;
+    // Préparer le drag en mode "pending" — le drag réel ne s'active qu'après DRAG_THRESHOLD px
+    // Enregistrer la position souris pour le calcul de distance
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    dragPendingRef.current = true;
+    isDraggingRef.current = false; // PAS encore actif
+    draggingElementIdRef.current = elementId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     elementStartPosRef.current = { x: element.x, y: element.y };
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setElementStartPos({ x: element.x, y: element.y });
-    // Pour les lignes (modèle SVG) : sauvegarder aussi width=x2 et height=y2
-    setElementStartSize({ width: element.width, height: element.height });
-    
+    elementStartSizeRef.current = { width: element.width, height: element.height };
+    draggingIsLineRef.current = element.type === 'shape' && element.shape === 'line';
+    draggingCustomPathRef.current = element.customPath || null;
+
+    console.log('[CLICK] mouseDown elementId=%s isDraggingRef=%s dragPendingRef=%s selectedElementId=%s',
+      elementId, isDraggingRef.current, dragPendingRef.current, selectedElementId);
+
     // Sauvegarder les positions de départ de TOUS les éléments sélectionnés
     const startPositions = new Map<string, { x: number; y: number }>();
     effectiveSelection.forEach(id => {
@@ -4093,16 +4110,40 @@ export default function CreationsAtelierV2({
       }));
       return;
     }
-    // Utiliser les REFS synchrones (pas les states) pour éviter le stale closure
+    // Utiliser UNIQUEMENT les refs synchrones pour éviter toute stale closure
     const currentDragStart = dragStartRef.current;
     const currentElementStartPos = elementStartPosRef.current;
-    if (!isDraggingRef.current || !currentDragStart || !currentElementStartPos || !selectedElementId) return;
+    const currentElementId = draggingElementIdRef.current;
+    if (!currentDragStart || !currentElementStartPos || !currentElementId) return;
+
+    // Seuil de drag : tant que la souris n'a pas bougé de DRAG_THRESHOLD px, ne pas déplacer
+    if (dragPendingRef.current && !isDraggingRef.current) {
+      const mdPos = mouseDownPosRef.current;
+      if (!mdPos) return;
+      const dx = e.clientX - mdPos.x;
+      const dy = e.clientY - mdPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      console.log('[MOVE] pending dist=%.1f isDraggingRef=%s dragPendingRef=%s id=%s',
+        dist, isDraggingRef.current, dragPendingRef.current, currentElementId);
+      if (dist < DRAG_THRESHOLD) return; // seuil non atteint
+      // Seuil atteint → activer le drag réel
+      isDraggingRef.current = true;
+      dragPendingRef.current = false;
+      setIsDragging(true);
+      setDragStart({ x: currentDragStart.x, y: currentDragStart.y });
+      setElementStartPos({ x: currentElementStartPos.x, y: currentElementStartPos.y });
+      setElementStartSize(elementStartSizeRef.current);
+      undoBatchStart();
+      console.log('[Drag] ACTIVATED (threshold reached) id=%s', currentElementId);
+    }
+
+    if (!isDraggingRef.current) return;
 
     // Convertir les deltas de pixels vers cm
     const pxPerCm = canvasDimensions.pxPerCm;
     const deltaXCm = (e.clientX - currentDragStart.x) / pxPerCm;
     const deltaYCm = (e.clientY - currentDragStart.y) / pxPerCm;
-    
+
     // Déplacement groupé : déplacer tous les éléments sélectionnés
     if (multiDragStartPositions.current.size > 1) {
       setCanvasElements(prev => prev.map(el => {
@@ -4129,45 +4170,39 @@ export default function CreationsAtelierV2({
         return el;
       }));
     } else {
-      // Déplacement simple (un seul élément)
-      const movingEl = canvasElements.find(el => el.id === selectedElementId);
-      if (movingEl?.type === 'shape' && movingEl?.shape === 'line' && elementStartSize) {
-        // Nouveau modèle SVG : x=x1, y=y1, width=x2, height=y2
-        // Déplacer les deux extrémités de la même valeur delta
+      // Déplacement simple (un seul élément) — tout via refs, pas de closure stale
+      const startSize = elementStartSizeRef.current;
+      if (draggingIsLineRef.current && startSize) {
+        // Ligne SVG : x=x1, y=y1, width=x2, height=y2
         const updates: Partial<CanvasElement> = {
           x: currentElementStartPos.x + deltaXCm,
           y: currentElementStartPos.y + deltaYCm,
-          width: elementStartSize.width + deltaXCm,
-          height: elementStartSize.height + deltaYCm,
+          width: startSize.width + deltaXCm,
+          height: startSize.height + deltaYCm,
         };
         // Si la ligne a un customPath (courbe), déplacer aussi le point de contrôle
-        if (movingEl.customPath) {
-          const m = movingEl.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+        const origPath = draggingCustomPathRef.current;
+        if (origPath) {
+          const m = origPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
           if (m) {
             const nx1 = currentElementStartPos.x + deltaXCm;
             const ny1 = currentElementStartPos.y + deltaYCm;
-            const origCtrlX = parseFloat(m[3]);
-            const origCtrlY = parseFloat(m[4]);
-            const origX1 = parseFloat(m[1]);
-            const origY1 = parseFloat(m[2]);
-            const ctrlDeltaX = origCtrlX - origX1;
-            const ctrlDeltaY = origCtrlY - origY1;
-            const newCtrlX = nx1 + ctrlDeltaX;
-            const newCtrlY = ny1 + ctrlDeltaY;
-            const nx2 = elementStartSize.width + deltaXCm;
-            const ny2 = elementStartSize.height + deltaYCm;
-            updates.customPath = `M ${nx1} ${ny1} Q ${newCtrlX} ${newCtrlY} ${nx2} ${ny2}`;
+            const ctrlDeltaX = parseFloat(m[3]) - parseFloat(m[1]);
+            const ctrlDeltaY = parseFloat(m[4]) - parseFloat(m[2]);
+            const nx2 = startSize.width + deltaXCm;
+            const ny2 = startSize.height + deltaYCm;
+            updates.customPath = `M ${nx1} ${ny1} Q ${nx1 + ctrlDeltaX} ${ny1 + ctrlDeltaY} ${nx2} ${ny2}`;
           }
         }
-        updateCanvasElement(selectedElementId, updates);
+        setCanvasElements(prev => prev.map(el => el.id === currentElementId ? { ...el, ...updates } : el));
       } else {
-        updateCanvasElement(selectedElementId, {
-          x: currentElementStartPos.x + deltaXCm,
-          y: currentElementStartPos.y + deltaYCm
-        });
+        setCanvasElements(prev => prev.map(el => el.id === currentElementId
+          ? { ...el, x: currentElementStartPos.x + deltaXCm, y: currentElementStartPos.y + deltaYCm }
+          : el
+        ));
       }
     }
-  }, [isDraggingCtrl, selectedElementId, canvasDimensions.pxPerCm, elementStartSize]);
+  }, [isDraggingCtrl, canvasDimensions.pxPerCm]);
   
   // === LASSO DE SÉLECTION ===
   const handleLassoStart = (e: React.MouseEvent) => {
@@ -4285,33 +4320,67 @@ export default function CreationsAtelierV2({
   };
   
   const handleMouseUp = useCallback(() => {
-    // Fin d'action continue → déverrouiller le batch undo
-    undoBatchEnd();
+    console.log('[UP] isDraggingRef=%s dragPendingRef=%s draggingElementId=%s',
+      isDraggingRef.current, dragPendingRef.current, draggingElementIdRef.current);
     // Fin du drag du point de contrôle de la courbe
     if (isDraggingCtrl) {
+      undoBatchEnd();
       setIsDraggingCtrl(false);
       draggingCtrlElementIdRef.current = null;
       setDragStart(null);
       return;
     }
 
-    // Contraindre les éléments dans les limites de la zone de travail (après drag/resize)
-    const maxW = canvasDimensions.formatWidthCm;
-    const maxH = canvasDimensions.formatHeightCm;
-    if (maxW > 0 && maxH > 0) {
-      setCanvasElements(prev => prev.map(el => {
-        if (el.locked || (el.type === 'shape' && el.shape === 'line')) return el;
-        let { x, y, width, height } = el;
-        width = Math.min(width, maxW);
-        height = Math.min(height, maxH);
-        x = Math.max(0, Math.min(x, maxW - width));
-        y = Math.max(0, Math.min(y, maxH - height));
-        if (x === el.x && y === el.y && width === el.width && height === el.height) return el;
-        return { ...el, x, y, width, height };
-      }));
+    // Si le drag était "pending" (seuil non atteint) → c'était un simple clic, pas de drag
+    const wasDragging = isDraggingRef.current;
+    if (dragPendingRef.current && !wasDragging) {
+      // Simple clic : annuler le pending, pas de déplacement ni de clamping
+      dragPendingRef.current = false;
+      mouseDownPosRef.current = null;
+      draggingElementIdRef.current = null;
+      draggingIsLineRef.current = false;
+      draggingCustomPathRef.current = null;
+      elementStartSizeRef.current = null;
+      dragStartRef.current = null;
+      elementStartPosRef.current = null;
+      return;
+    }
+
+    // Fin d'action continue → déverrouiller le batch undo (seulement si un vrai drag a eu lieu)
+    if (wasDragging) {
+      undoBatchEnd();
+    }
+
+    // Contraindre les éléments UNIQUEMENT après un vrai drag ou resize (pas sur un simple clic)
+    if (wasDragging) {
+      const maxW = canvasDimensions.formatWidthCm;
+      const maxH = canvasDimensions.formatHeightCm;
+      const EPS = 0.001; // tolérance pour éviter les micro-corrections flottantes
+      if (maxW > 0 && maxH > 0) {
+        setCanvasElements(prev => prev.map(el => {
+          if (el.locked || (el.type === 'shape' && el.shape === 'line')) return el;
+          let { x, y, width, height } = el;
+          width = Math.min(width, maxW);
+          height = Math.min(height, maxH);
+          x = Math.max(0, Math.min(x, maxW - width));
+          y = Math.max(0, Math.min(y, maxH - height));
+          // Ne créer un nouvel objet que si la position a réellement changé (au-delà du bruit flottant)
+          if (Math.abs(x - el.x) < EPS && Math.abs(y - el.y) < EPS &&
+              Math.abs(width - el.width) < EPS && Math.abs(height - el.height) < EPS) {
+            return el;
+          }
+          return { ...el, x, y, width, height };
+        }));
+      }
     }
 
     isDraggingRef.current = false;
+    dragPendingRef.current = false;
+    mouseDownPosRef.current = null;
+    draggingElementIdRef.current = null;
+    draggingIsLineRef.current = false;
+    draggingCustomPathRef.current = null;
+    elementStartSizeRef.current = null;
     dragStartRef.current = null;
     elementStartPosRef.current = null;
     setIsDragging(false);

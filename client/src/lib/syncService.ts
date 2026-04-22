@@ -69,7 +69,7 @@ export function getLastSyncTimestamp(): number {
  */
 export function setLastSyncTimestamp(timestamp: number): void {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(getSyncKey(), timestamp.toString());
+  safeLocalStorageSet(getSyncKey(), timestamp.toString());
   syncStatus.lastSyncTime = timestamp;
   notifyStatusChange();
 }
@@ -88,7 +88,7 @@ export function getSyncQueue(): SyncQueueItem[] {
  */
 function saveSyncQueue(queue: SyncQueueItem[]): void {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  safeLocalStorageSet(SYNC_QUEUE_KEY, JSON.stringify(queue));
   syncStatus.pendingChanges = queue.length;
   notifyStatusChange();
 }
@@ -225,6 +225,62 @@ export function clearSyncQueue(): void {
 export function forceFullSync(): void {
   setLastSyncTimestamp(0);
   console.log('[Sync] Full sync will be triggered on next sync');
+}
+
+// ── Nettoyage localStorage en cas de QuotaExceededError ──
+
+/** Préfixe/clés connues pour l'auto-save et les données temporaires volumineuses */
+const AUTOSAVE_KEYS = ['creations-atelier-autosave', 'detourage-image'] as const;
+
+/**
+ * Supprime les entrées auto-save / temporaires du localStorage.
+ * Retourne le nombre d'entrées supprimées.
+ */
+export function cleanupAutoSaveEntries(): number {
+  if (typeof localStorage === 'undefined') return 0;
+  let deleted = 0;
+  for (const key of AUTOSAVE_KEYS) {
+    if (localStorage.getItem(key) !== null) {
+      localStorage.removeItem(key);
+      deleted++;
+    }
+  }
+  // Supprimer aussi toute clé commençant par "autosave_" (future-proof)
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('autosave_')) {
+      localStorage.removeItem(k);
+      deleted++;
+    }
+  }
+  console.log(`[Sync] cleanupAutoSaveEntries: ${deleted} entries removed`);
+  return deleted;
+}
+
+/**
+ * Écrit dans localStorage avec gestion automatique du QuotaExceededError.
+ * En cas de quota dépassé : nettoie les entrées auto-save puis réessaie une fois.
+ * Retourne true si l'écriture a réussi, false sinon.
+ */
+export function safeLocalStorageSet(key: string, value: string): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    if (err?.name === 'QuotaExceededError' || err?.code === 22 || err?.message?.includes('quota')) {
+      console.warn('[Sync] QuotaExceededError — cleaning up auto-save entries…');
+      cleanupAutoSaveEntries();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch {
+        console.error('[Sync] Still over quota after cleanup');
+        return false;
+      }
+    }
+    throw err;
+  }
 }
 
 // Écouter les changements de connexion
