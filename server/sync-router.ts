@@ -35,6 +35,10 @@ import {
   getAllSharedModeles,
   createSharedModele,
   deleteSharedModele,
+  getAllUsefulLinks,
+  createUsefulLink,
+  updateUsefulLink,
+  deleteUsefulLink,
   purgeAllUserData,
 } from "./sync-db";
 import { uploadThumbnail, uploadThumbnailsBatch } from "./thumbnails";
@@ -787,6 +791,53 @@ export const syncRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const success = await deleteSharedModele(input.id);
+        return { success };
+      }),
+  }),
+
+  // ==================== ADRESSES UTILES ====================
+
+  usefulLinks: router({
+    /** Tous les utilisateurs authentifiés peuvent lister les liens */
+    getAll: protectedProcedure.query(async () => {
+      return await getAllUsefulLinks();
+    }),
+
+    /** Admin uniquement : créer un lien */
+    create: adminProcedure
+      .input(z.object({
+        title: z.string().min(1),
+        description: z.string().default(""),
+        url: z.string().url(),
+        tags: z.array(z.string()).default([]),
+        ordre: z.number().default(0),
+      }))
+      .mutation(async ({ input }) => {
+        const link = await createUsefulLink(input);
+        return { success: !!link, link };
+      }),
+
+    /** Admin uniquement : modifier un lien */
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        url: z.string().url().optional(),
+        tags: z.array(z.string()).optional(),
+        ordre: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        const success = await updateUsefulLink(id, data);
+        return { success };
+      }),
+
+    /** Admin uniquement : supprimer un lien */
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const success = await deleteUsefulLink(input.id);
         return { success };
       }),
   }),

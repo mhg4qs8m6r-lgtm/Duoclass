@@ -15,6 +15,7 @@ import {
   projectVersions,
   bibliothequeItems,
   sharedModeles,
+  usefulLinks,
   InsertCategory,
   InsertAlbum,
   InsertPhotoMetadata,
@@ -28,6 +29,7 @@ import {
   Project,
   BibliothequeItem,
   SharedModele,
+  UsefulLink,
 } from "../drizzle/schema";
 
 // ==================== CATÉGORIES ====================
@@ -781,6 +783,67 @@ export async function deleteSharedModele(id: number): Promise<boolean> {
     return true;
   } catch (error) {
     console.error("[Sync] Failed to delete shared modele:", error);
+    return false;
+  }
+}
+
+// ==================== ADRESSES UTILES ====================
+
+export async function getAllUsefulLinks(): Promise<UsefulLink[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(usefulLinks).orderBy(usefulLinks.ordre, usefulLinks.createdAt);
+  } catch (error) {
+    console.error("[Sync] Failed to get useful links:", error);
+    return [];
+  }
+}
+
+export async function createUsefulLink(data: {
+  title: string;
+  description: string;
+  url: string;
+  tags: string[];
+  ordre?: number;
+}): Promise<UsefulLink | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const result = await db.insert(usefulLinks).values(data).returning();
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Sync] Failed to create useful link:", error);
+    return null;
+  }
+}
+
+export async function updateUsefulLink(id: number, data: {
+  title?: string;
+  description?: string;
+  url?: string;
+  tags?: string[];
+  ordre?: number;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.update(usefulLinks).set(data).where(eq(usefulLinks.id, id));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to update useful link:", error);
+    return false;
+  }
+}
+
+export async function deleteUsefulLink(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.delete(usefulLinks).where(eq(usefulLinks.id, id));
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to delete useful link:", error);
     return false;
   }
 }

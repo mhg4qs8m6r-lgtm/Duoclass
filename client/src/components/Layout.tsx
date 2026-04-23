@@ -13,7 +13,8 @@ import {
   Camera,
   Smartphone,
   Lock,
-  Palette
+  Palette,
+  BookMarked
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -21,16 +22,17 @@ import LanguageSelector from "@/components/LanguageSelector";
 import TrialBanner from "@/components/TrialBanner";
 import InstallPWA from "@/components/InstallPWA";
 import HelpPanel from "@/components/HelpPanel";
+import UsefulLinksPanel from "@/components/UsefulLinksPanel";
 
 // Définition des actions possibles de la toolbar
-export type ToolbarAction = 
-  | "importer" 
-  | "ajouter" 
-  | "classer" 
-  | "supprimer" 
-  | "retouches" 
-  | "convertir" 
-  | "exporter" 
+export type ToolbarAction =
+  | "importer"
+  | "ajouter"
+  | "classer"
+  | "supprimer"
+  | "retouches"
+  | "convertir"
+  | "exporter"
   | "imprimer"
   | "diaporama";
 
@@ -99,6 +101,9 @@ export default function Layout(props: LayoutProps) {
   
   // État pour le panneau d'aide contextuelle
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // État pour le panneau Adresses Utiles
+  const [isUsefulLinksOpen, setIsUsefulLinksOpen] = useState(false);
   
   // States pour les couleurs personnalisées (réactifs aux changements)
   const [customColors, setCustomColors] = useState({
@@ -200,8 +205,9 @@ export default function Layout(props: LayoutProps) {
     { id: "atelier", label: t('sidebar.workshop'), icon: Palette, path: "/atelier", img: "/assets/icons/sidebar/Utilitaires.png" },
     { id: "parametres", label: t('sidebar.settings'), icon: Settings, path: "/parametres", img: "/assets/icons/sidebar/parametres.png" },
     { id: "themes", label: t('sidebar.themes'), icon: Settings, path: "/themes", img: "/assets/icons/sidebar/parametres.png" },
-    { id: "aide", label: t('sidebar.help'), icon: Wrench, path: "/aide", img: "/assets/icons/sidebar/Utilitaires.png" },
     { id: "utilitaires", label: t('sidebar.utilities'), icon: Wrench, path: "/utilitaires", img: "/assets/icons/sidebar/Utilitaires.png" },
+    { id: "adresses-utiles", label: language === 'fr' ? 'Adresses Utiles' : 'Useful Links', icon: BookMarked, path: "#adresses-utiles" },
+    { id: "aide", label: t('sidebar.help'), icon: Wrench, path: "/aide", img: "/assets/icons/sidebar/Utilitaires.png" },
   ];
 
   // Toolbar items (traduits)
@@ -436,7 +442,7 @@ export default function Layout(props: LayoutProps) {
             
             return <div key={item.id}>{buttonContent}</div>;
           })}
-          
+
         </div>
 
         {/* Main Content Container */}
@@ -473,15 +479,34 @@ export default function Layout(props: LayoutProps) {
                 if (item.id === "accueil") isActive = false;
               }
 
+              // "Adresses Utiles" ouvre une modale au lieu de naviguer
+              if (item.id === "adresses-utiles") {
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setIsUsefulLinksOpen(true)}
+                    className="w-full min-h-[64px] flex flex-col items-center justify-center px-2 py-4 transition-all border-l-4 border-transparent hover:bg-white/10 hover:border-white cursor-pointer touch-manipulation active:bg-white/20"
+                  >
+                    <BookMarked className="w-5 h-5 mb-1" style={{ color: customSidebarTextColor || 'white' }} />
+                    <span
+                      className="text-[12px] font-medium text-white text-center leading-tight break-words w-full"
+                      style={{ color: customSidebarTextColor || undefined }}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                );
+              }
+
               return (
                 <Link key={item.id} href={item.path}>
-                  <div 
+                  <div
                     className={cn(
                       "w-full min-h-[64px] flex flex-col items-center justify-center px-2 py-4 transition-all border-l-4 border-transparent hover:bg-white/10 hover:border-white cursor-pointer touch-manipulation active:bg-white/20",
                       isActive && "bg-white/20 border-l-yellow-400"
                     )}
                   >
-                    <span 
+                    <span
                       className="text-[12px] font-medium text-white text-center leading-tight break-words w-full"
                       style={{ color: customSidebarTextColor || undefined }}
                     >
@@ -518,10 +543,16 @@ export default function Layout(props: LayoutProps) {
       </div>
       
       {/* Panneau d'aide contextuelle */}
-      <HelpPanel 
-        isOpen={isHelpOpen} 
-        onClose={() => setIsHelpOpen(false)} 
+      <HelpPanel
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
         currentPath={location}
+      />
+
+      {/* Panneau Adresses Utiles */}
+      <UsefulLinksPanel
+        open={isUsefulLinksOpen}
+        onClose={() => setIsUsefulLinksOpen(false)}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, text, timestamp, varchar, bigint, boolean, real, serial } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgEnum, pgTable, text, timestamp, varchar, bigint, boolean, real, serial } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -261,3 +261,18 @@ export const sharedModeles = pgTable("sharedModeles", {
 
 export type SharedModele = typeof sharedModeles.$inferSelect;
 export type InsertSharedModele = typeof sharedModeles.$inferInsert;
+
+// ==================== ADRESSES UTILES ====================
+
+export const usefulLinks = pgTable("usefulLinks", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").default("").notNull(),
+  url: text("url").notNull(),
+  tags: jsonb("tags").default([]).notNull(), // string[]
+  ordre: integer("ordre").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UsefulLink = typeof usefulLinks.$inferSelect;
+export type InsertUsefulLink = typeof usefulLinks.$inferInsert;
