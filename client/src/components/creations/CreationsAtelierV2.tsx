@@ -906,7 +906,7 @@ export default function CreationsAtelierV2({
   const [currentProjectName, setCurrentProjectName] = useState(projectName);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(projectId || null);
   const [currentProjectType, setCurrentProjectType] = useState<string>('Projet libre');
-  console.log("[ATELIER] projet actif:", currentProjectId, "projectId prop:", projectId);
+  // Log supprimé — s'exécutait à chaque render et perturbait drag/sélection
   
   // Photo active pour le travail sur le canvas
   const [activeCanvasPhoto, setActiveCanvasPhoto] = useState<string | null>(null);
@@ -1133,9 +1133,13 @@ export default function CreationsAtelierV2({
       heightCm: dbItem.heightCm,
     }));
 
-    // Toujours forcer la mise à jour — pas d'optimisation qui pourrait bloquer
-    setCollectorItems(mapped);
-    console.log("[COLLECTEUR] items affichés:", mapped.length);
+    // Comparer avant de mettre à jour pour éviter les re-renders en cascade
+    setCollectorItems(prev => {
+      if (prev.length === mapped.length && prev.every((item, i) => item.id === mapped[i].id && item.src === mapped[i].src)) {
+        return prev; // Même contenu → garder la même référence, pas de re-render
+      }
+      return mapped;
+    });
   }, [collecteurDbItems, currentProjectId, language]);
 
   // Compteur réactif des items du Collecteur par projet
@@ -1147,8 +1151,11 @@ export default function CreationsAtelierV2({
       for (const project of existingProjects) {
         counts[project.id] = await db.collecteur.where('projectId').equals(project.id).count();
       }
-      console.log("[COLLECTEUR] compteurs par projet:", counts);
-      setCollecteurCountByProject(counts);
+      setCollecteurCountByProject(prev => {
+        const same = Object.keys(counts).length === Object.keys(prev).length &&
+          Object.keys(counts).every(k => counts[k] === prev[k]);
+        return same ? prev : counts;
+      });
     };
     updateCounts();
   }, [collecteurDbItems, existingProjects]);
@@ -1932,7 +1939,7 @@ export default function CreationsAtelierV2({
   // Cela évite que le path devienne invalide si le zoom change entre le calcul et le rendu.
   useEffect(() => {
     if (!stickerOverlay) {
-      setStickerContourPaths({});
+      setStickerContourPaths(prev => Object.keys(prev).length === 0 ? prev : {});
       return;
     }
     let cancelled = false;
@@ -3121,11 +3128,19 @@ export default function CreationsAtelierV2({
       });
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = `${baseName}_${timestamp}.png`;
-      await uploadModeleMut.mutateAsync({
+      const result = await uploadModeleMut.mutateAsync({
         category: saveAsModeleCategory as "passe-partout" | "pele-mele" | "cadres" | "bordures",
         filename,
         imageData: dataUrl,
       });
+      if (!result.success) {
+        toast.error(
+          language === "fr"
+            ? "Échec de l'envoi — la table sharedModeles existe-t-elle en base ?"
+            : "Upload failed — does the sharedModeles table exist?"
+        );
+        return;
+      }
       toast.success(
         language === "fr"
           ? `Modèle "${filename}" envoyé dans l'appli !`

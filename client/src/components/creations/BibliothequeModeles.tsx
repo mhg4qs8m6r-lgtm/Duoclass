@@ -25,8 +25,9 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const { data: index, refetch } = trpc.sync.sharedModeles.getAll.useQuery(undefined, {
+  const { data: index, refetch, isLoading, isError } = trpc.sync.sharedModeles.getAll.useQuery(undefined, {
     staleTime: 30_000,
+    retry: 2,
   });
   const deleteMut = trpc.sync.sharedModeles.delete.useMutation({
     onSuccess: () => refetch(),
@@ -37,7 +38,23 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
     deleteMut.mutate({ id });
   };
 
-  if (!index) return null;
+  if (isLoading) {
+    return (
+      <p className="text-xs text-gray-400 italic text-center py-4">
+        {language === "fr" ? "Chargement des modèles..." : "Loading templates..."}
+      </p>
+    );
+  }
+
+  if (isError || !index) {
+    return (
+      <p className="text-xs text-red-400 italic text-center py-4">
+        {language === "fr"
+          ? "Erreur de chargement des modèles — vérifiez la connexion"
+          : "Failed to load templates — check connection"}
+      </p>
+    );
+  }
 
   const visibleCats = categories.filter((c) => index[c] && index[c].length > 0);
   if (visibleCats.length === 0) {
