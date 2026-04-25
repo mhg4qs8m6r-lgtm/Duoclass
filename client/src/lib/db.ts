@@ -55,6 +55,10 @@ export interface CreationsProject {
   projectType?: string;
   /** Catégorie du projet : en_cours, finis */
   projectCategory?: string;
+  /** Timestamp du dernier envoi dans l'appli (sharedModeles) */
+  sentToAppAt?: number;
+  /** ID du modèle partagé correspondant (sharedModeles.id) */
+  sentToAppModeleId?: number;
   createdAt: number;
   updatedAt: number;
 }

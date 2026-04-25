@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -712,6 +712,8 @@ export default function CreationsAtelierV2({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const uploadModeleMut = trpc.sync.sharedModeles.upload.useMutation();
+  const deleteModeleMut = trpc.sync.sharedModeles.delete.useMutation();
+  const sharedModelesQuery = trpc.sync.sharedModeles.getAll.useQuery(undefined, { enabled: isAdmin });
   // Épaisseurs selon le rôle : admin = traits épais pour gabarits, user = traits nets et visibles
   const STROKE_THICK = isAdmin ? 5 : 2.5;    // formes standard (canvas 2D)
   const STROKE_PUZZLE = isAdmin ? 5 : 2.5;   // puzzle (canvas 2D)
@@ -2458,6 +2460,9 @@ export default function CreationsAtelierV2({
 
   // === EXPORT : Télécharger, Imprimer, @Mail ===
   const [isExporting, setIsExporting] = useState(false);
+
+  // === Envoyer dans l'appli : dialogue de confirmation ===
+  const [showSendToAppDialog, setShowSendToAppDialog] = useState(false);
   
   // Convertir une data: URL en Blob (utilitaire pour captureCanvas)
   const dataUrlToBlob = (dataUrl: string): Blob => {
@@ -3109,14 +3114,26 @@ export default function CreationsAtelierV2({
     "Collage":                      "cadres",
   };
 
-  const saveAsModeleCategory = modelesCategoryForProject[currentProjectType] ?? null;
+  // Catégorie de modèle pour l'envoi : mappée ou fallback "cadres"
+  const saveAsModeleCategory = modelesCategoryForProject[currentProjectType] ?? "cadres";
 
-  const handleSaveAsModele = async () => {
-    if (isExporting || !saveAsModeleCategory) return;
+  // Compte total des modèles existants pour l'auto-numérotation
+  const totalModelesCount = useMemo(() => {
+    if (!sharedModelesQuery.data) return 0;
+    return Object.values(sharedModelesQuery.data).reduce((sum, arr) => sum + arr.length, 0);
+  }, [sharedModelesQuery.data]);
+
+  /** Envoi effectif du modèle dans l'appli (upload + marquage projet) */
+  const doSendToApp = async (replaceModeleId?: number) => {
+    if (isExporting) return;
     setIsExporting(true);
-    const baseName = currentProjectName || (language === "fr" ? "Modele" : "Template");
     toast.info(language === "fr" ? "Capture en cours..." : "Capturing...");
     try {
+      // Si remplacement, supprimer l'ancien modèle
+      if (replaceModeleId) {
+        await deleteModeleMut.mutateAsync({ id: replaceModeleId });
+      }
+
       const canvas = await captureCanvas(3);
       if (!canvas) return;
       const blob = await canvasToBlob(canvas, "image/png");
@@ -3126,8 +3143,11 @@ export default function CreationsAtelierV2({
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const filename = `${baseName}_${timestamp}.png`;
+      // Auto-numérotation : Modèle N°X
+      const numero = replaceModeleId
+        ? totalModelesCount // remplacement → même rang
+        : totalModelesCount + 1; // nouvelle entrée
+      const filename = `${language === "fr" ? "Modèle" : "Template"} N°${numero}.png`;
       const result = await uploadModeleMut.mutateAsync({
         category: saveAsModeleCategory as "passe-partout" | "pele-mele" | "cadres" | "bordures",
         filename,
@@ -3141,10 +3161,19 @@ export default function CreationsAtelierV2({
         );
         return;
       }
+      // Marquer le projet comme envoyé
+      if (currentProjectId && result.modele) {
+        await updateCreationsProject(currentProjectId, {
+          sentToAppAt: Date.now(),
+          sentToAppModeleId: result.modele.id,
+        });
+      }
+      // Rafraîchir la liste des modèles
+      sharedModelesQuery.refetch();
       toast.success(
         language === "fr"
-          ? `Modèle "${filename}" envoyé dans l'appli !`
-          : `Template "${filename}" sent to app!`
+          ? `${filename} envoyé dans l'appli !`
+          : `${filename} sent to app!`
       );
     } catch (err) {
       console.error("Erreur sauver comme modèle:", err);
@@ -3152,6 +3181,30 @@ export default function CreationsAtelierV2({
       toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  /** Bouton "Envoyer dans l'appli" — logique des 3 cas */
+  const handleSaveAsModele = async () => {
+    if (isExporting) return;
+    // Lire le projet pour connaître l'état d'envoi
+    const project = currentProjectId ? await getCreationsProject(currentProjectId) : null;
+    const alreadySent = project?.sentToAppAt;
+    const modifiedSinceSend = alreadySent && project.updatedAt > alreadySent;
+
+    if (!alreadySent) {
+      // Cas 1 : jamais envoyé → envoi direct
+      await doSendToApp();
+    } else if (!modifiedSinceSend) {
+      // Cas 2 : déjà envoyé, pas modifié → bloqué
+      toast.info(
+        language === "fr"
+          ? "Ce modèle est déjà dans l'appli"
+          : "This template is already in the app"
+      );
+    } else {
+      // Cas 3 : déjà envoyé et modifié → dialogue
+      setShowSendToAppDialog(true);
     }
   };
 
@@ -4739,6 +4792,7 @@ export default function CreationsAtelierV2({
                       className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
                       title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
                     />
+                    {console.log('[DEBUG Version Admin] user.email:', user?.email, '| isAdmin:', isAdmin, '| role:', user?.role)}
                     {user?.email === 'caron7501@gmail.com' && (
                       <span className="text-sm font-bold" style={{ color: '#f97316' }}>Version Admin</span>
                     )}
@@ -9075,11 +9129,11 @@ export default function CreationsAtelierV2({
             </div>
           </div>
 
-          {/* Ligne 2 : Auto-save | Télécharger | Imprimer | @Mail | Exporter l'image | Sauvegarder le projet */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Ligne 2 : Auto-save | Télécharger | Imprimer | @Mail | Sauver l'image | Sauvegarder le projet | Envoyer dans l'appli | Fermer */}
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto min-h-[32px]">
             {/* Auto-save toggle + status */}
             <button
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-all duration-300 cursor-pointer ${
+              className={`flex-shrink-0 flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full transition-all duration-300 cursor-pointer ${
                 autoSaveStatus === 'saving' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
                 autoSaveStatus === 'saved' ? 'bg-green-50 text-green-600 border border-green-200' :
                 autoSaveStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-200' :
@@ -9105,54 +9159,116 @@ export default function CreationsAtelierV2({
               )}
             </button>
 
-            <div className="w-px h-5 bg-gray-300" />
-
-
-
+            <div className="w-px h-4 bg-gray-300 flex-shrink-0" />
 
             {/* Actions export */}
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleDownload} disabled={isExporting}>
-              <Download className="w-3.5 h-3.5" />
-              {isExporting ? (language === "fr" ? "Export..." : "Export...") : (language === "fr" ? "Télécharger" : "Download")}
+            <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2" onClick={handleDownload} disabled={isExporting}>
+              <Download className="w-3 h-3" />
+              {isExporting ? "..." : (language === "fr" ? "Télécharger" : "Download")}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handlePrint} disabled={isExporting}>
-              <Printer className="w-3.5 h-3.5" />
+            <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2" onClick={handlePrint} disabled={isExporting} title={language === "fr" ? "Imprimer" : "Print"}>
+              <Printer className="w-3 h-3" />
               {language === "fr" ? "Imprimer" : "Print"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={handleEmail} disabled={isExporting}>
-              <Mail className="w-3.5 h-3.5" />
+            <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2" onClick={handleEmail} disabled={isExporting} title="@Mail">
+              <Mail className="w-3 h-3" />
               @Mail
             </Button>
 
-            <div className="w-px h-5 bg-gray-300" />
+            <div className="w-px h-4 bg-gray-300 flex-shrink-0" />
 
             {/* Actions projet */}
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting}>
-              <ImagePlus className="w-3.5 h-3.5" />
-              {isExporting ? (language === "fr" ? "Sauvegarde..." : "Saving...") : (language === "fr" ? "Sauver l'image" : "Save image")}
+            <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2 border-pink-400 text-pink-600 hover:bg-pink-50" onClick={handleSaveAs} disabled={isExporting}>
+              <ImagePlus className="w-3 h-3" />
+              {isExporting ? "..." : (language === "fr" ? "Sauver l'image" : "Save image")}
             </Button>
 
             <Button
               size="sm"
-              className="gap-1 text-xs h-7 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md"
+              className="flex-shrink-0 gap-1 text-[11px] h-6 px-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-sm"
               onClick={() => handleSaveProject('finis')}
             >
-              <Save className="w-3.5 h-3.5" />
-              {language === "fr" ? "Sauvegarder le projet" : "Save project"}
+              <Save className="w-3 h-3" />
+              {language === "fr" ? "Sauvegarder" : "Save"}
             </Button>
-            {isAdmin && saveAsModeleCategory && (
-              <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-green-400 text-green-600 hover:bg-green-50" onClick={handleSaveAsModele} disabled={isExporting}>
-                <Download className="w-3.5 h-3.5" />
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2 border-green-400 text-green-600 hover:bg-green-50" onClick={handleSaveAsModele} disabled={isExporting}>
+                <Send className="w-3 h-3" />
                 {language === "fr" ? "Envoyer dans l'appli" : "Send to app"}
               </Button>
             )}
-            <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleRequestClose}>
+            <Button variant="outline" size="sm" className="flex-shrink-0 text-[11px] h-6 px-2" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>
           </div>
         </div>
       </div>
       
+      {/* Modale : Envoyer dans l'appli — modèle modifié */}
+      {showSendToAppDialog && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
+          <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Send className="w-5 h-5 text-green-500" />
+                {language === "fr" ? "Modèle modifié" : "Template modified"}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {language === "fr"
+                  ? "Ce modèle a été modifié depuis son dernier envoi. Que souhaitez-vous faire ?"
+                  : "This template has been modified since last sent. What would you like to do?"}
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <button
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-green-200 hover:bg-green-50 transition-colors text-left"
+                onClick={async () => {
+                  setShowSendToAppDialog(false);
+                  await doSendToApp();
+                }}
+              >
+                <Copy className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800 text-sm">
+                    {language === "fr" ? "Conserver les deux" : "Keep both"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {language === "fr"
+                      ? "Crée une nouvelle référence avec un nouveau numéro"
+                      : "Creates a new reference with a new number"}
+                  </p>
+                </div>
+              </button>
+              <button
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors text-left"
+                onClick={async () => {
+                  setShowSendToAppDialog(false);
+                  const project = currentProjectId ? await getCreationsProject(currentProjectId) : null;
+                  await doSendToApp(project?.sentToAppModeleId);
+                }}
+              >
+                <RotateCcw className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800 text-sm">
+                    {language === "fr" ? "Remplacer l'existant" : "Replace existing"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {language === "fr"
+                      ? "Écrase l'ancien modèle dans l'appli"
+                      : "Overwrites the old template in the app"}
+                  </p>
+                </div>
+              </button>
+            </div>
+            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowSendToAppDialog(false)}>
+                {language === "fr" ? "Annuler" : "Cancel"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modale de confirmation avant de quitter */}
 
       {/* Modale : Choix de catégorie avant sauvegarde */}

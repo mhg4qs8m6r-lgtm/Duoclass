@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -94,13 +94,27 @@ export default function Layout(props: LayoutProps) {
     currentAlbumId
   } = props;
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { t, language } = useLanguage();
   // État local du zoom si non contrôlé par le parent
   const [localZoom, setLocalZoom] = useState([0]);
   
   // État pour le panneau d'aide contextuelle
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Menu utilisateur (avatar)
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
 
   // État pour le panneau Adresses Utiles
   const [isUsefulLinksOpen, setIsUsefulLinksOpen] = useState(false);
@@ -302,17 +316,44 @@ export default function Layout(props: LayoutProps) {
               <span className="text-lg">👍</span>
             </button>
 
-            {/* Avatar */}
-            <div 
-              className="w-[50px] h-[50px] bg-white border-2 border-gray-300 rounded-full flex items-center justify-center hover:border-primary hover:shadow-md transition-all cursor-pointer shrink-0 overflow-hidden"
-              style={{
-                backgroundImage: localStorage.getItem('user_avatar') ? `url(${localStorage.getItem('user_avatar')})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center'
-              }}
-            >
-              {!localStorage.getItem('user_avatar') && (
-                <span className="text-xs font-medium text-gray-600">Avatar</span>
+            {/* Avatar + Menu utilisateur */}
+            <div className="relative" ref={userMenuRef}>
+              <div
+                className="w-[50px] h-[50px] bg-white border-2 border-gray-300 rounded-full flex items-center justify-center hover:border-primary hover:shadow-md transition-all cursor-pointer shrink-0 overflow-hidden"
+                style={{
+                  backgroundImage: localStorage.getItem('user_avatar') ? `url(${localStorage.getItem('user_avatar')})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
+                onClick={() => setShowUserMenu(prev => !prev)}
+              >
+                {!localStorage.getItem('user_avatar') && (
+                  <span className="text-xs font-medium text-gray-600">Avatar</span>
+                )}
+              </div>
+              {showUserMenu && (
+                <div className="absolute right-0 top-[56px] w-64 bg-white rounded-xl shadow-xl border border-gray-200 z-[9999] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-4 py-3 border-b bg-gray-50">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{user?.name || user?.email || '—'}</p>
+                    {user?.name && user?.email && (
+                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    )}
+                    {user?.role && (
+                      <span className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {user.role === 'admin' ? 'Admin' : 'Utilisateur'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors"
+                      onClick={() => { setShowUserMenu(false); logout(); }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      {language === 'fr' ? 'Se déconnecter' : 'Log out'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 

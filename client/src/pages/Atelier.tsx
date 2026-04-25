@@ -482,7 +482,7 @@ export default function Atelier() {
                 <h4 className="font-bold text-base text-gray-800 mb-1">{language === 'fr' ? "Étape 4 — Réalisez votre création" : "Step 4 — Create your design"}</h4>
                 <p>{"\u2192"} {language === 'fr' ? "Vous avez choisi un type de création lors de la création de votre projet" : "You chose a creation type when creating your project"}</p>
                 <p className="font-medium text-gray-800 mt-2">{language === 'fr' ? "Une fois votre projet élaboré :" : "Once your project is ready:"}</p>
-                <p>{"\u2192"} <strong>{language === 'fr' ? '"Exporter l\'image"' : '"Export image"'}</strong> : {language === 'fr' ? "enregistre l'image finale dans votre album" : "saves the final image to your album"}</p>
+                <p>{"\u2192"} <strong>{language === 'fr' ? '"Sauver l\'image"' : '"Save image"'}</strong> : {language === 'fr' ? "enregistre l'image finale dans votre album" : "saves the final image to your album"}</p>
                 <p>{"\u2192"} <strong>{language === 'fr' ? '"Sauvegarder le projet"' : '"Save project"'}</strong> : {language === 'fr' ? "conserve votre projet pour le reprendre plus tard" : "keeps your project to resume later"}</p>
                 <p>{"\u2192"} <strong>{language === 'fr' ? '"Fermer"' : '"Close"'}</strong> : {language === 'fr' ? "retour à l'Atelier" : "back to Workshop"}</p>
               </div>
