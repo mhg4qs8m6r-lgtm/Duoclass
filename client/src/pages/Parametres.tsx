@@ -358,13 +358,11 @@ export default function Parametres() {
 
     setIsResetting(true);
     try {
-      // 1. Supprimer les données côté serveur (PostgreSQL)
-      try {
-        await factoryResetMut.mutateAsync();
-        console.log('[FactoryReset] Données serveur supprimées');
-      } catch (serverErr) {
-        console.error('[FactoryReset] Erreur serveur (on continue le reset local):', serverErr);
-      }
+      // 1. Supprimer les données côté serveur (PostgreSQL) — fire-and-forget
+      // On ne bloque pas sur cet appel réseau : la purge locale doit s'afficher immédiatement.
+      factoryResetMut.mutateAsync().catch((serverErr) => {
+        console.error('[FactoryReset] Erreur serveur (purge locale déjà effectuée):', serverErr);
+      });
 
       // 2. Supprimer TOUTES les données IndexedDB
       await db.albums.clear();
