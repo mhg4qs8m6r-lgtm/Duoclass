@@ -126,7 +126,7 @@ export default function Parametres() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   
-  // Réinitialisation d'usine
+  // Remise à zéro
   const [showFactoryResetDialog, setShowFactoryResetDialog] = useState(false);
   const [factoryResetConfirmText, setFactoryResetConfirmText] = useState("");
   const [isResetting, setIsResetting] = useState(false);
@@ -347,7 +347,7 @@ export default function Parametres() {
     window.location.reload();
   };
 
-  // Réinitialisation d'usine
+  // Remise à zéro
   const factoryResetMut = trpc.sync.factoryReset.useMutation();
   const handleFactoryReset = async () => {
     if (factoryResetConfirmText !== "REINITIALISER") {
@@ -1007,7 +1007,7 @@ export default function Parametres() {
                     </div>
                   </div>
 
-                  {/* Réinitialisation d'usine - Pleine largeur en bas */}
+                  {/* Remise à zéro - Pleine largeur en bas */}
                   <div className="mt-3 border-2 border-red-300 rounded-lg p-3 bg-gradient-to-r from-red-50 to-orange-50">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-red-100 rounded-full">
