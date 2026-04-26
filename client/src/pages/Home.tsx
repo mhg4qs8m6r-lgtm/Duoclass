@@ -356,7 +356,8 @@ export default function Home() {
       label: newCategoryName.trim(),
       color: newCategoryColor,
       isDefault: false,
-      accessType: 'standard' // Default to standard for quick creation from Home
+      accessType: 'standard',
+      series: 'photoclass',
     });
     setNewCategoryName("");
     setIsCreatingCategory(false);

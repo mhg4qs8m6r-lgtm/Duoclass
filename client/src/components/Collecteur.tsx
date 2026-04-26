@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import CrispThumbnail from "@/components/ui/CrispThumbnail";
 
 /** Un élément stocké dans le Collecteur */
@@ -76,7 +75,7 @@ export default function Collecteur({ items, onRemoveItem, onClearAll }: Collecte
       )}
 
       {/* Zone d'éléments */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="p-2 flex flex-wrap gap-2 justify-center">
           {items.map((item) => (
             <div
@@ -115,7 +114,7 @@ export default function Collecteur({ items, onRemoveItem, onClearAll }: Collecte
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

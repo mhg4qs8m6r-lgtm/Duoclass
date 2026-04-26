@@ -295,7 +295,8 @@ export default function Parametres() {
       label: newCategoryName.trim(),
       color: newCategoryColor,
       isDefault: false,
-      accessType: newCategoryType // Add access type
+      accessType: newCategoryType,
+      series: 'photoclass',
     });
     setNewCategoryName("");
     toast.success(language === "fr" ? "Catégorie ajoutée" : "Category added");

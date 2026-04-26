@@ -154,10 +154,32 @@ export const db = new DuoClassDB();
 // ─── Helpers catégories ────────────────────────────────────────────────────────
 
 /**
+ * Migre les catégories existantes qui n'ont pas le champ `series`.
+ * - mediaType 'documents' → 'classpapiers'
+ * - tout autre cas → 'photoclass'
+ */
+export async function migrateCategories(): Promise<void> {
+  try {
+    const all = await db.categories.toArray();
+    const toFix = all.filter(c => !c.series);
+    for (const cat of toFix) {
+      const series = cat.mediaType === 'documents' ? 'classpapiers' : 'photoclass';
+      await db.categories.update(cat.id, { series });
+    }
+    if (toFix.length > 0) {
+      console.log(`[DB] migrateCategories: patched ${toFix.length} categories without series`);
+    }
+  } catch (err) {
+    console.warn('[DB] migrateCategories error:', err);
+  }
+}
+
+/**
  * Initialise les catégories et albums système au premier lancement.
  */
 export async function initCategories(): Promise<void> {
   try {
+    await migrateCategories();
     // Album Modèles Stickers
     const existing = await db.album_metas.get(MODELES_STICKERS_ALBUM_ID);
     if (!existing) {
