@@ -128,6 +128,7 @@ export default function Parametres() {
   
   // Remise à zéro
   const [showFactoryResetDialog, setShowFactoryResetDialog] = useState(false);
+  const [showResetCompleteModal, setShowResetCompleteModal] = useState(false);
   const [factoryResetConfirmText, setFactoryResetConfirmText] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -456,12 +457,7 @@ export default function Parametres() {
 
       setShowFactoryResetDialog(false);
       setFactoryResetConfirmText("");
-      toast.success(t('toast.factoryResetComplete'));
-
-      // Rediriger vers l'accueil
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1500);
+      setShowResetCompleteModal(true);
     } catch (error) {
       console.error("Erreur lors de la réinitialisation:", error);
       toast.error(t('toast.factoryResetError'));
@@ -1265,6 +1261,27 @@ export default function Parametres() {
               className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isResetting ? t('settings.resetting') : t('settings.confirmReset')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modale de confirmation post-remise à zéro */}
+      <AlertDialog open={showResetCompleteModal}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'fr' ? 'Remise à zéro effectuée' : 'Reset complete'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-700 leading-relaxed">
+              {language === 'fr'
+                ? 'Les bibliothèques de modèles n\'ont pas été vidées. Vous pouvez les vider manuellement depuis l\'Atelier si vous le souhaitez.'
+                : 'Template libraries have not been cleared. You can clear them manually from the Workshop if needed.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => { window.location.href = '/'; }}>
+              {language === 'fr' ? 'J\'ai compris' : 'Got it'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
