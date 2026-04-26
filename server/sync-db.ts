@@ -787,6 +787,19 @@ export async function deleteSharedModele(id: number): Promise<boolean> {
   }
 }
 
+export async function purgeAllSharedModeles(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.delete(sharedModeles);
+    console.log("[Sync] All shared modeles purged");
+    return true;
+  } catch (error) {
+    console.error("[Sync] Failed to purge shared modeles:", error);
+    return false;
+  }
+}
+
 // ==================== ADRESSES UTILES ====================
 
 export async function getAllUsefulLinks(): Promise<UsefulLink[]> {

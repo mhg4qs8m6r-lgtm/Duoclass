@@ -2,10 +2,11 @@
  * BibliothequeModeles – affiche les modèles partagés depuis PostgreSQL.
  * Admin peut supprimer des modèles ; tous les users peuvent les utiliser.
  */
+import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import CrispThumbnail from "@/components/ui/CrispThumbnail";
 
 const CATEGORY_LABELS: Record<string, { fr: string; en: string }> = {
@@ -24,6 +25,7 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
   const { language } = useLanguage();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const { data: index, refetch, isLoading, isError } = trpc.sync.sharedModeles.getAll.useQuery(undefined, {
     staleTime: 30_000,
@@ -31,6 +33,9 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
   });
   const deleteMut = trpc.sync.sharedModeles.delete.useMutation({
     onSuccess: () => refetch(),
+  });
+  const clearAllMut = trpc.sync.sharedModeles.clearAll.useMutation({
+    onSuccess: () => { setConfirmClear(false); refetch(); },
   });
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
@@ -69,6 +74,39 @@ export default function BibliothequeModeles({ categories, onSelectModele }: Bibl
 
   return (
     <div className="space-y-3">
+      {isAdmin && (
+        <div className="flex justify-end">
+          {confirmClear ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600">
+                {language === "fr" ? "Vider toute la bibliothèque ?" : "Clear entire library?"}
+              </span>
+              <button
+                onClick={() => clearAllMut.mutate()}
+                disabled={clearAllMut.isPending}
+                className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {language === "fr" ? "Confirmer" : "Confirm"}
+              </button>
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+              >
+                {language === "fr" ? "Annuler" : "Cancel"}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
+              title={language === "fr" ? "Vider tous les modèles" : "Clear all templates"}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {language === "fr" ? "Vider tout" : "Clear all"}
+            </button>
+          )}
+        </div>
+      )}
       {visibleCats.map((cat) => (
         <div key={cat}>
           {visibleCats.length > 1 && (

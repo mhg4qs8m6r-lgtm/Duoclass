@@ -35,6 +35,7 @@ import {
   getAllSharedModeles,
   createSharedModele,
   deleteSharedModele,
+  purgeAllSharedModeles,
   getAllUsefulLinks,
   createUsefulLink,
   updateUsefulLink,
@@ -791,6 +792,13 @@ export const syncRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const success = await deleteSharedModele(input.id);
+        return { success };
+      }),
+
+    /** Admin uniquement : vider toute la bibliothèque */
+    clearAll: adminProcedure
+      .mutation(async () => {
+        const success = await purgeAllSharedModeles();
         return { success };
       }),
   }),
