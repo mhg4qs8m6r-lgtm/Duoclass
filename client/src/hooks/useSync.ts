@@ -59,13 +59,18 @@ async function populateLocalFromServer(data: any) {
               // Fusionner : garder les frames locales non présentes sur le serveur
               const serverFrameIds = new Set(frames.map((f: any) => f.id));
               const localOnly = (existingAlbum.frames ?? []).filter((f: any) => !serverFrameIds.has(f.id));
-              // Réinjecter les photoUrl locales dans les frames serveur (le serveur ne stocke pas les base64)
+              // BRANCHE A — réinjecter les photoUrl/videoUrl/thumbnailUrl locales SEULEMENT si non-null.
+              // Ne pas forcer à null si Dexie a null : cela "confirmerait" une corruption issue de la branche B
+              // et bloquerait toute récupération future.
               const localPhotoMap = new Map((existingAlbum.frames ?? []).map((f: any) => [f.id, f]));
               const mergedServerFrames = frames.map((f: any) => {
                 const localFrame = localPhotoMap.get(f.id);
-                return localFrame
-                  ? { ...f, photoUrl: localFrame.photoUrl ?? null, videoUrl: localFrame.videoUrl ?? null, thumbnailUrl: localFrame.thumbnailUrl ?? null }
-                  : f;
+                if (!localFrame) return f;
+                const merged: any = { ...f };
+                if (localFrame.photoUrl != null)     merged.photoUrl     = localFrame.photoUrl;
+                if (localFrame.videoUrl != null)     merged.videoUrl     = localFrame.videoUrl;
+                if (localFrame.thumbnailUrl != null) merged.thumbnailUrl = localFrame.thumbnailUrl;
+                return merged;
               });
               await db.albums.put({
                 ...existingAlbum,
@@ -73,15 +78,23 @@ async function populateLocalFromServer(data: any) {
                 updatedAt: Date.now(),
               });
             } else {
-              await db.albums.put({
-                id: album.localId,
-                title: album.name,
-                type: album.isPrivate ? 'secure' : 'standard',
-                series: album.contentType === 'documents' ? 'classpapiers' : 'photoclass',
-                createdAt: new Date(album.createdAt).getTime(),
-                frames,
-                updatedAt: Date.now(),
-              } as any);
+              // BRANCHE B — album absent de db.albums (Dexie vide, nouveau device ou après reset).
+              // Ne pas écrire dans db.albums si les frames n'ont pas de photoUrl : cela créerait
+              // un "fantôme" avec photoUrl:null qui bloquerait la réinjection dans les sessions suivantes.
+              // db.album_metas a déjà été créé ci-dessus → l'album reste visible dans la liste.
+              const hasRecoverableContent = frames.some((f: any) => f.photoUrl != null);
+              if (hasRecoverableContent) {
+                await db.albums.put({
+                  id: album.localId,
+                  title: album.name,
+                  type: album.isPrivate ? 'secure' : 'standard',
+                  series: album.contentType === 'documents' ? 'classpapiers' : 'photoclass',
+                  createdAt: new Date(album.createdAt).getTime(),
+                  frames,
+                  updatedAt: Date.now(),
+                } as any);
+              }
+              // Sinon : pas d'écriture dans db.albums — UniversalAlbumPage créera les frames par défaut
             }
           }
         } catch (e) {
