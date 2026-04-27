@@ -551,20 +551,19 @@ export default function UniversalAlbumPage({
           frames: frames,
           updatedAt: Date.now()
         });
-        // Synchroniser les frames vers le serveur pour les albums "Images projets"
-        if (currentAlbumId === 'album_images_projets') {
-          const meta = await db.album_metas.get(currentAlbumId);
-          addToSyncQueue({
-            entityType: 'album',
-            action: 'update',
-            data: {
-              localId: currentAlbumId,
-              name: meta?.title || 'Images projets',
-              categoryLocalId: meta?.categoryId || 'cat_mes_projets',
-              framesData: JSON.stringify(frames),
-            },
-          });
-        }
+        // Synchroniser les frames (sans base64) vers le serveur pour tous les albums
+        const meta = await db.album_metas.get(currentAlbumId);
+        const strippedFrames = frames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+        addToSyncQueue({
+          entityType: 'album',
+          action: 'update',
+          data: {
+            localId: currentAlbumId,
+            name: meta?.title || currentAlbumId,
+            categoryLocalId: meta?.categoryId || undefined,
+            framesData: JSON.stringify(strippedFrames),
+          },
+        });
       } catch (err) {
         console.error("Erreur sauvegarde:", err);
       }
@@ -740,7 +739,19 @@ export default function UniversalAlbumPage({
         frames: targetFrames,
         updatedAt: Date.now()
       });
-      
+      // Synchroniser l'album cible (sans base64)
+      const strippedTargetFrames = targetFrames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'update',
+        data: {
+          localId: targetAlbumId,
+          name: targetAlbumMeta.title,
+          categoryLocalId: targetAlbumMeta.categoryId || undefined,
+          framesData: JSON.stringify(strippedTargetFrames),
+        },
+      });
+
       // Vider les cadres sources dans l'album actuel
       setFrames(frames.map(f => 
         movedFrameIds.includes(f.id)
@@ -4049,6 +4060,19 @@ export default function UniversalAlbumPage({
                 id: currentAlbumId,
                 frames: frames,
                 updatedAt: Date.now()
+              });
+              // Synchroniser sans base64
+              const quitMeta = await db.album_metas.get(currentAlbumId);
+              const quitStripped = frames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+              addToSyncQueue({
+                entityType: 'album',
+                action: 'update',
+                data: {
+                  localId: currentAlbumId,
+                  name: quitMeta?.title || currentAlbumId,
+                  categoryLocalId: quitMeta?.categoryId || undefined,
+                  framesData: JSON.stringify(quitStripped),
+                },
               });
               toast.success(language === 'fr' ? 'Session sauvegardée' : 'Session saved');
             } catch (error) {

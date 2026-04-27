@@ -3081,6 +3081,7 @@ export default function CreationsAtelierV2({
         }
       }
       // Synchroniser l'album (métadonnées + frames) vers le serveur
+      const strippedFrames = allFrames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
       addToSyncQueue({
         entityType: 'album',
         action: existingAlbum ? 'update' : 'create',
@@ -3088,7 +3089,7 @@ export default function CreationsAtelierV2({
           localId: destAlbumId,
           name: destAlbumName,
           categoryLocalId: 'cat_mes_projets',
-          framesData: JSON.stringify(allFrames),
+          framesData: JSON.stringify(strippedFrames),
         },
       });
       toast.success(
@@ -3719,7 +3720,19 @@ export default function CreationsAtelierV2({
             frames: updatedFrames,
             updatedAt: Date.now()
           });
-          
+          // Synchroniser sans base64
+          const removeMeta = await db.album_metas.get(currentProjectId);
+          const removeStripped = updatedFrames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+          addToSyncQueue({
+            entityType: 'album',
+            action: 'update',
+            data: {
+              localId: currentProjectId,
+              name: removeMeta?.title || currentProjectId,
+              categoryLocalId: removeMeta?.categoryId || 'cat_mes_projets',
+              framesData: JSON.stringify(removeStripped),
+            },
+          });
           console.log(`[Créations] Photo supprimée du projet: ${photoToRemove.src}`);
         }
       } catch (error) {

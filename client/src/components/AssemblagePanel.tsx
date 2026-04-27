@@ -48,6 +48,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { db, BibliothequeItemDB, MODELES_STICKERS_ALBUM_ID, addBibliothequeItem, deleteBibliothequeItemSync } from "@/db";
+import { addToSyncQueue } from "@/lib/syncService";
 import type { PhotoFrame } from "@/types/photo";
 import { toast } from "sonner";
 
@@ -1626,6 +1627,17 @@ function StickerPlannerSection({
       };
       albumData.frames = [...(albumData.frames ?? []), newFrame];
       await db.albums.put(albumData);
+      // Synchroniser sans base64
+      const stickerStripped = albumData.frames.map(({ photoUrl: _p, thumbnailUrl: _t, ...rest }: any) => rest);
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'update',
+        data: {
+          localId: MODELES_STICKERS_ALBUM_ID,
+          name: 'Modèles Stickers',
+          framesData: JSON.stringify(stickerStripped),
+        },
+      });
       setStickerAlbumPhotos((prev) => [...prev, newFrame]);
       toast.success(
         language === "fr"
@@ -1666,6 +1678,17 @@ function StickerPlannerSection({
     if (albumData) {
       albumData.frames = (albumData.frames ?? []).filter((f) => f.id !== frame.id);
       await db.albums.put(albumData);
+      // Synchroniser sans base64
+      const deletedStripped = albumData.frames.map(({ photoUrl: _p, thumbnailUrl: _t, ...rest }: any) => rest);
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'update',
+        data: {
+          localId: MODELES_STICKERS_ALBUM_ID,
+          name: 'Modèles Stickers',
+          framesData: JSON.stringify(deletedStripped),
+        },
+      });
     }
     setStickerAlbumPhotos((prev) => prev.filter((f) => f.id !== frame.id));
   };

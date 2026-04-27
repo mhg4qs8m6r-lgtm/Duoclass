@@ -59,9 +59,17 @@ async function populateLocalFromServer(data: any) {
               // Fusionner : garder les frames locales non présentes sur le serveur
               const serverFrameIds = new Set(frames.map((f: any) => f.id));
               const localOnly = (existingAlbum.frames ?? []).filter((f: any) => !serverFrameIds.has(f.id));
+              // Réinjecter les photoUrl locales dans les frames serveur (le serveur ne stocke pas les base64)
+              const localPhotoMap = new Map((existingAlbum.frames ?? []).map((f: any) => [f.id, f]));
+              const mergedServerFrames = frames.map((f: any) => {
+                const localFrame = localPhotoMap.get(f.id);
+                return localFrame
+                  ? { ...f, photoUrl: localFrame.photoUrl ?? null, videoUrl: localFrame.videoUrl ?? null, thumbnailUrl: localFrame.thumbnailUrl ?? null }
+                  : f;
+              });
               await db.albums.put({
                 ...existingAlbum,
-                frames: [...frames, ...localOnly],
+                frames: [...mergedServerFrames, ...localOnly],
                 updatedAt: Date.now(),
               });
             } else {
