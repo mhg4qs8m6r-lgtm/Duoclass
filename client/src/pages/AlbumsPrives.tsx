@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { db, AlbumMeta } from '@/db';
+import { addToSyncQueue } from '@/lib/syncService';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -157,6 +158,11 @@ export default function AlbumsPrives() {
       };
 
       await db.categories.add(newCategory);
+      addToSyncQueue({
+        entityType: 'category',
+        action: 'create',
+        data: { localId: newCategory.id, name: newCategory.label, color: newCategory.color, isSystem: false },
+      });
       toast.success(language === 'fr' ? 'Catégorie créée avec succès' : 'Category created successfully');
       setCategoryName('');
       setShowCreationForm(false);
@@ -186,6 +192,11 @@ export default function AlbumsPrives() {
 
       await db.album_metas.add(newAlbum);
       await db.albums.add({ id: newAlbum.id, frames: [], updatedAt: Date.now() });
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'create',
+        data: { localId: newAlbum.id, name: newAlbum.title, categoryLocalId: newAlbum.categoryId, isPrivate: true },
+      });
       toast.success(language === 'fr' ? 'Album créé avec succès' : 'Album created successfully');
       setAlbumName('');
       setSelectedCategoryForAlbum('');

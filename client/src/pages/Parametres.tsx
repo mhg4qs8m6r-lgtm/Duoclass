@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { exportAllData, importAllData, validateBackupFile, ImportResult } from "@/lib/exportUtils";
 import { cleanupUnnecessaryCategories } from "@/lib/cleanupCategories";
 import { trpc } from "@/lib/trpc";
-import { clearSyncQueue, setLastSyncTimestamp } from "@/lib/syncService";
+import { clearSyncQueue, setLastSyncTimestamp, addToSyncQueue } from "@/lib/syncService";
 import { v4 as uuidv4 } from 'uuid';
 import { Check, X, Lock, Unlock, Shield, Save, Info, User, Edit2, Trash2, Upload, AlertTriangle, FileJson, Palette, RotateCcw } from "lucide-react";
 import {
@@ -299,6 +299,11 @@ export default function Parametres() {
       accessType: newCategoryType,
       series: 'photoclass',
     });
+    addToSyncQueue({
+      entityType: 'category',
+      action: 'create',
+      data: { localId: id, name: newCategoryName.trim(), color: newCategoryColor, isSystem: false },
+    });
     setNewCategoryName("");
     toast.success(language === "fr" ? "Catégorie ajoutée" : "Category added");
   };
@@ -306,6 +311,11 @@ export default function Parametres() {
   const handleUpdateCategory = async () => {
     if (editingCategoryId && editingCategoryName.trim()) {
       await db.categories.update(editingCategoryId, { label: editingCategoryName.trim() });
+      addToSyncQueue({
+        entityType: 'category',
+        action: 'update',
+        data: { localId: editingCategoryId, name: editingCategoryName.trim() },
+      });
       setEditingCategoryId(null);
       toast.success(language === "fr" ? "Catégorie mise à jour" : "Category updated");
     }
@@ -315,6 +325,7 @@ export default function Parametres() {
     e.stopPropagation(); // Prevent triggering edit mode
     if (window.confirm(language === 'fr' ? "Attention : La suppression de cette catégorie entraînera la disparition de tous les albums et photos/documents qu'elle contient.\n\nCette action est irréversible. Voulez-vous continuer ?" : "Warning: Deleting this category will remove all albums and photos/documents it contains.\n\nThis action is irreversible. Do you want to continue?")) {
       await db.categories.delete(id);
+      addToSyncQueue({ entityType: 'category', action: 'delete', data: { localId: id } });
       toast.success(language === "fr" ? "Catégorie supprimée" : "Category deleted");
     }
   };

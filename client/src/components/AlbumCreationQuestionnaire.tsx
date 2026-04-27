@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { db, Category, AlbumData, AlbumMeta, createCreationsProject, updateCreationsProject } from "../db";
+import { addToSyncQueue } from "@/lib/syncService";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v4 as uuidv4 } from 'uuid';
 import { Trash2, Lock, Camera, Video, Layers, FileText } from "lucide-react";
@@ -136,6 +137,17 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
       };
       
       await db.categories.add(newCategory);
+      addToSyncQueue({
+        entityType: 'category',
+        action: 'create',
+        data: {
+          localId: id,
+          name: newCategoryNameQuick.trim(),
+          color: newCategoryColorQuick,
+          contentType: newCategoryMediaType === 'documents' ? 'documents' : 'photos',
+          isSystem: false,
+        },
+      });
       setSelectedCategoryId(id);
       setNewCategoryNameQuick("");
       setNewCategoryColorQuick("#3B82F6");
@@ -193,7 +205,8 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
       
       // Delete the category
       await db.categories.delete(categoryToDelete);
-      
+      addToSyncQueue({ entityType: 'category', action: 'delete', data: { localId: categoryToDelete } });
+
       setShowDeleteConfirmation(false);
       setCategoryToDelete(null);
       setDeleteConfirmed(false);
@@ -240,6 +253,17 @@ export default function AlbumCreationQuestionnaire({ onAlbumCreated, defaultAcce
 
       await db.albums.add(newAlbumData);
       await db.album_metas.add(newAlbumMeta);
+      addToSyncQueue({
+        entityType: 'album',
+        action: 'create',
+        data: {
+          localId: id,
+          name: albumName.trim(),
+          categoryLocalId: selectedCategoryId,
+          contentType: series === 'classpapiers' ? 'documents' : 'photos',
+          isPrivate: accessType !== 'standard',
+        },
+      });
       setAlbumName("");
       setAccessType("standard");
       setSelectedCategoryId("");

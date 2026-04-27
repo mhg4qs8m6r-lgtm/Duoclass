@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { db, AlbumMeta, Category } from "../db";
+import { addToSyncQueue } from "@/lib/syncService";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -359,6 +360,11 @@ export default function Home() {
       accessType: 'standard',
       series: 'photoclass',
     });
+    addToSyncQueue({
+      entityType: 'category',
+      action: 'create',
+      data: { localId: id, name: newCategoryName.trim(), color: newCategoryColor, isSystem: false },
+    });
     setNewCategoryName("");
     setIsCreatingCategory(false);
     toast.success(language === "fr" ? "Catégorie ajoutée" : "Category added");
@@ -377,6 +383,7 @@ export default function Home() {
     
     try {
       await db.categories.delete(categoryId);
+      addToSyncQueue({ entityType: 'category', action: 'delete', data: { localId: categoryId } });
       toast.success(language === 'fr' ? `Catégorie "${category.label}" supprimée` : `Category "${category.label}" deleted`);
       // Si cette catégorie était sélectionnée comme filtre, on réinitialise
       if (activeCategoryFilter === categoryId) {
