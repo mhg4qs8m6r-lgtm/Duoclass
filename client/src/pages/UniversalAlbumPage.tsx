@@ -141,8 +141,18 @@ export default function UniversalAlbumPage({
   const routePrefix = isPhoto ? "/photoclass/" : "/classpapiers/";
   const pageTitle = isPhoto ? "PhotoClass" : "Documents";
 
-  // --- MUTATION UPLOAD PHOTO S3 ---
+  // --- MUTATIONS STOCKAGE PHOTO S3 ---
   const uploadFrameMutation = trpc.sync.photos.uploadFrame.useMutation();
+  const deleteFrameMutation = trpc.sync.photos.deleteFrame.useMutation();
+
+  /** Supprime silencieusement le fichier S3 associé à une frame (fire-and-forget). */
+  const deleteFrameStorage = (frame: PhotoFrame) => {
+    if (!frame.storageKey) return;
+    deleteFrameMutation.mutate(
+      { storageKey: frame.storageKey },
+      { onError: (e) => console.error('[deleteFrame] S3 cleanup failed:', e) }
+    );
+  };
 
   // --- ÉTATS GLOBAUX ---
   const [location, setLocation] = useLocation();
@@ -388,10 +398,11 @@ export default function UniversalAlbumPage({
     }
     if (window.confirm(language === 'fr' ? `Supprimer ${selectedFrames.length} élément${selectedFrames.length > 1 ? 's' : ''} ?` : `Delete ${selectedFrames.length} item${selectedFrames.length > 1 ? 's' : ''}?`)) {
       saveToHistory(frames);
+      selectedFrames.forEach(f => deleteFrameStorage(f));
       setFrames(frames.map(f => f.isSelected ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, isSelected: false } : f));
       toast.success(language === 'fr' ? `${selectedFrames.length} élément${selectedFrames.length > 1 ? 's' : ''} supprimé${selectedFrames.length > 1 ? 's' : ''}` : `${selectedFrames.length} item${selectedFrames.length > 1 ? 's' : ''} deleted`);
     }
-  }, [frames, defaultTitle, saveToHistory]);
+  }, [frames, defaultTitle, saveToHistory, deleteFrameStorage]);
 
   const handleZoomIn = useCallback(() => {
     if (setZoomLevel && zoomLevel < 100) {
@@ -816,7 +827,7 @@ export default function UniversalAlbumPage({
     }
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -826,16 +837,35 @@ export default function UniversalAlbumPage({
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
+
         const photoDataUrl = canvas.toDataURL('image/jpeg');
-        
+
+        // Upload vers S3
+        let photoUrl: string = photoDataUrl;
+        let storageKey: string | undefined;
+        const albumId = currentAlbumId;
+        if (albumId) {
+          try {
+            const uploadResult = await uploadFrameMutation.mutateAsync({
+              albumLocalId: albumId,
+              frameKey: `camera_${Date.now()}`,
+              data: photoDataUrl,
+            });
+            photoUrl = uploadResult.url;
+            storageKey = uploadResult.key;
+          } catch (err) {
+            console.error('[upload] Caméra fallback base64:', err);
+          }
+        }
+
         // Ajouter la photo capturée
         const newFrame: PhotoFrame = {
           id: Date.now(),
           title: `Photo ${new Date().toLocaleTimeString()}`,
           isSelected: false,
           format: "JPG",
-          photoUrl: photoDataUrl,
+          photoUrl: photoUrl,
+          storageKey,
           comments: "",
           date: new Date().toLocaleDateString('fr-FR'),
           location: language === "fr" ? "Caméra" : "Camera"
@@ -1139,6 +1169,7 @@ export default function UniversalAlbumPage({
 
         // Upload vers S3 et récupération de l'URL persistante
         let photoUrl: string = base64; // fallback local si upload échoue
+        let storageKey: string | undefined;
         if (albumId && base64) {
           try {
             const uploadResult = await uploadFrameMutation.mutateAsync({
@@ -1147,9 +1178,9 @@ export default function UniversalAlbumPage({
               data: base64,
             });
             photoUrl = uploadResult.url;
+            storageKey = uploadResult.key;
           } catch (uploadErr) {
             console.error('[upload] Échec upload S3, fallback base64 local:', uploadErr);
-            // photoUrl reste le base64 local — la photo est visible mais ne survivra pas à Safari
           }
         }
 
@@ -1159,7 +1190,7 @@ export default function UniversalAlbumPage({
           isSelected: false,
           format: format,
           photoUrl: photoUrl,
-          storageKey: photoUrl !== base64 ? frameKey : undefined, // clé S3 pour suppression future
+          storageKey,
           mediaType: mediaType,
           videoUrl: videoUrl,
           thumbnailUrl: thumbnailUrl,
@@ -1437,6 +1468,7 @@ export default function UniversalAlbumPage({
   // Fonction pour traiter les fichiers du drag & drop (après contrôle parental si nécessaire)
   const processExternalDropFiles = async (validFiles: File[]) => {
     const toastId = toast.loading(`Traitement de ${validFiles.length} fichier(s)...`);
+    const albumId = currentAlbumId;
 
     try {
       const newFramesPromises = validFiles.map(async (file, index) => {
@@ -1446,30 +1478,24 @@ export default function UniversalAlbumPage({
         let videoUrl: string | null = null;
         let thumbnailUrl: string | null = null;
         let duration: number | undefined = undefined;
+        const frameKey = `frame_${Date.now()}_${index}`;
 
         if (file.type.startsWith('video/')) {
-          // Traitement des vidéos
           mediaType = 'video';
-          
-          // Vérifier la taille (max 100MB)
           if (!isVideoSizeAcceptable(file, 100)) {
             toast.warning(language === 'fr' ? `Vidéo "${file.name}" trop volumineuse (${formatFileSize(file.size)}). Max: 100MB` : `Video "${file.name}" too large (${formatFileSize(file.size)}). Max: 100MB`);
-            return null; // Ignorer ce fichier
+            return null;
           }
-          
           try {
             const videoData = await processVideoFile(file);
             thumbnailUrl = videoData.thumbnailUrl;
             duration = videoData.duration;
             format = videoData.format;
-            
-            // Stocker la vidéo en base64
             videoUrl = await new Promise((resolve) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result as string);
               reader.readAsDataURL(file);
             });
-            
             base64 = thumbnailUrl;
           } catch (err) {
             console.error('Erreur traitement vidéo:', err);
@@ -1488,12 +1514,30 @@ export default function UniversalAlbumPage({
           format = "PDF";
         }
 
+        // Upload vers S3
+        let photoUrl: string = base64;
+        let storageKey: string | undefined;
+        if (albumId && base64) {
+          try {
+            const uploadResult = await uploadFrameMutation.mutateAsync({
+              albumLocalId: albumId,
+              frameKey,
+              data: base64,
+            });
+            photoUrl = uploadResult.url;
+            storageKey = uploadResult.key;
+          } catch (uploadErr) {
+            console.error('[upload] Drag&drop fallback base64:', uploadErr);
+          }
+        }
+
         return {
           id: Date.now() + index,
           title: file.name.split('.')[0],
           isSelected: false,
           format: format,
-          photoUrl: base64,
+          photoUrl: photoUrl,
+          storageKey,
           mediaType: mediaType,
           videoUrl: videoUrl,
           thumbnailUrl: thumbnailUrl,
@@ -1503,7 +1547,7 @@ export default function UniversalAlbumPage({
           location: language === "fr" ? "Importé par glisser-déposer" : "Imported by drag and drop",
           originalName: file.name,
           size: file.size,
-          src: base64,
+          src: photoUrl,
           name: file.name
         };
       });
@@ -1635,6 +1679,8 @@ export default function UniversalAlbumPage({
   // Fonction pour traiter le drop sur un cadre (après contrôle parental si nécessaire)
   const processDropOnFrame = async (frameId: number, file: File) => {
     const toastId = toast.loading("Traitement du fichier...");
+    const albumId = currentAlbumId;
+    const frameKey = `frame_${Date.now()}_drop`;
 
     try {
       let base64 = "";
@@ -1645,29 +1691,22 @@ export default function UniversalAlbumPage({
       let duration: number | undefined = undefined;
 
       if (file.type.startsWith('video/')) {
-        // Traitement des vidéos
         mediaType = 'video';
-        
-        // Vérifier la taille (max 100MB)
         if (!isVideoSizeAcceptable(file, 100)) {
           toast.dismiss(toastId);
           toast.warning(language === 'fr' ? `Vidéo trop volumineuse (${formatFileSize(file.size)}). Max: 100MB` : `Video too large (${formatFileSize(file.size)}). Max: 100MB`);
           return;
         }
-        
         try {
           const videoData = await processVideoFile(file);
           thumbnailUrl = videoData.thumbnailUrl;
           duration = videoData.duration;
           format = videoData.format;
-          
-          // Stocker la vidéo en base64
           videoUrl = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(file);
           });
-          
           base64 = thumbnailUrl;
         } catch (err) {
           console.error('Erreur traitement vidéo:', err);
@@ -1687,27 +1726,37 @@ export default function UniversalAlbumPage({
         format = "PDF";
       }
 
+      // Upload vers S3
+      let photoUrl: string = base64;
+      let storageKey: string | undefined;
+      if (albumId && base64) {
+        try {
+          const uploadResult = await uploadFrameMutation.mutateAsync({
+            albumLocalId: albumId,
+            frameKey,
+            data: base64,
+          });
+          photoUrl = uploadResult.url;
+          storageKey = uploadResult.key;
+        } catch (uploadErr) {
+          console.error('[upload] Drop-on-frame fallback base64:', uploadErr);
+        }
+      }
+
       const newTitle = file.name.split('.')[0];
-      
-      // Détection des doublons (même logique que les autres fonctions)
-      console.log('[DOUBLON DEBUG FRAME] Démarrage détection doublons');
-      console.log('[DOUBLON DEBUG FRAME] Titre de la nouvelle photo:', newTitle);
-      console.log('[DOUBLON DEBUG FRAME] Frame cible:', frameId);
-      
+
       // Vérifier si une photo avec le même titre existe déjà (hors du cadre cible)
       const existingFrame = frames.find(f => {
         const match = f.title === newTitle && f.photoUrl && f.id !== frameId;
-        console.log(`[DOUBLON DEBUG FRAME] Comparaison: "${f.title}" === "${newTitle}" && hasPhoto=${!!f.photoUrl} && differentFrame=${f.id !== frameId} => ${match}`);
+        console.log(`[DOUBLON DEBUG FRAME] "${f.title}" === "${newTitle}" hasPhoto=${!!f.photoUrl} differentFrame=${f.id !== frameId} => ${match}`);
         return match;
       });
-      
+
       if (existingFrame) {
-        console.log('[DOUBLON DEBUG FRAME] DOUBLON DÉTECTÉ !', newTitle);
         toast.dismiss(toastId);
-        
-        // Créer l'objet newItem pour la fenêtre de confirmation
         const newItem = {
-          photoUrl: base64,
+          photoUrl: photoUrl,
+          storageKey,
           title: newTitle,
           format: format,
           mediaType: mediaType,
@@ -1719,23 +1768,20 @@ export default function UniversalAlbumPage({
           originalName: file.name,
           size: file.size
         };
-        
-        // Stocker le frameId cible pour l'utiliser après la décision
         setPendingDropFrameId(frameId);
         setDuplicatesToHandle([{ newItem, existingFrame }]);
         setNonDuplicatesToAdd([]);
         setShowDuplicateConfirmModal(true);
         return;
       }
-      
-      console.log('[DOUBLON DEBUG FRAME] Pas de doublon, ajout direct');
-      
+
       // Mettre à jour le cadre spécifique
-      let updatedFrames = frames.map(f => 
-        f.id === frameId 
+      let updatedFrames = frames.map(f =>
+        f.id === frameId
           ? {
               ...f,
-              photoUrl: base64,
+              photoUrl: photoUrl,
+              storageKey,
               title: newTitle,
               format: format,
               mediaType: mediaType,
@@ -1895,9 +1941,10 @@ export default function UniversalAlbumPage({
 
     if (window.confirm(language === 'fr' ? `Supprimer ${selectedIds.length} élément(s) ?` : `Delete ${selectedIds.length} item(s)?`)) {
       saveToHistory(frames);
-      const updatedFrames = frames.map(f => 
-        selectedIds.includes(f.id) 
-          ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: isPhoto ? "JPG" : "PDF", date: "", location: "", comments: "", isSelected: false } 
+      frames.filter(f => selectedIds.includes(f.id)).forEach(f => deleteFrameStorage(f));
+      const updatedFrames = frames.map(f =>
+        selectedIds.includes(f.id)
+          ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: isPhoto ? "JPG" : "PDF", date: "", location: "", comments: "", isSelected: false }
           : f
       );
       setFrames(updatedFrames);
@@ -3006,6 +3053,8 @@ export default function UniversalAlbumPage({
                     onDelete={(id) => {
                       if (window.confirm(language === 'fr' ? "Supprimer cette photo ?" : "Delete this photo?")) {
                         saveToHistory(frames);
+                        const target = frames.find(f => f.id === id);
+                        if (target) deleteFrameStorage(target);
                         setFrames(frames.map(f => f.id === id ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: "JPG", date: "", location: "", comments: "" } : f));
                         toast.success(language === 'fr' ? "Photo supprimée" : "Photo deleted");
                       }
@@ -3024,6 +3073,8 @@ export default function UniversalAlbumPage({
                     onDelete={(id) => {
                       if (window.confirm(language === 'fr' ? "Supprimer ce document ?" : "Delete this document?")) {
                         saveToHistory(frames);
+                        const target = frames.find(f => f.id === id);
+                        if (target) deleteFrameStorage(target);
                         setFrames(frames.map(f => f.id === id ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: "PDF", date: "", location: "", comments: "" } : f));
                         toast.success(language === 'fr' ? "Document supprimé" : "Document deleted");
                       }
@@ -3243,6 +3294,8 @@ export default function UniversalAlbumPage({
                     if (hasPhoto && contextMenu.frameId) {
                       if (window.confirm(language === 'fr' ? "Attention : La suppression de cet élément est irréversible.\n\nVoulez-vous continuer ?" : "Warning: Deleting this item is irreversible.\n\nDo you want to continue?")) {
                         saveToHistory(frames);
+                        const target = frames.find(f => f.id === contextMenu.frameId);
+                        if (target) deleteFrameStorage(target);
                         setFrames(frames.map(f => f.id === contextMenu.frameId ? { ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: isPhoto ? "JPG" : "PDF", date: "", location: "", comments: "" } : f));
                         toast.success(language === "fr" ? "Supprimé" : "Deleted");
                       }
@@ -3301,6 +3354,7 @@ export default function UniversalAlbumPage({
                     }
                     if (window.confirm(language === 'fr' ? `Attention : La suppression de ${isPhoto ? "toutes les photos" : "tous les documents"} de cet album est irréversible.\n\n${photosCount} élément${photosCount > 1 ? "s seront supprimés" : " sera supprimé"}.\n\nVoulez-vous continuer ?` : `Warning: Deleting ${isPhoto ? "all photos" : "all documents"} from this album is irreversible.\n\n${photosCount} item${photosCount > 1 ? "s will be deleted" : " will be deleted"}.\n\nDo you want to continue?`)) {
                       saveToHistory(frames);
+                      frames.filter(f => f.photoUrl).forEach(f => deleteFrameStorage(f));
                       setFrames(frames.map(f => ({ ...f, photoUrl: null, title: `${defaultTitle} ${f.id}`, format: isPhoto ? "JPG" : "PDF", date: "", location: "", comments: "" })));
                       toast.success(language === "fr" ? `${photosCount} élément${photosCount > 1 ? "s" : ""} supprimé${photosCount > 1 ? "s" : ""}` : `${photosCount} item${photosCount > 1 ? "s" : ""} deleted`);
                     }
@@ -3567,9 +3621,8 @@ export default function UniversalAlbumPage({
                 if (frameToEmpty) {
                   const frameData = frames.find(f => f.id === frameToEmpty);
                   if (frameData) {
-                    // Sauvegarder dans l'historique pour Ctrl+Z
                     saveToHistory(frames);
-                    // Sauvegarder pour pouvoir rétablir
+                    deleteFrameStorage(frameData);
                     setLastEmptiedFrame({ frameId: frameToEmpty, data: { ...frameData } });
                     // Vider le cadre
                     setFrames(frames.map(f => f.id === frameToEmpty ? { 

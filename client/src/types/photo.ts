@@ -14,6 +14,7 @@ export interface PhotoFrame {
   originalName?: string; // Nom du fichier original (pour détection de doublons)
   size?: number; // Taille du fichier original en octets (pour détection de doublons)
   imageHash?: string; // Hash du contenu pour détection de doublons
+  storageKey?: string; // Clé S3 pour suppression (ex: photos/42/albumId/frame_xxx.jpg)
   isVideo?: boolean; // Indicateur si c'est une vidéo (pour compatibilité Livre Photo)
   date?: string; // Date de la photo (pour affichage dans Livre Photo)
   [key: string]: any;
