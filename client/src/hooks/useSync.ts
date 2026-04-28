@@ -55,14 +55,15 @@ async function populateLocalFromServer(data: any) {
           const frames = JSON.parse(album.framesData);
           if (Array.isArray(frames) && frames.length > 0) {
             const existingAlbum = await db.albums.get(album.localId);
+            console.log(`[DIAG populateLocalFromServer] album=${album.localId} existingAlbum=${existingAlbum ? 'BRANCHE A (Dexie présent)' : 'BRANCHE B (Dexie absent)'} serverFrames=${frames.length}`);
             if (existingAlbum) {
+              // BRANCHE A
+              const localPhotoMap = new Map((existingAlbum.frames ?? []).map((f: any) => [f.id, f]));
+              console.log(`[DIAG BRANCHE A] frames locales dans Dexie:`, (existingAlbum.frames ?? []).map((f: any) => ({ id: f.id, photoUrl: f.photoUrl ? f.photoUrl.substring(0, 30) + '...' : null })));
               // Fusionner : garder les frames locales non présentes sur le serveur
               const serverFrameIds = new Set(frames.map((f: any) => f.id));
               const localOnly = (existingAlbum.frames ?? []).filter((f: any) => !serverFrameIds.has(f.id));
               // BRANCHE A — réinjecter les photoUrl/videoUrl/thumbnailUrl locales SEULEMENT si non-null.
-              // Ne pas forcer à null si Dexie a null : cela "confirmerait" une corruption issue de la branche B
-              // et bloquerait toute récupération future.
-              const localPhotoMap = new Map((existingAlbum.frames ?? []).map((f: any) => [f.id, f]));
               const mergedServerFrames = frames.map((f: any) => {
                 const localFrame = localPhotoMap.get(f.id);
                 if (!localFrame) return f;
@@ -70,19 +71,17 @@ async function populateLocalFromServer(data: any) {
                 if (localFrame.photoUrl != null)     merged.photoUrl     = localFrame.photoUrl;
                 if (localFrame.videoUrl != null)     merged.videoUrl     = localFrame.videoUrl;
                 if (localFrame.thumbnailUrl != null) merged.thumbnailUrl = localFrame.thumbnailUrl;
+                console.log(`[DIAG BRANCHE A] frame id=${f.id} localPhotoUrl=${localFrame.photoUrl ? localFrame.photoUrl.substring(0, 30) + '...' : null} → merged.photoUrl=${merged.photoUrl ? merged.photoUrl.substring(0, 30) + '...' : null}`);
                 return merged;
               });
-              await db.albums.put({
-                ...existingAlbum,
-                frames: [...mergedServerFrames, ...localOnly],
-                updatedAt: Date.now(),
-              });
+              const toWrite = { ...existingAlbum, frames: [...mergedServerFrames, ...localOnly], updatedAt: Date.now() };
+              console.log(`[DIAG BRANCHE A] écriture db.albums: ${toWrite.frames.length} frames, photoUrls:`, toWrite.frames.map((f: any) => ({ id: f.id, hasPhoto: !!f.photoUrl })));
+              await db.albums.put(toWrite);
             } else {
               // BRANCHE B — album absent de db.albums (Dexie vide, nouveau device ou après reset).
-              // Ne pas écrire dans db.albums si les frames n'ont pas de photoUrl : cela créerait
-              // un "fantôme" avec photoUrl:null qui bloquerait la réinjection dans les sessions suivantes.
-              // db.album_metas a déjà été créé ci-dessus → l'album reste visible dans la liste.
               const hasRecoverableContent = frames.some((f: any) => f.photoUrl != null);
+              console.log(`[DIAG BRANCHE B] album=${album.localId} frames serveur:`, frames.map((f: any) => ({ id: f.id, photoUrl: f.photoUrl ?? null })));
+              console.log(`[DIAG BRANCHE B] hasRecoverableContent=${hasRecoverableContent} → ${hasRecoverableContent ? 'écriture db.albums' : 'PAS d\'écriture (photos perdues car base64 non stocké serveur)'}`);
               if (hasRecoverableContent) {
                 await db.albums.put({
                   id: album.localId,

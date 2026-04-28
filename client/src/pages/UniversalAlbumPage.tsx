@@ -546,6 +546,7 @@ export default function UniversalAlbumPage({
 
     const saveTimeout = setTimeout(async () => {
       try {
+        console.log(`[DIAG auto-save] déclenchement pour album=${currentAlbumId} frames=${frames.length} photoUrls:`, frames.map(f => ({ id: f.id, hasPhoto: !!(f as any).photoUrl, photoUrlPreview: (f as any).photoUrl ? ((f as any).photoUrl as string).substring(0, 30) + '...' : null })));
         await db.albums.put({
           id: currentAlbumId,
           frames: frames,
@@ -554,6 +555,7 @@ export default function UniversalAlbumPage({
         // Synchroniser les frames (sans base64) vers le serveur pour tous les albums
         const meta = await db.album_metas.get(currentAlbumId);
         const strippedFrames = frames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+        console.log(`[DIAG auto-save] addToSyncQueue — strippedFrames (PAS de photoUrl):`, strippedFrames.map((f: any) => ({ id: f.id, hasPhoto: !!f.photoUrl })));
         addToSyncQueue({
           entityType: 'album',
           action: 'update',
