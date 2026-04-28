@@ -12,6 +12,7 @@ import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, C
 import { toast } from "sonner";
 import { db, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
 import { addToSyncQueue } from '@/lib/syncService';
+import { trpc } from '@/lib/trpc';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 // DuplicateValidationModal retiré - sera implémenté dans la version Electron
@@ -139,6 +140,9 @@ export default function UniversalAlbumPage({
   const rootAlbumId = isPhoto ? "root_photos" : "root_docs"; // ID pour la racine si pas d'album
   const routePrefix = isPhoto ? "/photoclass/" : "/classpapiers/";
   const pageTitle = isPhoto ? "PhotoClass" : "Documents";
+
+  // --- MUTATION UPLOAD PHOTO S3 ---
+  const uploadFrameMutation = trpc.sync.photos.uploadFrame.useMutation();
 
   // --- ÉTATS GLOBAUX ---
   const [location, setLocation] = useLocation();
@@ -546,16 +550,16 @@ export default function UniversalAlbumPage({
 
     const saveTimeout = setTimeout(async () => {
       try {
-        console.log(`[DIAG auto-save] déclenchement pour album=${currentAlbumId} frames=${frames.length} photoUrls:`, frames.map(f => ({ id: f.id, hasPhoto: !!(f as any).photoUrl, photoUrlPreview: (f as any).photoUrl ? ((f as any).photoUrl as string).substring(0, 30) + '...' : null })));
         await db.albums.put({
           id: currentAlbumId,
           frames: frames,
           updatedAt: Date.now()
         });
-        // Synchroniser les frames (sans base64) vers le serveur pour tous les albums
+        // Synchroniser les frames vers le serveur.
+        // photoUrl contient maintenant une URL S3 (pas un base64) → pas besoin de stripper.
+        // On retire uniquement videoUrl (lourd) et thumbnailUrl (redondant avec photoUrl).
         const meta = await db.album_metas.get(currentAlbumId);
-        const strippedFrames = frames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
-        console.log(`[DIAG auto-save] addToSyncQueue — strippedFrames (PAS de photoUrl):`, strippedFrames.map((f: any) => ({ id: f.id, hasPhoto: !!f.photoUrl })));
+        const syncFrames = frames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
         addToSyncQueue({
           entityType: 'album',
           action: 'update',
@@ -563,7 +567,7 @@ export default function UniversalAlbumPage({
             localId: currentAlbumId,
             name: meta?.title || currentAlbumId,
             categoryLocalId: meta?.categoryId || undefined,
-            framesData: JSON.stringify(strippedFrames),
+            framesData: JSON.stringify(syncFrames),
           },
         });
       } catch (err) {
@@ -741,8 +745,8 @@ export default function UniversalAlbumPage({
         frames: targetFrames,
         updatedAt: Date.now()
       });
-      // Synchroniser l'album cible (sans base64)
-      const strippedTargetFrames = targetFrames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+      // Synchroniser l'album cible (URLs S3, on retire seulement videoUrl/thumbnailUrl)
+      const syncTargetFrames = targetFrames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
       addToSyncQueue({
         entityType: 'album',
         action: 'update',
@@ -750,7 +754,7 @@ export default function UniversalAlbumPage({
           localId: targetAlbumId,
           name: targetAlbumMeta.title,
           categoryLocalId: targetAlbumMeta.categoryId || undefined,
-          framesData: JSON.stringify(strippedTargetFrames),
+          framesData: JSON.stringify(syncTargetFrames),
         },
       });
 
@@ -1077,6 +1081,7 @@ export default function UniversalAlbumPage({
       // Traitement direct de tous les fichiers (sans détection de doublons)
       // La détection de doublons sera implémentée dans la version Electron
       
+      const albumId = currentAlbumId;
       const newFramesPromises = selectedFiles.map(async (file: File, index: number) => {
         let base64 = "";
         let format = "JPG";
@@ -1085,31 +1090,32 @@ export default function UniversalAlbumPage({
         let thumbnailUrl: string | null = null;
         let duration: number | undefined = undefined;
         let imageHash: string = "";
+        const frameKey = `frame_${Date.now()}_${index}`;
 
         if (file.type.startsWith('video/')) {
           // Traitement des vidéos
           mediaType = 'video';
-          
+
           // Vérifier la taille (max 100MB pour le stockage local)
           if (!isVideoSizeAcceptable(file, 100)) {
             toast.warning(language === 'fr' ? `Vidéo "${file.name}" trop volumineuse (${formatFileSize(file.size)}). Max: 100MB` : `Video "${file.name}" too large (${formatFileSize(file.size)}). Max: 100MB`);
             return null; // Ignorer ce fichier
           }
-          
+
           try {
             // Extraire la vignette et la durée
             const videoData = await processVideoFile(file);
             thumbnailUrl = videoData.thumbnailUrl;
             duration = videoData.duration;
             format = videoData.format;
-            
+
             // Stocker la vidéo en base64 (attention: peut être lourd)
             videoUrl = await new Promise((resolve) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result as string);
               reader.readAsDataURL(file);
             });
-            
+
             // Utiliser la vignette comme photoUrl pour l'affichage
             base64 = thumbnailUrl;
           } catch (err) {
@@ -1121,8 +1127,6 @@ export default function UniversalAlbumPage({
           // Traitement des images
           base64 = await compressImage(file);
           format = file.type.split('/')[1].toUpperCase();
-          // Générer le hash APRÈS compression pour une détection fiable
-          // imageHash retiré - sera implémenté dans la version Electron
         } else if (file.type === 'application/pdf') {
           // Traitement des PDF
           base64 = await new Promise((resolve) => {
@@ -1131,7 +1135,22 @@ export default function UniversalAlbumPage({
             reader.readAsDataURL(file);
           });
           format = "PDF";
-          // imageHash retiré - sera implémenté dans la version Electron
+        }
+
+        // Upload vers S3 et récupération de l'URL persistante
+        let photoUrl: string = base64; // fallback local si upload échoue
+        if (albumId && base64) {
+          try {
+            const uploadResult = await uploadFrameMutation.mutateAsync({
+              albumLocalId: albumId,
+              frameKey,
+              data: base64,
+            });
+            photoUrl = uploadResult.url;
+          } catch (uploadErr) {
+            console.error('[upload] Échec upload S3, fallback base64 local:', uploadErr);
+            // photoUrl reste le base64 local — la photo est visible mais ne survivra pas à Safari
+          }
         }
 
         return {
@@ -1139,7 +1158,8 @@ export default function UniversalAlbumPage({
           title: file.name.split('.')[0],
           isSelected: false,
           format: format,
-          photoUrl: base64,
+          photoUrl: photoUrl,
+          storageKey: photoUrl !== base64 ? frameKey : undefined, // clé S3 pour suppression future
           mediaType: mediaType,
           videoUrl: videoUrl,
           thumbnailUrl: thumbnailUrl,
@@ -1149,8 +1169,8 @@ export default function UniversalAlbumPage({
           location: language === "fr" ? "Non localisé" : "Not located",
           originalName: file.name,
           size: file.size,
-          imageHash: imageHash, // Hash pour détection de doublons
-          src: base64,
+          imageHash: imageHash,
+          src: photoUrl,
           name: file.name
         };
       });
@@ -4063,9 +4083,9 @@ export default function UniversalAlbumPage({
                 frames: frames,
                 updatedAt: Date.now()
               });
-              // Synchroniser sans base64
+              // Synchroniser (URLs S3, on retire seulement videoUrl/thumbnailUrl)
               const quitMeta = await db.album_metas.get(currentAlbumId);
-              const quitStripped = frames.map(({ photoUrl: _p, videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
+              const quitSyncFrames = frames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
               addToSyncQueue({
                 entityType: 'album',
                 action: 'update',
@@ -4073,7 +4093,7 @@ export default function UniversalAlbumPage({
                   localId: currentAlbumId,
                   name: quitMeta?.title || currentAlbumId,
                   categoryLocalId: quitMeta?.categoryId || undefined,
-                  framesData: JSON.stringify(quitStripped),
+                  framesData: JSON.stringify(quitSyncFrames),
                 },
               });
               toast.success(language === 'fr' ? 'Session sauvegardée' : 'Session saved');

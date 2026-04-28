@@ -4,7 +4,7 @@
  * sans avoir besoin des photos originales (qui restent en local)
  */
 
-import { storagePut, storageGet } from './local-storage';
+import { storagePut, storageGet, storageDelete } from './local-storage';
 
 /**
  * Génère le chemin S3 pour une miniature
@@ -67,6 +67,60 @@ export async function getThumbnailUrl(
     return null;
   }
 }
+
+// ─── Photos d'album ──────────────────────────────────────────────────────────
+
+/**
+ * Génère la clé S3/disque pour une photo d'album.
+ * Exemple : photos/42/album_photos/frame_1748447200000.jpg
+ */
+export function getAlbumPhotoPath(
+  userId: number,
+  albumLocalId: string,
+  frameKey: string,
+  ext = "jpg"
+): string {
+  return `photos/${userId}/${albumLocalId}/${frameKey}.${ext}`;
+}
+
+/**
+ * Upload une photo d'album et retourne son URL persistante.
+ * @param data - data-URI base64 (image/jpeg, image/png, application/pdf…)
+ */
+export async function uploadAlbumPhoto(
+  userId: number,
+  albumLocalId: string,
+  frameKey: string,
+  data: string
+): Promise<{ url: string; key: string } | null> {
+  try {
+    // Détecter le type MIME et l'extension depuis le data-URI
+    const mimeMatch = data.match(/^data:([^;]+);base64,/);
+    const mime = mimeMatch?.[1] ?? "image/jpeg";
+    const ext = mime === "application/pdf" ? "pdf"
+              : mime === "image/png"       ? "png"
+              : mime === "image/webp"      ? "webp"
+              : mime === "video/mp4"       ? "mp4"
+              : "jpg";
+
+    const key = getAlbumPhotoPath(userId, albumLocalId, frameKey, ext);
+    const result = await storagePut(key, data, mime);
+    return { url: result.url, key: result.key };
+  } catch (error) {
+    console.error("[Thumbnails] uploadAlbumPhoto failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Supprime une photo d'album du stockage.
+ * @param key - clé retournée lors de l'upload (pas l'URL complète)
+ */
+export async function deleteAlbumPhoto(key: string): Promise<boolean> {
+  return storageDelete(key);
+}
+
+// ─── Miniatures (code original) ──────────────────────────────────────────────
 
 /**
  * Upload plusieurs miniatures en batch

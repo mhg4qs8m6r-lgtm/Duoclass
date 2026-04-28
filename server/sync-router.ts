@@ -42,7 +42,7 @@ import {
   deleteUsefulLink,
   purgeAllUserData,
 } from "./sync-db";
-import { uploadThumbnail, uploadThumbnailsBatch } from "./thumbnails";
+import { uploadThumbnail, uploadThumbnailsBatch, uploadAlbumPhoto, deleteAlbumPhoto } from "./thumbnails";
 
 // Schémas de validation
 const categorySchema = z.object({
@@ -380,7 +380,7 @@ export const syncRouter = router({
       .input(z.object({ localId: z.string() }))
       .mutation(async ({ ctx, input }) => {
         const success = await deletePhotoMetadata(ctx.user.id, input.localId);
-        
+
         if (success) {
           await logSyncAction({
             userId: ctx.user.id,
@@ -389,7 +389,43 @@ export const syncRouter = router({
             action: "delete",
           });
         }
-        
+
+        return { success };
+      }),
+
+    /**
+     * Upload une photo d'album vers S3 (ou disque local en dev).
+     * Reçoit un data-URI base64, retourne une URL publique persistante.
+     * Le client stocke cette URL dans frame.photoUrl — plus de base64 dans Dexie.
+     */
+    uploadFrame: protectedProcedure
+      .input(z.object({
+        albumLocalId: z.string(),
+        frameKey: z.string(), // identifiant unique de la frame, ex. "frame_1748447200000_0"
+        data: z.string(),     // data-URI base64
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await uploadAlbumPhoto(
+          ctx.user.id,
+          input.albumLocalId,
+          input.frameKey,
+          input.data
+        );
+        if (!result) {
+          throw new Error("Upload échoué");
+        }
+        return { url: result.url, key: result.key };
+      }),
+
+    /**
+     * Supprime une photo d'album du stockage (appelé quand frame vidée).
+     */
+    deleteFrame: protectedProcedure
+      .input(z.object({
+        storageKey: z.string(),
+      }))
+      .mutation(async ({ ctx: _ctx, input }) => {
+        const success = await deleteAlbumPhoto(input.storageKey);
         return { success };
       }),
   }),
@@ -501,7 +537,7 @@ export const syncRouter = router({
   }),
 
   // ==================== MINIATURES ====================
-  
+
   thumbnails: router({
     /**
      * Upload une miniature
