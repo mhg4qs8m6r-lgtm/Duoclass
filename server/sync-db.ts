@@ -108,7 +108,7 @@ export async function upsertCategory(data: InsertCategory): Promise<Category | n
     } else {
       // Création
       const result = await db.insert(categories).values(values);
-      const insertId = Number(result[0].insertId);
+      const insertId = Number(result.lastInsertRowid);
       
       const created = await db
         .select()
@@ -221,7 +221,7 @@ export async function upsertAlbum(data: InsertAlbum): Promise<Album | null> {
     } else {
       // Création
       const result = await db.insert(albums).values(values);
-      const insertId = Number(result[0].insertId);
+      const insertId = Number(result.lastInsertRowid);
       
       const created = await db
         .select()
@@ -360,7 +360,7 @@ export async function upsertPhotoMetadata(data: InsertPhotoMetadata): Promise<Ph
     } else {
       // Création
       const result = await db.insert(photoMetadata).values(values);
-      const insertId = Number(result[0].insertId);
+      const insertId = Number(result.lastInsertRowid);
       
       const created = await db
         .select()
@@ -476,7 +476,7 @@ export async function upsertUserSettings(data: InsertUserSettings): Promise<User
     } else {
       // Création
       const result = await db.insert(userSettings).values(values);
-      const insertId = Number(result[0].insertId);
+      const insertId = Number(result.lastInsertRowid);
       
       const created = await db
         .select()
