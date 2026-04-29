@@ -4805,7 +4805,6 @@ export default function CreationsAtelierV2({
                       className="text-lg font-semibold text-purple-600 bg-purple-100 px-3 py-0.5 rounded-full border-0 outline-none focus:ring-2 focus:ring-purple-400 min-w-[150px] max-w-[300px]"
                       title={language === 'fr' ? 'Cliquez pour renommer le collage' : 'Click to rename the collage'}
                     />
-                    {console.log('[DEBUG Version Admin] user.email:', user?.email, '| isAdmin:', isAdmin, '| role:', user?.role)}
                     {user?.email === 'caron7501@gmail.com' && (
                       <span className="text-sm font-bold" style={{ color: '#f97316' }}>Version Admin</span>
                     )}
