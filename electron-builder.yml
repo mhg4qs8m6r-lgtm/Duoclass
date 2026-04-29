@@ -1,0 +1,36 @@
+appId: com.duoclass.app
+productName: DuoClass
+
+directories:
+  buildResources: build
+  output: dist/release
+
+# Entry point for Electron
+main: dist/electron/main.js
+
+files:
+  - dist/electron/**
+  - dist/public/**
+  - node_modules/**
+  - package.json
+
+# Rebuild native modules (e.g. better-sqlite3) for Electron's Node ABI
+npmRebuild: true
+
+mac:
+  category: public.app-category.education
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+linux:
+  target:
+    - AppImage

@@ -6,11 +6,16 @@ import path from "path";
 import { users, passwordResetTokens } from "../drizzle/schema";
 import type { User, PasswordResetToken } from "../drizzle/schema";
 
-const dbPath = process.env.SQLITE_PATH ?? path.resolve("./duoclass.db");
-const sqlite = new Database(dbPath);
-const _db = drizzle(sqlite);
+// Lazy init: opened on first call so SQLITE_PATH can be set by electron/main.ts
+// before any request is handled.
+let _db: ReturnType<typeof drizzle> | null = null;
 
 export function getDb() {
+  if (!_db) {
+    const dbPath = process.env.SQLITE_PATH ?? path.resolve("./duoclass.db");
+    const sqlite = new Database(dbPath);
+    _db = drizzle(sqlite);
+  }
   return _db;
 }
 

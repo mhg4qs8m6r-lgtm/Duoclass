@@ -28,13 +28,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
-  // Validate required env vars
+export async function startServer(): Promise<number> {
   if (!process.env.JWT_SECRET) {
     console.error("FATAL: JWT_SECRET environment variable is not set. Auth will not work.");
-  }
-  if (!process.env.DATABASE_URL) {
-    console.error("FATAL: DATABASE_URL environment variable is not set.");
   }
 
   const app = express();
@@ -74,9 +70,10 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  return new Promise(resolve => {
+    server.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+      resolve(port);
+    });
   });
 }
-
-startServer().catch(console.error);

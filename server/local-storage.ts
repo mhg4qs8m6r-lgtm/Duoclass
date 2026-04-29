@@ -38,7 +38,11 @@ async function getS3Client() {
 
 // ─── Disque local ────────────────────────────────────────────────────────────
 
-const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+// Lazy: resolved at call time so electron/main.ts can set UPLOAD_DIR before
+// the first request arrives.
+function uploadRoot(): string {
+  return process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+}
 
 function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
@@ -49,7 +53,7 @@ async function ensureDir(filePath: string): Promise<void> {
 }
 
 function absPath(relKey: string): string {
-  return path.join(UPLOAD_ROOT, normalizeKey(relKey));
+  return path.join(uploadRoot(), normalizeKey(relKey));
 }
 
 // ─── Interface publique ───────────────────────────────────────────────────────
@@ -144,7 +148,7 @@ export async function storageDelete(relKey: string): Promise<boolean> {
 
 /** Chemin racine des uploads locaux (pour Express static en mode local) */
 export function getUploadRoot(): string {
-  return UPLOAD_ROOT;
+  return uploadRoot();
 }
 
 /** true si le backend actif est S3 */
