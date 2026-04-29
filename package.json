@@ -16,7 +16,9 @@
     "electron:build-preload": "esbuild electron/preload.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/preload.cjs",
     "electron:build": "pnpm electron:build-main && pnpm electron:build-preload",
     "electron:dev": "vite build && pnpm electron:build && electron dist/electron/main.cjs",
-    "electron:dist": "vite build && pnpm electron:build && electron-builder"
+    "electron:dist": "vite build && pnpm electron:build && electron-builder",
+    "electron:rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
