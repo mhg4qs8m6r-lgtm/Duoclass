@@ -1,248 +1,248 @@
-import { integer, jsonb, pgEnum, pgTable, text, timestamp, varchar, bigint, boolean, real, serial } from "drizzle-orm/pg-core";
+import { integer, sqliteTable, text, real } from "drizzle-orm/sqlite-core";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name"),
-  email: varchar("email", { length: 320 }).notNull().unique(),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: varchar("role", { length: 32 }).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
-  trialStartDate: bigint("trialStartDate", { mode: "number" }),
-  trialEndDate: bigint("trialEndDate", { mode: "number" }),
+  email: text("email").notNull().unique(),
+  loginMethod: text("loginMethod"),
+  role: text("role").default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  passwordHash: text("passwordHash").notNull(),
+  trialStartDate: integer("trialStartDate"),
+  trialEndDate: integer("trialEndDate"),
   photoCount: integer("photoCount").default(0).notNull(),
-  subscriptionStatus: varchar("subscriptionStatus", { length: 32 }).default("trial").notNull(),
-  subscriptionPlan: varchar("subscriptionPlan", { length: 32 }),
-  subscriptionEndDate: bigint("subscriptionEndDate", { mode: "number" }),
+  subscriptionStatus: text("subscriptionStatus").default("trial").notNull(),
+  subscriptionPlan: text("subscriptionPlan"),
+  subscriptionEndDate: integer("subscriptionEndDate"),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
+export const categories = sqliteTable("categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  contentType: varchar("contentType", { length: 32 }).default("photos").notNull(),
-  icon: varchar("icon", { length: 32 }),
-  color: varchar("color", { length: 7 }),
+  localId: text("localId").notNull(),
+  name: text("name").notNull(),
+  contentType: text("contentType").default("photos").notNull(),
+  icon: text("icon"),
+  color: text("color"),
   sortOrder: integer("sortOrder").default(0).notNull(),
-  isSystem: boolean("isSystem").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  isSystem: integer("isSystem", { mode: "boolean" }).default(false).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type Category = typeof categories.$inferSelect;
 export type InsertCategory = typeof categories.$inferInsert;
 
-export const albums = pgTable("albums", {
-  id: serial("id").primaryKey(),
+export const albums = sqliteTable("albums", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  categoryLocalId: varchar("categoryLocalId", { length: 64 }),
-  name: varchar("name", { length: 255 }).notNull(),
+  localId: text("localId").notNull(),
+  categoryLocalId: text("categoryLocalId"),
+  name: text("name").notNull(),
   description: text("description"),
-  contentType: varchar("contentType", { length: 32 }).default("photos").notNull(),
-  coverPhotoLocalId: varchar("coverPhotoLocalId", { length: 64 }),
+  contentType: text("contentType").default("photos").notNull(),
+  coverPhotoLocalId: text("coverPhotoLocalId"),
   sortOrder: integer("sortOrder").default(0).notNull(),
   photoCount: integer("photoCount").default(0).notNull(),
-  isSystem: boolean("isSystem").default(false).notNull(),
-  isPrivate: boolean("isPrivate").default(false).notNull(),
-  privatePassword: varchar("privatePassword", { length: 255 }),
+  isSystem: integer("isSystem", { mode: "boolean" }).default(false).notNull(),
+  isPrivate: integer("isPrivate", { mode: "boolean" }).default(false).notNull(),
+  privatePassword: text("privatePassword"),
   framesData: text("framesData"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type Album = typeof albums.$inferSelect;
 export type InsertAlbum = typeof albums.$inferInsert;
 
-export const photoMetadata = pgTable("photoMetadata", {
-  id: serial("id").primaryKey(),
+export const photoMetadata = sqliteTable("photoMetadata", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  albumLocalId: varchar("albumLocalId", { length: 64 }),
-  fileName: varchar("fileName", { length: 255 }),
-  mediaType: varchar("mediaType", { length: 32 }).default("photo").notNull(),
-  mimeType: varchar("mimeType", { length: 128 }),
-  fileSize: bigint("fileSize", { mode: "number" }),
+  localId: text("localId").notNull(),
+  albumLocalId: text("albumLocalId"),
+  fileName: text("fileName"),
+  mediaType: text("mediaType").default("photo").notNull(),
+  mimeType: text("mimeType"),
+  fileSize: integer("fileSize"),
   width: integer("width"),
   height: integer("height"),
-  fileHash: varchar("fileHash", { length: 64 }),
+  fileHash: text("fileHash"),
   position: integer("position").default(0).notNull(),
   rotation: integer("rotation").default(0).notNull(),
   cropData: text("cropData"),
   scale: real("scale").default(1),
-  title: varchar("title", { length: 255 }),
+  title: text("title"),
   caption: text("caption"),
   tags: text("tags"),
   rating: integer("rating"),
-  isFavorite: boolean("isFavorite").default(false).notNull(),
-  dateTaken: timestamp("dateTaken"),
+  isFavorite: integer("isFavorite", { mode: "boolean" }).default(false).notNull(),
+  dateTaken: integer("dateTaken", { mode: "timestamp" }),
   gpsLatitude: real("gpsLatitude"),
   gpsLongitude: real("gpsLongitude"),
-  cameraModel: varchar("cameraModel", { length: 128 }),
-  thumbnailUrl: varchar("thumbnailUrl", { length: 512 }),
-  thumbnailKey: varchar("thumbnailKey", { length: 255 }),
-  isDeleted: boolean("isDeleted").default(false).notNull(),
-  deletedAt: timestamp("deletedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  cameraModel: text("cameraModel"),
+  thumbnailUrl: text("thumbnailUrl"),
+  thumbnailKey: text("thumbnailKey"),
+  isDeleted: integer("isDeleted", { mode: "boolean" }).default(false).notNull(),
+  deletedAt: integer("deletedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type PhotoMetadata = typeof photoMetadata.$inferSelect;
 export type InsertPhotoMetadata = typeof photoMetadata.$inferInsert;
 
-export const userSettings = pgTable("userSettings", {
-  id: serial("id").primaryKey(),
+export const userSettings = sqliteTable("userSettings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull().unique(),
-  displayMode: varchar("displayMode", { length: 32 }).default("normal"),
+  displayMode: text("displayMode").default("normal"),
   thumbnailSize: integer("thumbnailSize").default(150),
-  themeColor: varchar("themeColor", { length: 7 }).default("#2563eb"),
-  backgroundTexture: varchar("backgroundTexture", { length: 64 }),
-  language: varchar("language", { length: 5 }).default("fr"),
-  defaultPhotoSort: varchar("defaultPhotoSort", { length: 32 }).default("date"),
-  defaultSortOrder: varchar("defaultSortOrder", { length: 4 }).default("desc"),
-  autoCreateThumbnails: boolean("autoCreateThumbnails").default(true),
-  detectDuplicates: boolean("detectDuplicates").default(true),
-  readExifData: boolean("readExifData").default(true),
+  themeColor: text("themeColor").default("#2563eb"),
+  backgroundTexture: text("backgroundTexture"),
+  language: text("language").default("fr"),
+  defaultPhotoSort: text("defaultPhotoSort").default("date"),
+  defaultSortOrder: text("defaultSortOrder").default("desc"),
+  autoCreateThumbnails: integer("autoCreateThumbnails", { mode: "boolean" }).default(true),
+  detectDuplicates: integer("detectDuplicates", { mode: "boolean" }).default(true),
+  readExifData: integer("readExifData", { mode: "boolean" }).default(true),
   additionalSettings: text("additionalSettings"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = typeof userSettings.$inferInsert;
 
-export const projects = pgTable("projects", {
-  id: serial("id").primaryKey(),
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
+  localId: text("localId").notNull(),
+  name: text("name").notNull(),
   canvasElements: text("canvasElements"),
   canvasData: text("canvasData"),
   photos: text("photos"),
-  canvasFormat: varchar("canvasFormat", { length: 64 }),
+  canvasFormat: text("canvasFormat"),
   canvasFormatWidth: integer("canvasFormatWidth"),
   canvasFormatHeight: integer("canvasFormatHeight"),
   thumbnail: text("thumbnail"),
-  projectType: varchar("projectType", { length: 64 }),
-  projectCategory: varchar("projectCategory", { length: 32 }),
+  projectType: text("projectType"),
+  projectCategory: text("projectCategory"),
   collecteurData: text("collecteurData"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 
-export const projectVersions = pgTable("projectVersions", {
-  id: serial("id").primaryKey(),
+export const projectVersions = sqliteTable("projectVersions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   projectId: integer("projectId").notNull(),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  name: varchar("name", { length: 255 }),
+  localId: text("localId").notNull(),
+  name: text("name"),
   canvasElements: text("canvasElements"),
   canvasData: text("canvasData"),
   photos: text("photos"),
-  canvasFormat: varchar("canvasFormat", { length: 64 }),
+  canvasFormat: text("canvasFormat"),
   canvasFormatWidth: integer("canvasFormatWidth"),
   canvasFormatHeight: integer("canvasFormatHeight"),
   thumbnail: text("thumbnail"),
-  projectType: varchar("projectType", { length: 64 }),
-  projectCategory: varchar("projectCategory", { length: 32 }),
+  projectType: text("projectType"),
+  projectCategory: text("projectCategory"),
   collecteurData: text("collecteurData"),
-  savedAt: timestamp("savedAt").defaultNow().notNull(),
+  savedAt: integer("savedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type ProjectVersion = typeof projectVersions.$inferSelect;
 export type InsertProjectVersion = typeof projectVersions.$inferInsert;
 
-export const bibliothequeItems = pgTable("bibliothequeItems", {
-  id: serial("id").primaryKey(),
+export const bibliothequeItems = sqliteTable("bibliothequeItems", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  localId: varchar("localId", { length: 64 }).notNull(),
-  category: varchar("category", { length: 64 }).notNull(),
-  type: varchar("type", { length: 64 }),
-  name: varchar("name", { length: 255 }).notNull(),
+  localId: text("localId").notNull(),
+  category: text("category").notNull(),
+  type: text("type"),
+  name: text("name").notNull(),
   url: text("url"),
   thumbnail: text("thumbnail"),
   fullImage: text("fullImage"),
-  sourcePhotoId: varchar("sourcePhotoId", { length: 64 }),
-  addedAt: bigint("addedAt", { mode: "number" }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-  syncTimestamp: bigint("syncTimestamp", { mode: "number" }),
+  sourcePhotoId: text("sourcePhotoId"),
+  addedAt: integer("addedAt"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  syncTimestamp: integer("syncTimestamp"),
 });
 
 export type BibliothequeItem = typeof bibliothequeItems.$inferSelect;
 export type InsertBibliothequeItem = typeof bibliothequeItems.$inferInsert;
 
-export const syncLog = pgTable("syncLog", {
-  id: serial("id").primaryKey(),
+export const syncLog = sqliteTable("syncLog", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  entityType: varchar("entityType", { length: 32 }).notNull(),
-  entityLocalId: varchar("entityLocalId", { length: 64 }).notNull(),
-  action: varchar("action", { length: 32 }).notNull(),
+  entityType: text("entityType").notNull(),
+  entityLocalId: text("entityLocalId").notNull(),
+  action: text("action").notNull(),
   previousData: text("previousData"),
   newData: text("newData"),
-  deviceFingerprint: varchar("deviceFingerprint", { length: 128 }),
-  timestamp: bigint("timestamp", { mode: "number" }).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  deviceFingerprint: text("deviceFingerprint"),
+  timestamp: integer("timestamp").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type SyncLog = typeof syncLog.$inferSelect;
 export type InsertSyncLog = typeof syncLog.$inferInsert;
 
-export const licenses = pgTable("licenses", {
-  id: serial("id").primaryKey(),
-  licenseCode: varchar("licenseCode", { length: 32 }).notNull().unique(),
+export const licenses = sqliteTable("licenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  licenseCode: text("licenseCode").notNull().unique(),
   userId: integer("userId"),
-  email: varchar("email", { length: 320 }),
-  deviceFingerprint: varchar("deviceFingerprint", { length: 128 }),
-  deviceName: varchar("deviceName", { length: 255 }),
-  licenseType: varchar("licenseType", { length: 32 }).default("lifetime").notNull(),
-  status: varchar("status", { length: 32 }).default("pending").notNull(),
-  activatedAt: timestamp("activatedAt"),
-  expiresAt: timestamp("expiresAt"),
+  email: text("email"),
+  deviceFingerprint: text("deviceFingerprint"),
+  deviceName: text("deviceName"),
+  licenseType: text("licenseType").default("lifetime").notNull(),
+  status: text("status").default("pending").notNull(),
+  activatedAt: integer("activatedAt", { mode: "timestamp" }),
+  expiresAt: integer("expiresAt", { mode: "timestamp" }),
   transferCount: integer("transferCount").default(0).notNull(),
   maxTransfers: integer("maxTransfers").default(3).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type License = typeof licenses.$inferSelect;
 export type InsertLicense = typeof licenses.$inferInsert;
 
-export const licenseHistory = pgTable("licenseHistory", {
-  id: serial("id").primaryKey(),
+export const licenseHistory = sqliteTable("licenseHistory", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   licenseId: integer("licenseId").notNull(),
-  eventType: varchar("eventType", { length: 32 }).notNull(),
-  deviceFingerprint: varchar("deviceFingerprint", { length: 128 }),
-  deviceName: varchar("deviceName", { length: 255 }),
-  ipAddress: varchar("ipAddress", { length: 45 }),
+  eventType: text("eventType").notNull(),
+  deviceFingerprint: text("deviceFingerprint"),
+  deviceName: text("deviceName"),
+  ipAddress: text("ipAddress"),
   details: text("details"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type LicenseHistory = typeof licenseHistory.$inferSelect;
 export type InsertLicenseHistory = typeof licenseHistory.$inferInsert;
 
-export const passwordResetTokens = pgTable("passwordResetTokens", {
-  id: serial("id").primaryKey(),
+export const passwordResetTokens = sqliteTable("passwordResetTokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
-  token: varchar("token", { length: 64 }).notNull().unique(),
-  expiresAt: timestamp("expiresAt").notNull(),
-  usedAt: timestamp("usedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
+  usedAt: integer("usedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
@@ -250,13 +250,13 @@ export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 
 // ==================== MODÈLES PARTAGÉS ====================
 
-export const sharedModeles = pgTable("sharedModeles", {
-  id: serial("id").primaryKey(),
-  category: varchar("category", { length: 64 }).notNull(), // "passe-partout" | "pele-mele"
-  filename: varchar("filename", { length: 255 }).notNull(),
+export const sharedModeles = sqliteTable("sharedModeles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  category: text("category").notNull(), // "passe-partout" | "pele-mele"
+  filename: text("filename").notNull(),
   imageData: text("imageData").notNull(), // base64 data URL
   uploadedBy: integer("uploadedBy").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type SharedModele = typeof sharedModeles.$inferSelect;
@@ -264,14 +264,14 @@ export type InsertSharedModele = typeof sharedModeles.$inferInsert;
 
 // ==================== ADRESSES UTILES ====================
 
-export const usefulLinks = pgTable("usefulLinks", {
-  id: serial("id").primaryKey(),
-  title: varchar("title", { length: 255 }).notNull(),
+export const usefulLinks = sqliteTable("usefulLinks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
   description: text("description").default("").notNull(),
   url: text("url").notNull(),
-  tags: jsonb("tags").default([]).notNull(), // string[]
+  tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
   ordre: integer("ordre").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type UsefulLink = typeof usefulLinks.$inferSelect;

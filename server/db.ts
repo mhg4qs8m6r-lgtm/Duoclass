@@ -1,25 +1,16 @@
 import { eq, and, gt, isNull } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import Database from "better-sqlite3";
 import crypto from "crypto";
+import path from "path";
 import { users, passwordResetTokens } from "../drizzle/schema";
 import type { User, PasswordResetToken } from "../drizzle/schema";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+const dbPath = process.env.SQLITE_PATH ?? path.resolve("./duoclass.db");
+const sqlite = new Database(dbPath);
+const _db = drizzle(sqlite);
 
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      const pool = new pg.Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false },
-      });
-      _db = drizzle(pool);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
-  }
+export function getDb() {
   return _db;
 }
 
@@ -30,8 +21,7 @@ export async function createUser(data: {
   loginMethod: string;
   role?: string;
 }): Promise<User> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = getDb();
 
   const [user] = await db
     .insert(users)
@@ -49,22 +39,19 @@ export async function createUser(data: {
 }
 
 export async function getUserById(id: number): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
+  const db = getDb();
   const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result[0];
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
+  const db = getDb();
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return result[0];
 }
 
 export async function updateLastSignedIn(userId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+  const db = getDb();
   await db
     .update(users)
     .set({ lastSignedIn: new Date(), updatedAt: new Date() })
@@ -72,8 +59,7 @@ export async function updateLastSignedIn(userId: number): Promise<void> {
 }
 
 export async function updatePassword(userId: number, passwordHash: string): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = getDb();
   await db
     .update(users)
     .set({ passwordHash, updatedAt: new Date() })
@@ -85,8 +71,7 @@ export async function updatePassword(userId: number, passwordHash: string): Prom
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 heure
 
 export async function createPasswordResetToken(userId: number): Promise<string> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = getDb();
 
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
@@ -99,8 +84,7 @@ export async function createPasswordResetToken(userId: number): Promise<string> 
 export async function validatePasswordResetToken(
   token: string
 ): Promise<PasswordResetToken | null> {
-  const db = await getDb();
-  if (!db) return null;
+  const db = getDb();
 
   const [row] = await db
     .select()
@@ -118,8 +102,7 @@ export async function validatePasswordResetToken(
 }
 
 export async function markPasswordResetTokenUsed(token: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+  const db = getDb();
   await db
     .update(passwordResetTokens)
     .set({ usedAt: new Date() })

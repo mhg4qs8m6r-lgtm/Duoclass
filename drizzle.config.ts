@@ -1,16 +1,13 @@
 import { defineConfig } from "drizzle-kit";
+import path from "path";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required to run drizzle commands");
-}
+const dbPath = process.env.SQLITE_PATH ?? path.resolve("./duoclass.db");
 
 export default defineConfig({
   schema: "./drizzle/schema.ts",
-  out: "./drizzle",
-  dialect: "postgresql",
-    dbCredentials: {
-    url: connectionString,
-    ssl: true,
+  out: "./drizzle/migrations-sqlite",
+  dialect: "sqlite",
+  dbCredentials: {
+    url: dbPath,
   },
 });
