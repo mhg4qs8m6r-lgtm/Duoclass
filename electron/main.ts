@@ -18,12 +18,13 @@ if (!process.env.JWT_SECRET) {
 }
 
 // ─── Server ───────────────────────────────────────────────────────────────────
-// Imported after env vars are set so lazy inits in db.ts / local-storage.ts
-// pick up the correct paths on first use.
-import { startServer } from "../server/_core/index";
+// Uses electron/server.ts (no Vite dependency) instead of server/_core/index.ts.
+// server/_core/index.ts imports vite which is ESM-only and cannot be require()'d
+// from a CJS bundle.
+import { startServer } from "./server";
 
 // ─── Window ───────────────────────────────────────────────────────────────────
-const PRELOAD_PATH = path.join(__dirname, "preload.js");
+const PRELOAD_PATH = path.join(__dirname, "preload.cjs");
 
 let mainWindow: BrowserWindow | null = null;
 

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "main": "dist/electron/main.js",
+  "main": "dist/electron/main.cjs",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/dev-entry.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
@@ -12,10 +12,10 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "electron:build-main": "esbuild electron/main.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/main.js",
-    "electron:build-preload": "esbuild electron/preload.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/preload.js",
+    "electron:build-main": "esbuild electron/main.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/main.cjs",
+    "electron:build-preload": "esbuild electron/preload.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/preload.cjs",
     "electron:build": "pnpm electron:build-main && pnpm electron:build-preload",
-    "electron:dev": "NODE_ENV=development pnpm electron:build && electron dist/electron/main.js",
+    "electron:dev": "vite build && pnpm electron:build && electron dist/electron/main.cjs",
     "electron:dist": "vite build && pnpm electron:build && electron-builder"
   },
   "dependencies": {
