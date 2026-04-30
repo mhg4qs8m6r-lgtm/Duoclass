@@ -11,6 +11,7 @@ main: dist/electron/main.cjs
 files:
   - dist/electron/**
   - dist/public/**
+  - drizzle/migrations-sqlite/**
   - node_modules/**
   - package.json
 

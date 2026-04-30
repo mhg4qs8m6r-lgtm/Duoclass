@@ -10,8 +10,10 @@ import net from "net";
 import fs from "fs";
 import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { appRouter } from "../server/routers";
 import { createContext } from "../server/_core/context";
+import { getDb } from "../server/db";
 import { getUploadRoot } from "../server/local-storage";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -33,6 +35,16 @@ export async function startServer(): Promise<number> {
   if (!process.env.JWT_SECRET) {
     console.error("[Electron] FATAL: JWT_SECRET not set. Auth will not work.");
   }
+
+  // Run SQLite migrations synchronously before accepting requests.
+  // Path works both in dev (dist/electron/ → ../../drizzle/migrations-sqlite)
+  // and in a packaged app (same relative structure, migrations included via electron-builder.yml).
+  const migrationsFolder =
+    process.env.MIGRATIONS_PATH ??
+    path.join(__dirname, "../../drizzle/migrations-sqlite");
+  console.log(`[Electron] Running migrations from ${migrationsFolder}`);
+  migrate(getDb(), { migrationsFolder });
+  console.log("[Electron] Migrations applied.");
 
   const app = express();
   const server = createServer(app);
