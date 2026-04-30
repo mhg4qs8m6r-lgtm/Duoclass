@@ -55,6 +55,28 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
   return result[0];
 }
 
+/**
+ * Retourne l'utilisateur local unique (Electron).
+ * Le crée automatiquement au premier lancement si la table est vide.
+ */
+export async function getOrCreateLocalUser(): Promise<User> {
+  const db = getDb();
+  const existing = await db.select().from(users).limit(1);
+  if (existing[0]) return existing[0];
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: "local@duoclass",
+      name: "Utilisateur local",
+      passwordHash: "",
+      loginMethod: "local",
+      role: "admin",
+      lastSignedIn: new Date(),
+    })
+    .returning();
+  return user;
+}
+
 export async function updateLastSignedIn(userId: number): Promise<void> {
   const db = getDb();
   await db

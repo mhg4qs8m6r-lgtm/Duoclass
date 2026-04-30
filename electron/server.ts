@@ -10,7 +10,6 @@ import net from "net";
 import fs from "fs";
 import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "../server/_core/oauth";
 import { appRouter } from "../server/routers";
 import { createContext } from "../server/_core/context";
 import { getUploadRoot } from "../server/local-storage";
@@ -42,7 +41,6 @@ export async function startServer(): Promise<number> {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use("/uploads", express.static(getUploadRoot()));
 
-  registerOAuthRoutes(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
 
   // Serve the Vite build. In the CJS bundle __dirname = dist/electron/,
