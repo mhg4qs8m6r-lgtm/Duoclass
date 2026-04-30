@@ -40,7 +40,7 @@ async function createWindow(port: number): Promise<void> {
     },
   });
 
-  await mainWindow.loadURL(`http://localhost:${port}`);
+  await mainWindow.loadURL(`http://localhost:${port}/albums`);
 
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();

@@ -276,17 +276,10 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <Button
-              variant="ghost"
-              className="text-gray-600 hover:text-orange-600"
-              onClick={handleLogin}
-            >
-              {fr ? "Se connecter" : "Sign in"}
-            </Button>
-            <Button
               className="bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:from-orange-600 hover:to-pink-600 shadow-md shadow-orange-200"
-              onClick={handleStartFree}
+              onClick={() => setLocation("/albums")}
             >
-              {fr ? "Essai gratuit" : "Free trial"}
+              {fr ? "Ouvrir DuoClass" : "Open DuoClass"}
             </Button>
           </div>
         </div>
