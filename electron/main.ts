@@ -29,6 +29,21 @@ const PRELOAD_PATH = path.join(__dirname, "preload.cjs");
 
 let mainWindow: BrowserWindow | null = null;
 
+/** Attend que le serveur Express réponde (max 10s, polling 200ms). */
+async function waitForServer(port: number): Promise<void> {
+  const url = `http://localhost:${port}/`;
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      await fetch(url);
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  console.warn("[Electron] Server did not respond in 10s — loading anyway.");
+}
+
 async function createWindow(port: number): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -40,6 +55,7 @@ async function createWindow(port: number): Promise<void> {
     },
   });
 
+  await waitForServer(port);
   await mainWindow.loadURL(`http://localhost:${port}/albums`);
 
   if (!app.isPackaged) {
