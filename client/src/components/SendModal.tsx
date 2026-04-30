@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Mail } from 'lucide-react';
 import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
-import { trpc } from '@/lib/trpc';
 
 interface PhotoToSend {
   filename: string;
@@ -25,7 +24,7 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('Photos partagées depuis DuoClass');
   const [message, setMessage] = useState('Voici les photos que je souhaite partager avec vous.');
-  const sendMutation = trpc.email.sendPhotos.useMutation();
+  const [sending, setSending] = useState(false);
 
   const itemCount = photos.length;
 
@@ -38,22 +37,13 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
       toast.error(language === "fr" ? "Adresse email invalide" : "Invalid email address");
       return;
     }
-
-    try {
-      await sendMutation.mutateAsync({
-        to: email,
-        subject,
-        message,
-        photos,
-      });
-      toast.success(language === 'fr' ? `Photos envoyées avec succès à ${email}` : `Photos sent successfully to ${email}`);
-      onClose();
-      setEmail('');
-      setMessage('Voici les photos que je souhaite partager avec vous.');
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
-      toast.error(language === 'fr' ? `Erreur d'envoi : ${errorMsg}` : `Send error: ${errorMsg}`);
-    }
+    setSending(true);
+    // Envoi SMTP non disponible en mode Electron local.
+    toast.info(language === 'fr'
+      ? "L'envoi par email n'est pas disponible en mode local."
+      : "Email sending is not available in local mode.");
+    setSending(false);
+    onClose();
   };
 
   return (
@@ -120,18 +110,9 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{language === 'fr' ? 'Annuler' : 'Cancel'}</Button>
-          <Button onClick={handleSend} disabled={sendMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
-            {sendMutation.isPending ? (
-              <>
-                <span className="animate-spin mr-2">&#9203;</span>
-                {language === 'fr' ? 'Envoi...' : 'Sending...'}
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4 mr-2" />
-                {language === 'fr' ? 'Envoyer' : 'Send'}
-              </>
-            )}
+          <Button onClick={handleSend} disabled={sending} className="bg-blue-600 hover:bg-blue-700">
+            <Send className="w-4 h-4 mr-2" />
+            {language === 'fr' ? 'Envoyer' : 'Send'}
           </Button>
         </DialogFooter>
       </DialogContent>
