@@ -5,10 +5,11 @@ import crypto from "crypto";
 // ─── Paths Electron (set BEFORE server modules are imported) ──────────────────
 // server/db.ts and server/local-storage.ts read these env vars lazily (on first
 // request), so setting them here is safe even though imports are hoisted.
+// Toujours stocker dans userData (packaged ou dev), jamais dans le CWD.
+process.env.SQLITE_PATH ??= path.join(app.getPath("userData"), "duoclass.db");
+process.env.UPLOAD_DIR  ??= path.join(app.getPath("userData"), "uploads");
 if (app.isPackaged) {
   process.env.NODE_ENV = "production";
-  process.env.SQLITE_PATH = path.join(app.getPath("userData"), "duoclass.db");
-  process.env.UPLOAD_DIR = path.join(app.getPath("userData"), "uploads");
 }
 
 // Generate a session secret if none is provided (dev convenience).
