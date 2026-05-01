@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import path from "path";
 import crypto from "crypto";
+import fs from "fs";
 
 // ─── Paths Electron (set BEFORE server modules are imported) ──────────────────
 // server/db.ts and server/local-storage.ts read these env vars lazily (on first
@@ -60,6 +61,16 @@ async function createWindow(port: number): Promise<void> {
 
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
+
+    // Rechargement automatique quand Vite rebuild (mode watch)
+    const distDir = path.join(__dirname, "..", "client");
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    fs.watch(distDir, { recursive: true }, () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        mainWindow?.webContents.reload();
+      }, 300);
+    });
   }
 
   mainWindow.on("closed", () => {

@@ -16,6 +16,7 @@
     "electron:build-preload": "esbuild electron/preload.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/electron/preload.cjs",
     "electron:build": "pnpm electron:build-main && pnpm electron:build-preload",
     "electron:dev": "vite build && pnpm electron:build && electron dist/electron/main.cjs",
+    "electron:watch": "pnpm electron:build && concurrently -n vite,electron -c cyan,magenta \"vite build --watch\" \"electron dist/electron/main.cjs\"",
     "electron:dist": "vite build && pnpm electron:build && electron-builder",
     "electron:rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
@@ -128,6 +129,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "add": "^2.0.6",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.4",
     "electron": "^34.0.0",
     "electron-builder": "^25.0.0",
