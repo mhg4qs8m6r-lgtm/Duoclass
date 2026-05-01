@@ -47,6 +47,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { db } from "@/db";
 import { toast } from "sonner";
 import BibliothequeModeles from "./BibliothequeModeles";
+import { BASE_COLORS, COLOR_PALETTE } from "@/lib/colorPalette";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -718,6 +719,38 @@ function PassePartoutSection({
               <Label className="text-xs font-semibold text-gray-700">
                 {fr ? "1 - Couleur unie" : "1 - Solid color"}
               </Label>
+
+              {/* Palette complète — identique à Thèmes Interface */}
+              <div className="max-h-36 overflow-y-auto rounded border border-gray-200 p-1.5 bg-gray-50">
+                {/* Rangée de base */}
+                <div className="flex flex-wrap gap-0.5 mb-1 pb-1 border-b border-gray-200">
+                  {BASE_COLORS.map((c, i) => (
+                    <button
+                      key={`base-${i}`}
+                      type="button"
+                      onClick={() => setBgColor(c)}
+                      className={`w-5 h-5 rounded-full border-2 transition-all hover:scale-110 ${bgColor === c ? "border-pink-500 scale-110" : "border-transparent"}`}
+                      style={{ backgroundColor: c, boxShadow: '0 0 0 1px #ccc' }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+                {/* Grille pastels */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: '2px' }}>
+                  {COLOR_PALETTE.map((c, i) => (
+                    <button
+                      key={`pal-${i}`}
+                      type="button"
+                      onClick={() => setBgColor(c)}
+                      className={`w-full aspect-square border-2 transition-all hover:scale-110 ${bgColor === c ? "border-pink-500 scale-110" : "border-transparent"}`}
+                      style={{ backgroundColor: c }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Sélecteur personnalisé */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-shrink-0">
                   <input
@@ -734,7 +767,6 @@ function PassePartoutSection({
                 >
                   {fr ? "Appliquer la couleur" : "Apply color"}
                 </Button>
-
               </div>
             </div>
 

@@ -801,13 +801,6 @@ export default function MiseEnPageTab({
                 </h3>
 
                 <div className="space-y-3">
-                  <input
-                    type="color"
-                    value={pageBackgroundColor}
-                    onChange={(e) => setPageBackgroundColor(e.target.value)}
-                    className="w-full h-12 rounded cursor-pointer"
-                  />
-                  
                   {/* Couleurs prédéfinies */}
                   <div className="flex gap-2 flex-wrap">
                     {["#FFFFFF", "#F5F5F5", "#FFFBEB", "#FEF3C7", "#ECFDF5", "#F0FDF4", "#EFF6FF", "#FDF2F8", "#1A1A1A"].map((color) => (
@@ -821,6 +814,14 @@ export default function MiseEnPageTab({
                       />
                     ))}
                   </div>
+
+                  {/* Sélecteur personnalisé */}
+                  <input
+                    type="color"
+                    value={pageBackgroundColor}
+                    onChange={(e) => setPageBackgroundColor(e.target.value)}
+                    className="w-full h-12 rounded cursor-pointer"
+                  />
                 </div>
               </div>
             </div>

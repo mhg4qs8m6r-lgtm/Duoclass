@@ -17,6 +17,7 @@ import {
   X,
   Play,
   Image as ImageLucide,
+  Lock,
 } from "lucide-react";
 
 import photo1 from "@/assets/photo 1.jpeg";
@@ -376,6 +377,20 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ───── Privacy Banner ───── */}
+      <div className="px-4 pb-2">
+        <div className="container mx-auto max-w-3xl">
+          <div className="flex items-center gap-5 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-7 py-5 shadow-md">
+            <Lock className="w-9 h-9 shrink-0 text-emerald-600" />
+            <p className="text-base font-semibold text-emerald-900 leading-snug">
+              {fr
+                ? "🔒 Vos données restent sur votre appareil — photos, documents et albums ne quittent jamais votre Mac."
+                : "🔒 Your data stays on your device — photos, documents and albums never leave your Mac."}
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* ───── Screenshots Grid ───── */}
       <section className="py-8 px-4">
