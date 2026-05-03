@@ -3837,21 +3837,54 @@ export default function CreationsAtelierV2({
       xCm = Math.max(0, Math.min(xCm, formatWidthCm - widthCm));
       yCm = Math.max(0, Math.min(yCm, formatHeightCm - heightCm));
 
+      // Si un papier pêle-mêle existe, détecter si le drop tombe dans un trou
+      // et placer la photo derrière le papier (zIndex inférieur).
+      const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
+      let assignedHoleId: string | undefined;
+      let assignedZIndex = canvasElements.length + 1;
+
+      if (pelePaper) {
+        // La photo va TOUJOURS sous le papier
+        assignedZIndex = Math.max(1, (pelePaper.zIndex ?? 2) - 1);
+
+        // Si drop sur un trou → assigner et recadrer au trou
+        if (dropPositionCm && pelePaper.holes) {
+          const hit = pelePaper.holes.find(hole => {
+            const inX = dropPositionCm!.x >= hole.x && dropPositionCm!.x <= hole.x + hole.w;
+            const inY = dropPositionCm!.y >= hole.y && dropPositionCm!.y <= hole.y + hole.h;
+            return inX && inY;
+          });
+          if (hit) {
+            assignedHoleId = hit.id;
+            // Recadrer la photo pour remplir le trou tout en conservant les proportions
+            const scaleW = hit.w / widthCm;
+            const scaleH = hit.h / heightCm;
+            const scale = Math.max(scaleW, scaleH);
+            widthCm = widthCm * scale;
+            heightCm = heightCm * scale;
+            // Centrer sur le trou
+            xCm = hit.x + (hit.w - widthCm) / 2;
+            yCm = hit.y + (hit.h - heightCm) / 2;
+          }
+        }
+      }
+
       const newElement: CanvasElement = {
         id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: "image",
         src,
-        x: xCm, // Position en cm
-        y: yCm, // Position en cm
-        width: widthCm, // Largeur en cm
-        height: heightCm, // Hauteur en cm
+        x: xCm,
+        y: yCm,
+        width: widthCm,
+        height: heightCm,
         rotation: 0,
-        zIndex: canvasElements.length + 1,
+        zIndex: assignedZIndex,
         opacity: 1,
         name: name || (language === 'fr' ? 'Élément' : 'Element'),
         originalWidthPx: img.naturalWidth,
         originalHeightPx: img.naturalHeight,
         ...(assignGroupId ? { groupId: assignGroupId } : {}),
+        ...(assignedHoleId ? { assignedHoleId } : {}),
       };
       setCanvasElements(prev => [...prev, newElement]);
       setSelectedElementId(newElement.id);
@@ -7700,6 +7733,7 @@ export default function CreationsAtelierV2({
                       })()
                     ) : null}
                     {/* Rendu spécial pour shape='line' : SVG absolu couvrant toute la page */}
+                    {/* pelemele-paper est rendu uniquement via le SVG ci-dessus — ne pas tomber dans le div normal */}
                     {element.type === 'shape' && element.shape === 'line' ? (
                       <svg
                         key={element.id}
@@ -7820,7 +7854,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : (
+                    ) : element.type === 'pelemele-paper' ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
@@ -7839,6 +7873,19 @@ export default function CreationsAtelierV2({
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
+                        // Photo assignée à un trou : clipper visuellement à la forme du trou
+                        ...(element.assignedHoleId ? (() => {
+                          const paper = canvasElements.find(el => el.type === 'pelemele-paper');
+                          const hole = paper?.holes?.find(h => h.id === element.assignedHoleId);
+                          if (!hole) return {};
+                          // Coordonnées du trou relatives à la photo (en pixels)
+                          const ox = (hole.x - element.x) * pxPerCm;
+                          const oy = (hole.y - element.y) * pxPerCm;
+                          const hw = hole.w * pxPerCm;
+                          const hh = hole.h * pxPerCm;
+                          // Clip simple en rect pour tous les types (le papier gère la forme précise)
+                          return { clipPath: `inset(${Math.max(0, oy)}px ${Math.max(0, elementWidthPx - ox - hw)}px ${Math.max(0, elementHeightPx - oy - hh)}px ${Math.max(0, ox)}px)` };
+                        })() : {}),
                         // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
                         outline: (
                           element.groupId && isInMultiSelection
