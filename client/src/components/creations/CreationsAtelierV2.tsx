@@ -6205,9 +6205,32 @@ export default function CreationsAtelierV2({
                     activeOpeningId={null}
                     selectedCanvasElementId={selectedElementId}
                     onAddBackground={(patternSrc, patternOpacity, bgColor) => {
-                      // Génère un rectangle plein couvrant exactement le format, sans découpe
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+
+                      // En contexte pêle-mêle : crée/met à jour le fond percé au lieu d'un fond image
+                      if (currentProjectType.includes('Pêle-mêle') && !patternSrc) {
+                        const existing = canvasElements.find(el => el.type === 'pelemele-paper');
+                        if (existing) {
+                          updateCanvasElement(existing.id, { openingColor: bgColor });
+                        } else {
+                          setCanvasElements(prev => [...prev, {
+                            id: `pm-paper-${Date.now()}`,
+                            type: 'pelemele-paper' as const,
+                            x: 0, y: 0,
+                            width: formatW, height: formatH,
+                            rotation: 0,
+                            zIndex: 2,
+                            opacity: 1,
+                            openingColor: bgColor,
+                            holes: [],
+                          }]);
+                        }
+                        toast.success(language === 'fr' ? 'Fond percé appliqué' : 'Perforated paper applied');
+                        return;
+                      }
+
+                      // Cas standard : génère un rectangle plein couvrant exactement le format
                       const canvas = document.createElement('canvas');
                       const DPI = 96;
                       const CM_TO_PX = DPI / 2.54;
@@ -7029,24 +7052,37 @@ export default function CreationsAtelierV2({
                       if (p) updateCanvasElement(p.id, { paperImageUrl: imageUrl ?? undefined });
                     }}
                     onPeleMeleAddHole={(shape) => {
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (!p) return;
                       const fmtW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
                       const w = Math.min(6, fmtW * 0.4);
                       const h = shape === 'square' || shape === 'round' ? w : Math.min(8, fmtH * 0.35);
-                      const existingHoles = p.holes || [];
-                      // Empiler les trous avec un léger décalage
-                      const offset = existingHoles.length * 0.5;
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
                       const newHole: HoleDescriptor = {
                         id: `hole-${Date.now()}`,
                         shape,
-                        x: (fmtW - w) / 2 + offset,
-                        y: (fmtH - h) / 2 + offset,
-                        w, h,
-                        rotation: 0,
+                        x: 0, y: 0, w, h, rotation: 0,
                       };
-                      updateCanvasElement(p.id, { holes: [...existingHoles, newHole] });
+
+                      if (!p) {
+                        // Auto-créer le papier avec le premier trou
+                        newHole.x = (fmtW - w) / 2;
+                        newHole.y = (fmtH - h) / 2;
+                        setCanvasElements(prev => [...prev, {
+                          id: `pm-paper-${Date.now()}`,
+                          type: 'pelemele-paper' as const,
+                          x: 0, y: 0,
+                          width: fmtW, height: fmtH,
+                          rotation: 0, zIndex: 2, opacity: 1,
+                          openingColor: '#f0e6d3',
+                          holes: [newHole],
+                        }]);
+                      } else {
+                        const existingHoles = p.holes || [];
+                        const offset = existingHoles.length * 0.5;
+                        newHole.x = (fmtW - w) / 2 + offset;
+                        newHole.y = (fmtH - h) / 2 + offset;
+                        updateCanvasElement(p.id, { holes: [...existingHoles, newHole] });
+                      }
                       setSelectedHoleId(newHole.id);
                     }}
                     onPeleMeleRemoveHole={(holeId) => {

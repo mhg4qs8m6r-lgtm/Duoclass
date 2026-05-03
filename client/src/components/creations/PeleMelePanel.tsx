@@ -99,52 +99,14 @@ export function PeleMelePanel({
 }: PeleMelePanelProps) {
   const fr = language === "fr";
   const [newHoleShape, setNewHoleShape] = useState<HoleDescriptor["shape"]>("rect");
-  const [colorInput, setColorInput] = useState(paper?.color ?? DEFAULT_PAPER_COLOR);
   const [showImageInput, setShowImageInput] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState(paper?.imageUrl ?? "");
-
-  // ── Pas de papier : écran de création ──────────────────────────────────────
-
-  if (!paper) {
-    return (
-      <div className="space-y-3 p-1">
-        <p className="text-xs text-gray-500 italic">
-          {fr
-            ? "Créez un fond percé : choisissez la couleur du papier, puis découpez des trous de la forme de votre choix."
-            : "Create a perforated background: choose the paper color, then cut holes in the shape you want."}
-        </p>
-
-        {/* Couleur initiale */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-600 whitespace-nowrap">
-            {fr ? "Couleur du papier" : "Paper color"}
-          </label>
-          <input
-            type="color"
-            value={colorInput}
-            onChange={(e) => setColorInput(e.target.value)}
-            className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-          />
-        </div>
-
-        <button
-          onClick={() => onCreatePaper(colorInput)}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 px-3 rounded-md transition-colors"
-        >
-          <Plus size={14} />
-          {fr ? "Créer le fond percé" : "Create perforated paper"}
-        </button>
-      </div>
-    );
-  }
-
-  // ── Papier existant : édition ───────────────────────────────────────────────
 
   return (
     <div className="space-y-4 p-1">
 
-      {/* ── Section : papier ── */}
-      <div className="space-y-2">
+      {/* ── Section : papier (seulement si un fond percé existe) ── */}
+      {paper && <div className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1">
           <Palette size={12} />
           {fr ? "Fond du papier" : "Paper background"}
@@ -221,7 +183,7 @@ export function PeleMelePanel({
           <Trash2 size={12} />
           {fr ? "Supprimer le fond percé" : "Remove perforated paper"}
         </button>
-      </div>
+      </div>}
 
       {/* ── Section : ajouter un trou ── */}
       <div className="space-y-2 border-t border-gray-200 pt-3">
@@ -261,7 +223,7 @@ export function PeleMelePanel({
       </div>
 
       {/* ── Section : liste des trous ── */}
-      {paper.holes.length > 0 && (
+      {paper && paper.holes.length > 0 && (
         <div className="space-y-2 border-t border-gray-200 pt-3">
           <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
             {fr ? `Trous (${paper.holes.length})` : `Holes (${paper.holes.length})`}
