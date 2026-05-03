@@ -7658,77 +7658,121 @@ export default function CreationsAtelierV2({
                     
                     return (
                     <>
-                    {/* Rendu pêle-mêle : papier percé via SVG mask + destination-out */}
+                    {/* Rendu pêle-mêle : papier percé via <canvas> + destination-out
+                        Le canvas est NATIVEMENT transparent là où destination-out a effacé,
+                        ce qui laisse les couches inférieures (photos) apparaître à travers. */}
                     {element.type === 'pelemele-paper' ? (
                       (() => {
                         const pageW = canvasDimensions.pageWidth;
                         const pageH = canvasDimensions.pageHeight;
-                        const maskId = `pm-mask-${element.id}`;
                         const holes = element.holes || [];
+                        // Clé de redraw : change quand le papier ou les trous changent
+                        const redrawKey = `${element.id}-${element.openingColor}-${element.paperImageUrl ?? ''}-${holes.map(h => `${h.id}${h.shape}${h.x}${h.y}${h.w}${h.h}${h.rotation}`).join('|')}-${selectedHoleId ?? ''}`;
+                        const canvasW = Math.round(pageW);
+                        const canvasH = Math.round(pageH);
+
+                        // Ref callback : dessine le papier + perce les trous à chaque montage
+                        const drawPaper = (canvas: HTMLCanvasElement | null) => {
+                          if (!canvas) return;
+                          const ctx = canvas.getContext('2d');
+                          if (!ctx) return;
+                          ctx.clearRect(0, 0, canvasW, canvasH);
+
+                          // 1. Remplir le papier (couleur ou image)
+                          const draw = () => {
+                            ctx.fillStyle = element.openingColor || '#f0e6d3';
+                            ctx.fillRect(0, 0, canvasW, canvasH);
+
+                            // 2. Percer les trous avec destination-out
+                            for (const hole of holes) {
+                              ctx.save();
+                              const hcx = (hole.x + hole.w / 2) * pxPerCm;
+                              const hcy = (hole.y + hole.h / 2) * pxPerCm;
+                              ctx.translate(hcx, hcy);
+                              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+                              ctx.globalCompositeOperation = 'destination-out';
+                              ctx.beginPath();
+                              drawHolePathCanvas(ctx, hole, pxPerCm);
+                              ctx.fill();
+                              ctx.restore();
+                            }
+
+                            // 3. Trait fin "crayon" autour de chaque trou
+                            ctx.globalCompositeOperation = 'source-over';
+                            for (const hole of holes) {
+                              ctx.save();
+                              const hcx = (hole.x + hole.w / 2) * pxPerCm;
+                              const hcy = (hole.y + hole.h / 2) * pxPerCm;
+                              ctx.translate(hcx, hcy);
+                              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+                              ctx.beginPath();
+                              drawHolePathCanvas(ctx, hole, pxPerCm);
+                              const isHoleSelected = selectedHoleId === hole.id;
+                              ctx.strokeStyle = isHoleSelected ? '#2563eb' : '#1a1a1a';
+                              ctx.lineWidth = isHoleSelected ? 1.5 : 0.8;
+                              ctx.globalAlpha = isHoleSelected ? 0.9 : 0.55;
+                              ctx.stroke();
+                              ctx.restore();
+                            }
+                          };
+
+                          if (element.paperImageUrl) {
+                            const img = new window.Image();
+                            img.onload = () => {
+                              ctx.drawImage(img, 0, 0, canvasW, canvasH);
+                              // Percer et tracer après le chargement de l'image
+                              for (const hole of holes) {
+                                ctx.save();
+                                const hcx = (hole.x + hole.w / 2) * pxPerCm;
+                                const hcy = (hole.y + hole.h / 2) * pxPerCm;
+                                ctx.translate(hcx, hcy);
+                                ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+                                ctx.globalCompositeOperation = 'destination-out';
+                                ctx.beginPath();
+                                drawHolePathCanvas(ctx, hole, pxPerCm);
+                                ctx.fill();
+                                ctx.restore();
+                              }
+                              ctx.globalCompositeOperation = 'source-over';
+                              for (const hole of holes) {
+                                ctx.save();
+                                const hcx = (hole.x + hole.w / 2) * pxPerCm;
+                                const hcy = (hole.y + hole.h / 2) * pxPerCm;
+                                ctx.translate(hcx, hcy);
+                                ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+                                ctx.beginPath();
+                                drawHolePathCanvas(ctx, hole, pxPerCm);
+                                const isHoleSelected = selectedHoleId === hole.id;
+                                ctx.strokeStyle = isHoleSelected ? '#2563eb' : '#1a1a1a';
+                                ctx.lineWidth = isHoleSelected ? 1.5 : 0.8;
+                                ctx.globalAlpha = isHoleSelected ? 0.9 : 0.55;
+                                ctx.stroke();
+                                ctx.restore();
+                              }
+                            };
+                            img.src = element.paperImageUrl;
+                          } else {
+                            draw();
+                          }
+                        };
+
                         return (
-                          <svg
-                            key={element.id}
+                          <canvas
+                            key={redrawKey}
+                            ref={drawPaper}
+                            width={canvasW}
+                            height={canvasH}
                             data-canvas-element="true"
-                            className="absolute"
                             style={{
+                              position: 'absolute',
                               left: 0, top: 0,
-                              width: pageW, height: pageH,
+                              width: canvasW,
+                              height: canvasH,
                               zIndex: element.zIndex,
                               opacity: element.opacity,
                               pointerEvents: 'none',
-                              overflow: 'visible',
                             }}
-                          >
-                            <defs>
-                              <mask id={maskId}>
-                                {/* Blanc = papier visible, noir = trou transparent */}
-                                <rect x="0" y="0" width={pageW} height={pageH} fill="white" />
-                                {holes.map(hole => {
-                                  const cx = (hole.x + hole.w / 2) * pxPerCm;
-                                  const cy = (hole.y + hole.h / 2) * pxPerCm;
-                                  return (
-                                    <g key={hole.id} transform={`rotate(${hole.rotation || 0},${cx},${cy})`}>
-                                      <path d={buildHoleSvgPathPx(hole, pxPerCm)} fill="black" />
-                                    </g>
-                                  );
-                                })}
-                              </mask>
-                            </defs>
-                            {/* Papier coloré ou image, percé par le mask */}
-                            {element.paperImageUrl ? (
-                              <image
-                                href={element.paperImageUrl}
-                                x="0" y="0"
-                                width={pageW} height={pageH}
-                                preserveAspectRatio="xMidYMid slice"
-                                mask={`url(#${maskId})`}
-                              />
-                            ) : (
-                              <rect
-                                x="0" y="0"
-                                width={pageW} height={pageH}
-                                fill={element.openingColor || '#f0e6d3'}
-                                mask={`url(#${maskId})`}
-                              />
-                            )}
-                            {/* Trait fin autour de chaque trou — "au crayon" */}
-                            {holes.map(hole => {
-                              const cx = (hole.x + hole.w / 2) * pxPerCm;
-                              const cy = (hole.y + hole.h / 2) * pxPerCm;
-                              const isHoleSelected = selectedHoleId === hole.id;
-                              return (
-                                <g key={`stroke-${hole.id}`} transform={`rotate(${hole.rotation || 0},${cx},${cy})`}>
-                                  <path
-                                    d={buildHoleSvgPathPx(hole, pxPerCm)}
-                                    fill="none"
-                                    stroke={isHoleSelected ? '#2563eb' : '#1a1a1a'}
-                                    strokeWidth={isHoleSelected ? 1.5 : 0.8}
-                                    opacity={isHoleSelected ? 0.9 : 0.55}
-                                  />
-                                </g>
-                              );
-                            })}
-                          </svg>
+                          />
                         );
                       })()
                     ) : null}
