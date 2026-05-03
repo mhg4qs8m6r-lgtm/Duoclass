@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import logoUrl from "@/assets/logo-duoclass.png";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -276,7 +277,7 @@ export default function Layout(props: LayoutProps) {
 
             <div className="flex items-center gap-3">
               <img
-                src="/assets/logo-duoclass.png"
+                src={logoUrl}
                 alt="DuoClass Logo"
                 className="w-[55px] h-[55px] object-contain shrink-0"
                 draggable={false}
