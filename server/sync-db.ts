@@ -763,6 +763,7 @@ export async function createSharedModele(data: {
   filename: string;
   imageData: string;
   uploadedBy: number;
+  slotsJson?: string | null;
 }): Promise<SharedModele | null> {
   const db = await getDb();
   if (!db) return null;

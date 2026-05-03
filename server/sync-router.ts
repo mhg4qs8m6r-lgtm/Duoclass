@@ -798,10 +798,10 @@ export const syncRouter = router({
     /** Tous les utilisateurs authentifiés peuvent lister les modèles */
     getAll: protectedProcedure.query(async () => {
       const items = await getAllSharedModeles();
-      const grouped: Record<string, Array<{ id: number; filename: string; imageData: string }>> = {};
+      const grouped: Record<string, Array<{ id: number; filename: string; imageData: string; slotsJson?: string | null }>> = {};
       for (const item of items) {
         if (!grouped[item.category]) grouped[item.category] = [];
-        grouped[item.category].push({ id: item.id, filename: item.filename, imageData: item.imageData });
+        grouped[item.category].push({ id: item.id, filename: item.filename, imageData: item.imageData, slotsJson: item.slotsJson });
       }
       return grouped;
     }),
@@ -812,6 +812,7 @@ export const syncRouter = router({
         category: z.enum(["passe-partout", "pele-mele", "cadres", "bordures"]),
         filename: z.string(),
         imageData: z.string(),
+        slotsJson: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const modele = await createSharedModele({
@@ -819,6 +820,7 @@ export const syncRouter = router({
           filename: input.filename,
           imageData: input.imageData,
           uploadedBy: ctx.user.id,
+          slotsJson: input.slotsJson ?? null,
         });
         return { success: !!modele, modele };
       }),

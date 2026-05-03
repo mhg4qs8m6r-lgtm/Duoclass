@@ -21,6 +21,7 @@ import { jsPDF } from "jspdf";
 // Import des panneaux d'outils (inline, pas de modales)
 import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
+import { type HoleDescriptor, type PeleMelePaperState } from "./PeleMelePanel";
 import Collecteur from "../Collecteur";
 
 interface CreationsAtelierProps {
@@ -51,7 +52,7 @@ const PAPER_FORMATS = [
 // Cela permet de garder des dimensions cohérentes quelle que soit l'orientation ou le zoom
 interface CanvasElement {
   id: string;
-  type: "image" | "text" | "shape";
+  type: "image" | "text" | "shape" | "pelemele-paper";
   src?: string;
   text?: string;
   x: number; // Position X en cm
@@ -112,6 +113,16 @@ interface CanvasElement {
    * Généré par l'éditeur de segments (incurvation / suppression de bords).
    */
   customPath?: string;
+
+  // ── Pêle-mêle (type === "pelemele-paper") ─────────────────────────────────
+  /** Trous découpés dans le papier */
+  holes?: HoleDescriptor[];
+  /** Image de fond du papier (optionnel, remplace openingColor) */
+  paperImageUrl?: string;
+
+  // ── Photo assignée à un trou pêle-mêle (type === "image") ─────────────────
+  /** ID du trou auquel cette photo est assignée */
+  assignedHoleId?: string;
 
 }
 
@@ -961,6 +972,10 @@ export default function CreationsAtelierV2({
   const [isDetourageSectionOpen, setIsDetourageSectionOpen] = useState(false);
   const [showAllTools, setShowAllTools] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // ── État pêle-mêle ────────────────────────────────────────────────────────
+  /** ID du trou pêle-mêle actuellement sélectionné dans le panneau */
+  const [selectedHoleId, setSelectedHoleId] = useState<string | null>(null);
 
   // Filtrage des outils selon le type de projet
   const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
@@ -2739,6 +2754,67 @@ export default function CreationsAtelierV2({
           continue;
         }
 
+        // --- Éléments de type 'pelemele-paper' (papier percé pêle-mêle) ---
+        if (element.type === 'pelemele-paper') {
+          const paperOffscreen = document.createElement('canvas');
+          paperOffscreen.width = outW;
+          paperOffscreen.height = outH;
+          const pc = paperOffscreen.getContext('2d');
+          if (pc) {
+            // 1. Remplir avec la couleur/image du papier
+            if (element.paperImageUrl) {
+              await new Promise<void>((resolve) => {
+                const img = new window.Image();
+                img.onload = () => {
+                  pc.drawImage(img, 0, 0, outW, outH);
+                  resolve();
+                };
+                img.onerror = () => resolve();
+                img.src = element.paperImageUrl!;
+              });
+            } else {
+              pc.fillStyle = element.openingColor || '#f0e6d3';
+              pc.fillRect(0, 0, outW, outH);
+            }
+            // 2. Percer les trous avec destination-out
+            for (const hole of (element.holes || [])) {
+              pc.save();
+              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
+              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
+              pc.translate(hcx, hcy);
+              pc.rotate((hole.rotation || 0) * Math.PI / 180);
+              pc.globalCompositeOperation = 'destination-out';
+              pc.beginPath();
+              drawHolePathCanvas(pc, hole, PX_PER_CM);
+              pc.fill();
+              pc.restore();
+            }
+            // 3. Compositer le papier percé sur le canvas principal
+            ctx.save();
+            ctx.globalAlpha = element.opacity;
+            ctx.drawImage(paperOffscreen, 0, 0);
+            ctx.restore();
+            // 4. Trait fin "crayon" autour de chaque trou
+            for (const hole of (element.holes || [])) {
+              ctx.save();
+              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
+              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
+              ctx.translate(hcx, hcy);
+              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+              ctx.beginPath();
+              drawHolePathCanvas(ctx, hole, PX_PER_CM);
+              ctx.strokeStyle = '#1a1a1a';
+              ctx.lineWidth = Math.max(1, 0.025 * PX_PER_CM); // ~0.025 cm, très fin
+              ctx.globalAlpha = 0.55;
+              ctx.stroke();
+              ctx.restore();
+            }
+            drawnCount++;
+            diagLines.push(`PeleMele paper -> DESSINÉ OK (${(element.holes || []).length} trous)`);
+          }
+          continue;
+        }
+
         // --- Éléments de type 'image' ---
         if (element.type !== 'image' || !element.src) continue;
         const domImg = page.querySelector(`img[data-element-id="${element.id}"]`) as HTMLImageElement | null;
@@ -3481,6 +3557,135 @@ export default function CreationsAtelierV2({
       }
       default: // rect
         ctx.rect(x, y, w, h);
+    }
+  };
+
+  // ── Helpers pêle-mêle ────────────────────────────────────────────────────
+
+  /**
+   * Génère un path SVG en coordonnées pixels pour un trou pêle-mêle.
+   * Utilisé dans le rendu DOM interactif (SVG avec mask).
+   */
+  const buildHoleSvgPathPx = (hole: HoleDescriptor, pxPerCm: number): string => {
+    const x = hole.x * pxPerCm;
+    const y = hole.y * pxPerCm;
+    const w = hole.w * pxPerCm;
+    const h = hole.h * pxPerCm;
+    switch (hole.shape) {
+      case 'square': {
+        const s = Math.min(w, h);
+        const ox = x + (w - s) / 2, oy = y + (h - s) / 2;
+        return `M${ox},${oy} h${s} v${s} h${-s} Z`;
+      }
+      case 'round': {
+        const r = Math.min(w, h) / 2;
+        const cx = x + w / 2, cy = y + h / 2;
+        return `M${cx - r},${cy} a${r},${r} 0 1,0 ${r * 2},0 a${r},${r} 0 1,0 ${-r * 2},0`;
+      }
+      case 'oval':
+        return `M${x + w / 2},${y} a${w / 2},${h / 2} 0 1,0 0.001,0 Z`;
+      case 'arch': {
+        const r = w / 2;
+        return `M${x},${y + h} L${x},${y + r} A${r},${r} 0 0,1 ${x + w},${y + r} L${x + w},${y + h} Z`;
+      }
+      case 'heart': {
+        const cx = x + w / 2;
+        return `M${cx},${y + h * 0.35} C${cx},${y + h * 0.10} ${x},${y + h * 0.10} ${x},${y + h * 0.35} C${x},${y + h * 0.60} ${cx},${y + h * 0.75} ${cx},${y + h} C${cx},${y + h * 0.75} ${x + w},${y + h * 0.60} ${x + w},${y + h * 0.35} C${x + w},${y + h * 0.10} ${cx},${y + h * 0.10} ${cx},${y + h * 0.35} Z`;
+      }
+      case 'star': {
+        const branches = 5;
+        const cx = x + w / 2, cy = y + h / 2;
+        const outerR = Math.min(w, h) / 2;
+        const innerR = outerR * 0.42;
+        let d = '';
+        for (let i = 0; i < branches * 2; i++) {
+          const angle = (i * Math.PI) / branches - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          d += (i === 0 ? 'M' : 'L') + (cx + r * Math.cos(angle)).toFixed(2) + ',' + (cy + r * Math.sin(angle)).toFixed(2);
+        }
+        return d + ' Z';
+      }
+      case 'diamond': {
+        const cx = x + w / 2, cy = y + h / 2;
+        return `M${cx},${y} L${x + w},${cy} L${cx},${y + h} L${x},${cy} Z`;
+      }
+      default: // rect
+        return `M${x},${y} h${w} v${h} h${-w} Z`;
+    }
+  };
+
+  /**
+   * Trace le path d'un trou pêle-mêle sur un contexte canvas.
+   * Coordonnées en cm × pxPerCm. L'appelant gère save/restore et rotation.
+   */
+  const drawHolePathCanvas = (
+    ctx: CanvasRenderingContext2D,
+    hole: HoleDescriptor,
+    pxPerCm: number
+  ) => {
+    // Coordonnées relatives au centre du trou (car rotation appliquée avant)
+    const w = hole.w * pxPerCm;
+    const h = hole.h * pxPerCm;
+    const ox = -w / 2;
+    const oy = -h / 2;
+    switch (hole.shape) {
+      case 'square': {
+        const s = Math.min(w, h);
+        ctx.rect(ox + (w - s) / 2, oy + (h - s) / 2, s, s);
+        break;
+      }
+      case 'round': {
+        const r = Math.min(w, h) / 2;
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        break;
+      }
+      case 'oval': {
+        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+        break;
+      }
+      case 'arch': {
+        const r = w / 2;
+        ctx.moveTo(ox, oy + h);
+        ctx.lineTo(ox, oy + r);
+        ctx.arc(0, oy + r, r, Math.PI, 0);
+        ctx.lineTo(ox + w, oy + h);
+        ctx.closePath();
+        break;
+      }
+      case 'heart': {
+        const cx = 0;
+        ctx.moveTo(cx, oy + h * 0.35);
+        ctx.bezierCurveTo(cx, oy + h * 0.10, ox, oy + h * 0.10, ox, oy + h * 0.35);
+        ctx.bezierCurveTo(ox, oy + h * 0.60, cx, oy + h * 0.75, cx, oy + h);
+        ctx.bezierCurveTo(cx, oy + h * 0.75, ox + w, oy + h * 0.60, ox + w, oy + h * 0.35);
+        ctx.bezierCurveTo(ox + w, oy + h * 0.10, cx, oy + h * 0.10, cx, oy + h * 0.35);
+        ctx.closePath();
+        break;
+      }
+      case 'star': {
+        const branches = 5;
+        const outerR = Math.min(w, h) / 2;
+        const innerR = outerR * 0.42;
+        for (let i = 0; i < branches * 2; i++) {
+          const angle = (i * Math.PI) / branches - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          const px = r * Math.cos(angle);
+          const py = r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        break;
+      }
+      case 'diamond': {
+        ctx.moveTo(0, oy);
+        ctx.lineTo(ox + w, 0);
+        ctx.lineTo(0, oy + h);
+        ctx.lineTo(ox, 0);
+        ctx.closePath();
+        break;
+      }
+      default: // rect
+        ctx.rect(ox, oy, w, h);
     }
   };
 
@@ -6750,6 +6955,75 @@ export default function CreationsAtelierV2({
                       const fmtH = orientation === "portrait" ? paperFormat.height : paperFormat.width;
                       addToCanvas(url, filename, undefined, undefined, { w: fmtW, h: fmtH });
                     }}
+                    // ── Pêle-mêle ──────────────────────────────────────────
+                    peleMelePaper={(() => {
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (!p) return null;
+                      return { color: p.openingColor || '#f0e6d3', imageUrl: p.paperImageUrl, holes: p.holes || [] } as PeleMelePaperState;
+                    })()}
+                    selectedHoleId={selectedHoleId}
+                    onPeleMeleCreatePaper={(color) => {
+                      const fmtW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
+                      const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+                      const existing = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (existing) {
+                        updateCanvasElement(existing.id, { openingColor: color });
+                      } else {
+                        const newEl: CanvasElement = {
+                          id: `pm-paper-${Date.now()}`,
+                          type: 'pelemele-paper',
+                          x: 0, y: 0,
+                          width: fmtW, height: fmtH,
+                          rotation: 0,
+                          zIndex: 2,
+                          opacity: 1,
+                          openingColor: color,
+                          holes: [],
+                        };
+                        setCanvasElements(prev => [...prev, newEl]);
+                      }
+                    }}
+                    onPeleMeleRemovePaper={() => {
+                      setCanvasElements(prev => prev.filter(el => el.type !== 'pelemele-paper' && !el.assignedHoleId));
+                      setSelectedHoleId(null);
+                    }}
+                    onPeleMeleSetPaperColor={(color) => {
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (p) updateCanvasElement(p.id, { openingColor: color });
+                    }}
+                    onPeleMeleSetPaperImage={(imageUrl) => {
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (p) updateCanvasElement(p.id, { paperImageUrl: imageUrl ?? undefined });
+                    }}
+                    onPeleMeleAddHole={(shape) => {
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (!p) return;
+                      const fmtW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
+                      const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+                      const w = Math.min(6, fmtW * 0.4);
+                      const h = shape === 'square' || shape === 'round' ? w : Math.min(8, fmtH * 0.35);
+                      const existingHoles = p.holes || [];
+                      // Empiler les trous avec un léger décalage
+                      const offset = existingHoles.length * 0.5;
+                      const newHole: HoleDescriptor = {
+                        id: `hole-${Date.now()}`,
+                        shape,
+                        x: (fmtW - w) / 2 + offset,
+                        y: (fmtH - h) / 2 + offset,
+                        w, h,
+                        rotation: 0,
+                      };
+                      updateCanvasElement(p.id, { holes: [...existingHoles, newHole] });
+                      setSelectedHoleId(newHole.id);
+                    }}
+                    onPeleMeleRemoveHole={(holeId) => {
+                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
+                      if (!p) return;
+                      updateCanvasElement(p.id, { holes: (p.holes || []).filter(h => h.id !== holeId) });
+                      setCanvasElements(prev => prev.filter(el => el.assignedHoleId !== holeId));
+                      if (selectedHoleId === holeId) setSelectedHoleId(null);
+                    }}
+                    onPeleMeleSelectHole={(holeId) => setSelectedHoleId(holeId)}
                   />
                 )}
               </div>
@@ -7351,6 +7625,80 @@ export default function CreationsAtelierV2({
                     
                     return (
                     <>
+                    {/* Rendu pêle-mêle : papier percé via SVG mask + destination-out */}
+                    {element.type === 'pelemele-paper' ? (
+                      (() => {
+                        const pageW = canvasDimensions.pageWidth;
+                        const pageH = canvasDimensions.pageHeight;
+                        const maskId = `pm-mask-${element.id}`;
+                        const holes = element.holes || [];
+                        return (
+                          <svg
+                            key={element.id}
+                            data-canvas-element="true"
+                            className="absolute"
+                            style={{
+                              left: 0, top: 0,
+                              width: pageW, height: pageH,
+                              zIndex: element.zIndex,
+                              opacity: element.opacity,
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                            }}
+                          >
+                            <defs>
+                              <mask id={maskId}>
+                                {/* Blanc = papier visible, noir = trou transparent */}
+                                <rect x="0" y="0" width={pageW} height={pageH} fill="white" />
+                                {holes.map(hole => {
+                                  const cx = (hole.x + hole.w / 2) * pxPerCm;
+                                  const cy = (hole.y + hole.h / 2) * pxPerCm;
+                                  return (
+                                    <g key={hole.id} transform={`rotate(${hole.rotation || 0},${cx},${cy})`}>
+                                      <path d={buildHoleSvgPathPx(hole, pxPerCm)} fill="black" />
+                                    </g>
+                                  );
+                                })}
+                              </mask>
+                            </defs>
+                            {/* Papier coloré ou image, percé par le mask */}
+                            {element.paperImageUrl ? (
+                              <image
+                                href={element.paperImageUrl}
+                                x="0" y="0"
+                                width={pageW} height={pageH}
+                                preserveAspectRatio="xMidYMid slice"
+                                mask={`url(#${maskId})`}
+                              />
+                            ) : (
+                              <rect
+                                x="0" y="0"
+                                width={pageW} height={pageH}
+                                fill={element.openingColor || '#f0e6d3'}
+                                mask={`url(#${maskId})`}
+                              />
+                            )}
+                            {/* Trait fin autour de chaque trou — "au crayon" */}
+                            {holes.map(hole => {
+                              const cx = (hole.x + hole.w / 2) * pxPerCm;
+                              const cy = (hole.y + hole.h / 2) * pxPerCm;
+                              const isHoleSelected = selectedHoleId === hole.id;
+                              return (
+                                <g key={`stroke-${hole.id}`} transform={`rotate(${hole.rotation || 0},${cx},${cy})`}>
+                                  <path
+                                    d={buildHoleSvgPathPx(hole, pxPerCm)}
+                                    fill="none"
+                                    stroke={isHoleSelected ? '#2563eb' : '#1a1a1a'}
+                                    strokeWidth={isHoleSelected ? 1.5 : 0.8}
+                                    opacity={isHoleSelected ? 0.9 : 0.55}
+                                  />
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        );
+                      })()
+                    ) : null}
                     {/* Rendu spécial pour shape='line' : SVG absolu couvrant toute la page */}
                     {element.type === 'shape' && element.shape === 'line' ? (
                       <svg

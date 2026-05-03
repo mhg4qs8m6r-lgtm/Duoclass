@@ -256,6 +256,7 @@ export const sharedModeles = sqliteTable("sharedModeles", {
   filename: text("filename").notNull(),
   imageData: text("imageData").notNull(), // base64 data URL
   uploadedBy: integer("uploadedBy").notNull(),
+  slotsJson: text("slotsJson"),           // JSON sérialisé PeleMelePaperState (pêle-mêle uniquement)
   createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 

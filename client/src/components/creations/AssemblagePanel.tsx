@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { PeleMelePanel, type HoleDescriptor, type PeleMelePaperState } from "./PeleMelePanel";
 import {
   Frame,
   ChevronDown,
@@ -260,6 +261,19 @@ export interface AssemblagePanelProps {
   onSelectModele?: (url: string, filename: string) => void;
   /** Ouvre la modale "Ordre des calques du projet" */
   onOpenLayerOrder?: () => void;
+
+  // ── Pêle-mêle ──────────────────────────────────────────────────────────────
+  /** État courant du fond percé pêle-mêle (null = aucun) */
+  peleMelePaper?: PeleMelePaperState | null;
+  /** ID du trou actuellement sélectionné */
+  selectedHoleId?: string | null;
+  onPeleMeleCreatePaper?: (color: string) => void;
+  onPeleMeleRemovePaper?: () => void;
+  onPeleMeleSetPaperColor?: (color: string) => void;
+  onPeleMeleSetPaperImage?: (imageUrl: string | null) => void;
+  onPeleMeleAddHole?: (shape: HoleDescriptor["shape"]) => void;
+  onPeleMeleRemoveHole?: (holeId: string) => void;
+  onPeleMeleSelectHole?: (holeId: string | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1943,11 +1957,19 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                 )}
                 {section.id === "pelemele-modele" && (
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-500 italic">
-                      {language === "fr"
-                        ? "Créez une disposition vierge de pêle-mêle avec plusieurs ouvertures de formes variées."
-                        : "Create a blank collage layout with multiple openings of various shapes."}
-                    </p>
+                    <PeleMelePanel
+                      language={language as "fr" | "en"}
+                      paper={props.peleMelePaper ?? null}
+                      selectedHoleId={props.selectedHoleId ?? null}
+                      onCreatePaper={props.onPeleMeleCreatePaper ?? (() => {})}
+                      onRemovePaper={props.onPeleMeleRemovePaper ?? (() => {})}
+                      onSetPaperColor={props.onPeleMeleSetPaperColor ?? (() => {})}
+                      onSetPaperImage={props.onPeleMeleSetPaperImage ?? (() => {})}
+                      onAddHole={props.onPeleMeleAddHole ?? (() => {})}
+                      onRemoveHole={props.onPeleMeleRemoveHole ?? (() => {})}
+                      onSelectHole={props.onPeleMeleSelectHole ?? (() => {})}
+                    />
+                    {/* PassePartoutSection conservée en dessous pour les gabarits admin existants */}
                     <PassePartoutSection
                       canvasFormat={props.canvasFormat}
                       onAddPassePartout={props.onAddPassePartout}
@@ -2001,11 +2023,18 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                 )}
                 {section.id === "montage-pelemele" && (
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-500 italic">
-                      {language === "fr"
-                        ? "Disposition pêle-mêle avec photos. Glissez vos photos dans les ouvertures."
-                        : "Collage layout with photos. Drag your photos into the openings."}
-                    </p>
+                    <PeleMelePanel
+                      language={language as "fr" | "en"}
+                      paper={props.peleMelePaper ?? null}
+                      selectedHoleId={props.selectedHoleId ?? null}
+                      onCreatePaper={props.onPeleMeleCreatePaper ?? (() => {})}
+                      onRemovePaper={props.onPeleMeleRemovePaper ?? (() => {})}
+                      onSetPaperColor={props.onPeleMeleSetPaperColor ?? (() => {})}
+                      onSetPaperImage={props.onPeleMeleSetPaperImage ?? (() => {})}
+                      onAddHole={props.onPeleMeleAddHole ?? (() => {})}
+                      onRemoveHole={props.onPeleMeleRemoveHole ?? (() => {})}
+                      onSelectHole={props.onPeleMeleSelectHole ?? (() => {})}
+                    />
                     <PassePartoutSection
                       canvasFormat={props.canvasFormat}
                       onAddPassePartout={props.onAddPassePartout}
