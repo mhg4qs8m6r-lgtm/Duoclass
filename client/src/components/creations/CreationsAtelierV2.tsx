@@ -2551,8 +2551,6 @@ export default function CreationsAtelierV2({
       // Passe unique : tous les éléments triés par zIndex global
       const sortedElements = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
       let drawnCount = 0;
-      // Trous pêle-mêle à dessiner en dernier (contours par-dessus les photos)
-      let peleMeleHolesForOutlines: HoleDescriptor[] = [];
       
       // DIAGNOSTIC : afficher l'état de chaque élément
       const diagLines: string[] = [];
@@ -2766,27 +2764,62 @@ export default function CreationsAtelierV2({
           continue;
         }
 
-        // --- Éléments de type 'pelemele-paper' (fond coloré du pêle-mêle) ---
-        // Approche simple : fond pleine page + contours dessinés après les photos
+        // --- Éléments de type 'pelemele-paper' (papier percé pêle-mêle) ---
+        // Canvas offscreen : fond couleur + destination-out pour les trous → composite sur le canvas principal.
+        // Les photos (zIndex inférieur) sont déjà dessinées ; les trous du papier les laissent apparaître.
         if (element.type === 'pelemele-paper') {
-          ctx.save();
-          ctx.globalAlpha = element.opacity;
-          if (element.paperImageUrl) {
-            await new Promise<void>((resolve) => {
-              const img = new window.Image();
-              img.onload = () => { ctx.drawImage(img, 0, 0, outW, outH); resolve(); };
-              img.onerror = () => resolve();
-              img.src = element.paperImageUrl!;
-            });
-          } else {
-            ctx.fillStyle = element.openingColor || '#f0e6d3';
-            ctx.fillRect(0, 0, outW, outH);
+          const paperOffscreen = document.createElement('canvas');
+          paperOffscreen.width = outW;
+          paperOffscreen.height = outH;
+          const pc = paperOffscreen.getContext('2d');
+          if (pc) {
+            if (element.paperImageUrl) {
+              await new Promise<void>((resolve) => {
+                const img = new window.Image();
+                img.onload = () => { pc.drawImage(img, 0, 0, outW, outH); resolve(); };
+                img.onerror = () => resolve();
+                img.src = element.paperImageUrl!;
+              });
+            } else {
+              pc.fillStyle = element.openingColor || '#f0e6d3';
+              pc.fillRect(0, 0, outW, outH);
+            }
+            // Percer les trous : destination-out efface les zones des trous → zones transparentes
+            for (const hole of (element.holes || [])) {
+              pc.save();
+              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
+              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
+              pc.translate(hcx, hcy);
+              pc.rotate((hole.rotation || 0) * Math.PI / 180);
+              pc.globalCompositeOperation = 'destination-out';
+              pc.beginPath();
+              drawHolePathCanvas(pc, hole, PX_PER_CM);
+              pc.fill();
+              pc.restore();
+            }
+            // Compositer le papier percé (source-over : trous transparents = photos dessous visibles)
+            ctx.save();
+            ctx.globalAlpha = element.opacity;
+            ctx.drawImage(paperOffscreen, 0, 0);
+            ctx.restore();
+            // Contours fins autour de chaque trou
+            for (const hole of (element.holes || [])) {
+              ctx.save();
+              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
+              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
+              ctx.translate(hcx, hcy);
+              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+              ctx.beginPath();
+              drawHolePathCanvas(ctx, hole, PX_PER_CM);
+              ctx.strokeStyle = '#1a1a1a';
+              ctx.lineWidth = Math.max(1, 0.025 * PX_PER_CM);
+              ctx.globalAlpha = 0.55;
+              ctx.stroke();
+              ctx.restore();
+            }
+            drawnCount++;
+            diagLines.push(`PeleMele paper -> DESSINÉ OK (${(element.holes || []).length} trous)`);
           }
-          ctx.restore();
-          drawnCount++;
-          diagLines.push(`PeleMele fond -> DESSINÉ OK`);
-          // Mémoriser les trous pour les contours (dessinés après toutes les photos)
-          peleMeleHolesForOutlines = element.holes || [];
           continue;
         }
 
@@ -2860,22 +2893,6 @@ export default function CreationsAtelierV2({
           
           ctx.save();
           ctx.globalAlpha = element.opacity;
-          // Photo assignée à un trou : clipper au contour de la forme avant de dessiner
-          if (element.assignedHoleId) {
-            const paperEl = sortedElements.find(e => e.type === 'pelemele-paper');
-            const hole = paperEl?.holes?.find(h => h.id === element.assignedHoleId);
-            if (hole) {
-              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
-              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
-              // Appliquer le clip en coord monde (translate+rotate → path → clip → reset transform)
-              ctx.translate(hcx, hcy);
-              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
-              ctx.beginPath();
-              drawHolePathCanvas(ctx, hole, PX_PER_CM);
-              ctx.clip();
-              ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform, clip reste actif
-            }
-          }
           const cx = x + w / 2;
           const cy = y + h / 2;
           ctx.translate(cx, cy);
@@ -2890,22 +2907,6 @@ export default function CreationsAtelierV2({
           const errMsg = err instanceof Error ? err.message : String(err);
           diagLines.push(`  -> ERREUR: ${errMsg}`);
         }
-      }
-
-      // Contours fins des trous pêle-mêle (par-dessus toutes les photos)
-      for (const hole of peleMeleHolesForOutlines) {
-        ctx.save();
-        const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
-        const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
-        ctx.translate(hcx, hcy);
-        ctx.rotate((hole.rotation || 0) * Math.PI / 180);
-        ctx.beginPath();
-        drawHolePathCanvas(ctx, hole, PX_PER_CM);
-        ctx.strokeStyle = '#1a1a1a';
-        ctx.lineWidth = Math.max(1, 0.025 * PX_PER_CM);
-        ctx.globalAlpha = 0.55;
-        ctx.stroke();
-        ctx.restore();
       }
 
       // Afficher le diagnostic complet dans un toast persistant
@@ -3859,7 +3860,7 @@ export default function CreationsAtelierV2({
         });
         if (hit) {
           assignedHoleId = hit.id;
-          assignedZIndex = (pelePaper.zIndex ?? 2) + 1;
+          assignedZIndex = Math.max(1, (pelePaper.zIndex ?? 2) - 1);
           // Recadrer la photo pour remplir le trou tout en conservant les proportions
           const scaleW = hit.w / widthCm;
           const scaleH = hit.h / heightCm;
@@ -7698,61 +7699,71 @@ export default function CreationsAtelierV2({
                     
                     return (
                     <>
-                    {/* Rendu pêle-mêle : fond coloré + contours SVG fill="none"
-                        - Couche 1 : div coloré pleine page (le papier)
-                        - Couche 2 : photos clippées à leur trou (zIndex papier+1)
-                        - Couche 3 : contours SVG fill="none" (zIndex papier+2) */}
+                    {/* Rendu pêle-mêle : UN seul SVG avec fill-rule="evenodd"
+                        Le <path> composé = rect pleine page + sous-paths des trous.
+                        fill-rule="evenodd" rend les trous VRAIMENT transparents (pas de couleur).
+                        Les photos se placent DERRIÈRE ce SVG (zIndex papier - 1). */}
                     {element.type === 'pelemele-paper' ? (
                       (() => {
                         const pageW = canvasDimensions.pageWidth;
                         const pageH = canvasDimensions.pageHeight;
                         const holes = element.holes || [];
+                        // Path composé : rect extérieur + trous (evenodd = trous transparents)
+                        const compoundD = [
+                          `M0,0 H${pageW} V${pageH} H0 Z`,
+                          ...holes.map(h => buildHoleSvgPathPx(h, pxPerCm))
+                        ].join(' ');
                         return (
-                          <>
-                            {/* Fond coloré pleine page */}
-                            <div
-                              key={`${element.id}-bg`}
-                              data-canvas-element="true"
-                              style={{
-                                position: 'absolute',
-                                left: 0, top: 0,
-                                width: pageW,
-                                height: pageH,
-                                backgroundColor: element.paperImageUrl ? undefined : (element.openingColor || '#f0e6d3'),
-                                backgroundImage: element.paperImageUrl ? `url(${element.paperImageUrl})` : undefined,
-                                backgroundSize: 'cover',
-                                zIndex: element.zIndex,
-                                opacity: element.opacity,
-                                pointerEvents: 'none',
-                              }}
+                          <svg
+                            key={element.id}
+                            data-canvas-element="true"
+                            style={{
+                              position: 'absolute',
+                              left: 0, top: 0,
+                              width: pageW,
+                              height: pageH,
+                              zIndex: element.zIndex,
+                              opacity: element.opacity,
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                            }}
+                          >
+                            {element.paperImageUrl && (
+                              <defs>
+                                <pattern
+                                  id={`pm-img-${element.id}`}
+                                  x="0" y="0"
+                                  width={pageW} height={pageH}
+                                  patternUnits="userSpaceOnUse"
+                                >
+                                  <image
+                                    href={element.paperImageUrl}
+                                    x="0" y="0"
+                                    width={pageW} height={pageH}
+                                    preserveAspectRatio="xMidYMid slice"
+                                  />
+                                </pattern>
+                              </defs>
+                            )}
+                            {/* Papier avec trous vrais via fill-rule=evenodd */}
+                            <path
+                              fillRule="evenodd"
+                              fill={element.paperImageUrl ? `url(#pm-img-${element.id})` : (element.openingColor || '#f0e6d3')}
+                              d={compoundD}
                             />
-                            {/* Contours fins des trous (fill="none", trait fin noir) */}
-                            <svg
-                              key={`${element.id}-outlines`}
-                              data-canvas-element="true"
-                              style={{
-                                position: 'absolute',
-                                left: 0, top: 0,
-                                width: pageW,
-                                height: pageH,
-                                zIndex: (element.zIndex || 0) + 2,
-                                pointerEvents: 'none',
-                                overflow: 'visible',
-                              }}
-                            >
-                              {holes.map(hole => (
-                                <path
-                                  key={hole.id}
-                                  d={buildHoleSvgPathPx(hole, pxPerCm)}
-                                  fill="none"
-                                  stroke={selectedHoleId === hole.id ? '#2563eb' : '#1a1a1a'}
-                                  strokeWidth={selectedHoleId === hole.id ? 1.5 : 0.8}
-                                  opacity={selectedHoleId === hole.id ? 0.9 : 0.55}
-                                  transform={`rotate(${hole.rotation || 0}, ${(hole.x + hole.w / 2) * pxPerCm}, ${(hole.y + hole.h / 2) * pxPerCm})`}
-                                />
-                              ))}
-                            </svg>
-                          </>
+                            {/* Contours fins autour de chaque trou */}
+                            {holes.map(hole => (
+                              <path
+                                key={hole.id}
+                                d={buildHoleSvgPathPx(hole, pxPerCm)}
+                                fill="none"
+                                stroke={selectedHoleId === hole.id ? '#2563eb' : '#1a1a1a'}
+                                strokeWidth={selectedHoleId === hole.id ? 1.5 : 0.8}
+                                opacity={selectedHoleId === hole.id ? 0.9 : 0.55}
+                                transform={hole.rotation ? `rotate(${hole.rotation}, ${(hole.x + hole.w / 2) * pxPerCm}, ${(hole.y + hole.h / 2) * pxPerCm})` : undefined}
+                              />
+                            ))}
+                          </svg>
                         );
                       })()
                     ) : null}
@@ -7897,16 +7908,9 @@ export default function CreationsAtelierV2({
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
-                        // Photo assignée à un trou : clipper à la forme exacte du trou
-                        ...(element.assignedHoleId ? (() => {
-                          const paper = canvasElements.find(el => el.type === 'pelemele-paper');
-                          const hole = paper?.holes?.find(h => h.id === element.assignedHoleId);
-                          if (!hole) return {};
-                          // Générer le path SVG du trou en coordonnées relatives à la photo
-                          const relHole = { ...hole, x: hole.x - element.x, y: hole.y - element.y };
-                          const pathStr = buildHoleSvgPathPx(relHole, pxPerCm);
-                          return { clipPath: `path('${pathStr}')` };
-                        })() : {}),
+                        // Photos assignées à un trou : pas de clipPath nécessaire —
+                        // le SVG pêle-mêle (fill-rule=evenodd) couvre tout sauf les trous.
+                        // La photo derrière n'est visible qu'à travers les trous transparents.
                         // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
                         outline: (
                           element.groupId && isInMultiSelection
