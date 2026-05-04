@@ -6225,7 +6225,7 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            zIndex: Math.max(0, ...prev.map(e => e.zIndex)) + 1,
+                            zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1,
                             opacity: 1,
                             openingColor: bgColor,
                             holes: [],
@@ -7030,7 +7030,7 @@ export default function CreationsAtelierV2({
                       if (existing) {
                         updateCanvasElement(existing.id, { openingColor: color });
                       } else {
-                        const maxZ = Math.max(0, ...canvasElements.map(e => e.zIndex));
+                        const maxZ = Math.max(1, ...canvasElements.map(e => e.zIndex));
                         const newEl: CanvasElement = {
                           id: `pm-paper-${Date.now()}`,
                           type: 'pelemele-paper',
@@ -7078,7 +7078,7 @@ export default function CreationsAtelierV2({
                           type: 'pelemele-paper' as const,
                           x: 0, y: 0,
                           width: fmtW, height: fmtH,
-                          rotation: 0, zIndex: Math.max(0, ...prev.map(e => e.zIndex)) + 1, opacity: 1,
+                          rotation: 0, zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1, opacity: 1,
                           openingColor: '#f0e6d3',
                           holes: [newHole],
                         }]);
