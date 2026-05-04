@@ -1,7 +1,6 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, globalShortcut, session } from "electron";
 import path from "path";
 import crypto from "crypto";
-import fs from "fs";
 
 // ─── Paths Electron (set BEFORE server modules are imported) ──────────────────
 // server/db.ts and server/local-storage.ts read these env vars lazily (on first
@@ -59,18 +58,13 @@ async function createWindow(port: number): Promise<void> {
   await waitForServer(port);
   await mainWindow.loadURL(`http://localhost:${port}/albums`);
 
+  // Raccourci DevTools : Cmd+Shift+I (toujours disponible, packagé ou non)
+  globalShortcut.register("CommandOrControl+Shift+I", () => {
+    mainWindow?.webContents.toggleDevTools();
+  });
+
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
-
-    // Rechargement automatique quand Vite rebuild (mode watch)
-    const distDir = path.join(__dirname, "..", "client");
-    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-    fs.watch(distDir, { recursive: true }, () => {
-      if (reloadTimer) clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(() => {
-        mainWindow?.webContents.reload();
-      }, 300);
-    });
   }
 
   mainWindow.on("closed", () => {
@@ -80,6 +74,10 @@ async function createWindow(port: number): Promise<void> {
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  // Vider le cache HTTP Chromium au démarrage pour que les rebuilds Vite
+  // soient toujours chargés (évite les fichiers JS/CSS périmés en mémoire).
+  await session.defaultSession.clearCache();
+
   const port = await startServer();
   await createWindow(port);
 

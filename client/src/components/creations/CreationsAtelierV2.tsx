@@ -1535,8 +1535,18 @@ export default function CreationsAtelierV2({
                   y = Math.max(0, Math.min(y, fmtH - height));
                   return { ...el, x, y, width, height };
                 });
-                console.log(`[Créations] ${clamped.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
-                setCanvasElements(clamped);
+                // Projets pêle-mêle : supprimer les artefacts de l'ancienne architecture
+                // (éléments 'shape' indépendants = anciens gabarits passe-partout)
+                // et les 'pelemele-paper' sans trous (papier vide = rectangle inutile).
+                const isPeleMele = creationsProject.projectType?.includes('Pêle-mêle');
+                const filtered = isPeleMele
+                  ? clamped.filter((el: any) =>
+                      el.type !== 'shape' &&
+                      !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
+                    )
+                  : clamped;
+                console.log(`[Créations] ${filtered.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
+                setCanvasElements(filtered);
               }
 
               // Les éléments du collecteur sont gérés par la live query IndexedDB
