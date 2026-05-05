@@ -52,7 +52,7 @@ const PAPER_FORMATS = [
 // Cela permet de garder des dimensions cohérentes quelle que soit l'orientation ou le zoom
 interface CanvasElement {
   id: string;
-  type: "image" | "text" | "shape" | "pelemele-paper" | "opening";
+  type: "image" | "text" | "shape" | "pelemele-paper" | "opening" | "fond-passe-partout";
   src?: string;
   text?: string;
   x: number; // Position X en cm
@@ -2512,7 +2512,7 @@ export default function CreationsAtelierV2({
     
     const imageElements = canvasElements.filter(el => el.type === 'image' && el.src);
     const textElements = canvasElements.filter(el => el.type === 'text');
-    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
+    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening' || el.type === 'fond-passe-partout');
     if (imageElements.length === 0 && textElements.length === 0 && openingElements.length === 0) {
       toast.error(language === 'fr' ? 'Aucun élément à capturer' : 'No elements to capture');
       return null;
@@ -2721,6 +2721,57 @@ export default function CreationsAtelierV2({
           ctx.restore();
           drawnCount++;
           diagLines.push(`Shape "${element.name}" (${element.shape}) -> DESSINÉ OK`);
+          continue;
+        }
+
+        // --- Éléments de type 'fond-passe-partout' (fond coloré avec trous pour les ouvertures) ---
+        if (element.type === 'fond-passe-partout') {
+          const fondOffscreen = document.createElement('canvas');
+          fondOffscreen.width = outW;
+          fondOffscreen.height = outH;
+          const fc = fondOffscreen.getContext('2d')!;
+          // 1. Remplir avec la couleur de fond
+          fc.fillStyle = element.openingColor || '#ffffff';
+          fc.fillRect(0, 0, outW, outH);
+          // 2. Appliquer le motif si présent
+          if (element.paperImageUrl) {
+            await new Promise<void>((resolve) => {
+              const img = new window.Image();
+              img.onload = () => {
+                const pat = fc.createPattern(img, 'repeat');
+                if (pat) { fc.fillStyle = pat; fc.fillRect(0, 0, outW, outH); }
+                resolve();
+              };
+              img.onerror = () => resolve();
+              img.src = element.paperImageUrl!;
+            });
+          }
+          // 3. Découper les trous (destination-out) pour chaque opening
+          fc.globalCompositeOperation = 'destination-out';
+          const openingEls = canvasElements.filter(el => el.type === 'opening');
+          for (const op of openingEls) {
+            const ox = op.x * PX_PER_CM;
+            const oy = op.y * PX_PER_CM;
+            const ow = op.width * PX_PER_CM;
+            const oh = op.height * PX_PER_CM;
+            fc.save();
+            fc.globalAlpha = 1;
+            const cx = ox + ow / 2; const cy = oy + oh / 2;
+            fc.translate(cx, cy);
+            fc.rotate((op.rotation * Math.PI) / 180);
+            fc.beginPath();
+            drawOpeningPath(fc, op.shape || 'rect', -ow / 2, -oh / 2, ow, oh);
+            fc.fill();
+            fc.restore();
+          }
+          fc.globalCompositeOperation = 'source-over';
+          // 4. Composite sur le canvas principal
+          ctx.save();
+          ctx.globalAlpha = element.opacity;
+          ctx.drawImage(fondOffscreen, 0, 0);
+          ctx.restore();
+          drawnCount++;
+          diagLines.push(`fond-passe-partout "${element.name}" -> DESSINÉ OK (${openingEls.length} trous)`);
           continue;
         }
 
@@ -3623,6 +3674,96 @@ export default function CreationsAtelierV2({
       }
       default: // rect
         return `M${x},${y} h${w} v${h} h${-w} Z`;
+    }
+  };
+
+  /**
+   * Génère un path SVG en coordonnées pixels pour un élément type:'opening'.
+   * Coordonnées absolues dans le repère de la page (même système que buildHoleSvgPathPx).
+   * Note : la rotation n'est pas intégrée dans le path (limitation V1 identique au pêle-mêle).
+   */
+  const buildOpeningPagePathPx = (el: CanvasElement, pxPerCm: number): string => {
+    if (el.customPath) {
+      // customPath en cm (coordonnées absolues page) → px
+      return el.customPath.replace(
+        /([MLQZ])([^MLQZ]*)/g,
+        (_m: string, cmd: string, args: string) => {
+          if (cmd === 'Z') return 'Z ';
+          const nums = args.trim().replace(/,/g, ' ').split(/\s+/).filter(Boolean).map(Number);
+          const converted: number[] = [];
+          for (let ni = 0; ni < nums.length; ni += 2) {
+            converted.push(nums[ni] * pxPerCm);
+            converted.push(nums[ni + 1] * pxPerCm);
+          }
+          if (cmd === 'Q' && converted.length >= 4)
+            return `Q${converted[0].toFixed(2)},${converted[1].toFixed(2)} ${converted[2].toFixed(2)},${converted[3].toFixed(2)} `;
+          return `${cmd}${converted[0].toFixed(2)},${converted[1].toFixed(2)} `;
+        }
+      );
+    }
+    const x = el.x * pxPerCm;
+    const y = el.y * pxPerCm;
+    const w = el.width * pxPerCm;
+    const h = el.height * pxPerCm;
+    switch (el.shape) {
+      case 'square': {
+        const s = Math.min(w, h);
+        const ox = x + (w - s) / 2; const oy = y + (h - s) / 2;
+        return `M${ox},${oy} h${s} v${s} h-${s} Z`;
+      }
+      case 'round': {
+        const r = Math.min(w, h) / 2;
+        const cx = x + w / 2; const cy = y + h / 2;
+        return `M${cx - r},${cy} a${r},${r} 0 1,0 ${r * 2},0 a${r},${r} 0 1,0 -${r * 2},0`;
+      }
+      case 'oval':
+        return `M${x + w / 2},${y} a${w / 2},${h / 2} 0 1,0 0.001,0 Z`;
+      case 'arch': {
+        const r = w / 2;
+        return `M${x},${y + h} L${x},${y + r} A${r},${r} 0 0,1 ${x + w},${y + r} L${x + w},${y + h} Z`;
+      }
+      case 'heart': {
+        const depth = (el.heartDepth ?? 50) / 100;
+        const nY = y + h * (0.25 + depth * 0.25);
+        return [
+          `M${x + w * 0.5},${nY}`,
+          `C${x + w * 0.5},${y + h * 0.10} ${x},${y + h * 0.10} ${x},${y + h * 0.35}`,
+          `C${x},${y + h * 0.60} ${x + w * 0.5},${y + h * 0.75} ${x + w * 0.5},${y + h}`,
+          `C${x + w * 0.5},${y + h * 0.75} ${x + w},${y + h * 0.60} ${x + w},${y + h * 0.35}`,
+          `C${x + w},${y + h * 0.10} ${x + w * 0.5},${y + h * 0.10} ${x + w * 0.5},${nY} Z`,
+        ].join(' ');
+      }
+      case 'star': {
+        const branches = el.starBranches ?? 5;
+        const cx = x + w / 2; const cy = y + h / 2;
+        const outerR = Math.min(w, h) / 2;
+        const innerR = outerR * 0.42;
+        let d = '';
+        for (let i = 0; i < branches * 2; i++) {
+          const angle = (i * Math.PI) / branches - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          d += (i === 0 ? 'M' : 'L') + (cx + r * Math.cos(angle)).toFixed(2) + ',' + (cy + r * Math.sin(angle)).toFixed(2);
+        }
+        return d + ' Z';
+      }
+      case 'diamond': {
+        const cx = x + w / 2; const cy = y + h / 2;
+        return `M${cx},${y} L${x + w},${cy} L${cx},${y + h} L${x},${cy} Z`;
+      }
+      case 'hexagon': {
+        let d = '';
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3 - Math.PI / 6;
+          d += (i === 0 ? 'M' : 'L') + (x + w / 2 + w / 2 * Math.cos(a)).toFixed(2) + ',' + (y + h / 2 + h / 2 * Math.sin(a)).toFixed(2);
+        }
+        return d + ' Z';
+      }
+      case 'puzzle': {
+        const edges = el.puzzleEdges ?? { top: 0, right: 0, bottom: 0, left: 0 };
+        return buildPuzzlePath(w, h, edges, el.puzzleCutStyle ?? 'classique', el.puzzleShowBorder ?? true, x, y, el.puzzleEdgeSeeds);
+      }
+      default: // rect
+        return `M${x},${y} h${w} v${h} h-${w} Z`;
     }
   };
 
@@ -5746,9 +5887,13 @@ export default function CreationsAtelierV2({
                       }
                     }}
                     hasExistingPassePartout={canvasElements.some(el => el.name === "Passe-partout" || el.name === "Mat frame")}
-                    hasExistingBackground={canvasElements.some(el => el.name === (language === 'fr' ? 'Fond' : 'Background'))}
+                    hasExistingBackground={canvasElements.some(el =>
+                      el.name === (language === 'fr' ? 'Fond' : 'Background') || el.type === 'fond-passe-partout'
+                    )}
                     onRemoveBackground={() => {
-                      setCanvasElements(prev => prev.filter(el => el.name !== (language === 'fr' ? 'Fond' : 'Background')));
+                      setCanvasElements(prev => prev.filter(el =>
+                        el.name !== (language === 'fr' ? 'Fond' : 'Background') && el.type !== 'fond-passe-partout'
+                      ));
                     }}
                     onReplacePassePartout={(data: PassePartoutData) => {
                       // Supprimer tous les passe-partouts existants puis ajouter le nouveau
@@ -6216,6 +6361,56 @@ export default function CreationsAtelierV2({
                     onAddBackground={(patternSrc, patternOpacity, bgColor) => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
+
+                      // ── Cas passe-partout : des ouvertures SVG existent → fond percé evenodd ──
+                      const openingEls = canvasElements.filter(el => el.type === 'opening');
+                      if (openingEls.length > 0) {
+                        const fondColor = bgColor && bgColor !== 'transparent' ? bgColor : '#ffffff';
+                        const maxOpeningZ = Math.max(...openingEls.map(e => e.zIndex));
+                        const applyFond = (paperImageUrl: string | undefined) => {
+                          const fondEl: CanvasElement = {
+                            id: `fond-passe-partout-${Date.now()}`,
+                            type: 'fond-passe-partout',
+                            x: 0, y: 0,
+                            width: formatW, height: formatH,
+                            rotation: 0,
+                            // zIndex entre le fond plat (0) et les ouvertures
+                            zIndex: Math.max(1, maxOpeningZ - 1),
+                            opacity: 1,
+                            locked: true,
+                            name: language === 'fr' ? 'Fond passe-partout' : 'Mat background',
+                            openingColor: fondColor,
+                            paperImageUrl,
+                          };
+                          setCanvasElements(prev => [
+                            ...prev.filter(el => el.type !== 'fond-passe-partout'),
+                            fondEl,
+                          ]);
+                          toast.success(language === 'fr' ? 'Fond appliqué' : 'Background applied');
+                        };
+                        if (patternSrc) {
+                          // Composite couleur + motif → image stockée dans paperImageUrl
+                          const DPI = 96; const CM = DPI / 2.54;
+                          const cvs = document.createElement('canvas');
+                          cvs.width = Math.round(formatW * CM);
+                          cvs.height = Math.round(formatH * CM);
+                          const ctx2 = cvs.getContext('2d')!;
+                          ctx2.fillStyle = fondColor;
+                          ctx2.fillRect(0, 0, cvs.width, cvs.height);
+                          const img = new window.Image();
+                          img.onload = () => {
+                            ctx2.globalAlpha = (patternOpacity ?? 100) / 100;
+                            const pat = ctx2.createPattern(img, 'repeat');
+                            if (pat) { ctx2.fillStyle = pat; ctx2.fillRect(0, 0, cvs.width, cvs.height); }
+                            applyFond(cvs.toDataURL('image/png'));
+                          };
+                          img.onerror = () => applyFond(undefined);
+                          img.src = patternSrc;
+                        } else {
+                          applyFond(undefined);
+                        }
+                        return;
+                      }
 
                       // En contexte pêle-mêle : crée/met à jour le fond percé au lieu d'un fond image
                       if (currentProjectType.includes('Pêle-mêle') && !patternSrc) {
@@ -7704,6 +7899,58 @@ export default function CreationsAtelierV2({
                     
                     return (
                     <>
+                    {/* Rendu fond-passe-partout : SVG fill-rule="evenodd" couvrant toute la page
+                        avec des trous transparents aux positions des éléments type:'opening' */}
+                    {element.type === 'fond-passe-partout' ? (
+                      (() => {
+                        const { pxPerCm } = canvasDimensions;
+                        const pageW = canvasDimensions.pageWidth;
+                        const pageH = canvasDimensions.pageHeight;
+                        const openingEls = canvasElements.filter(el => el.type === 'opening');
+                        const outerRect = `M0,0 H${pageW} V${pageH} H0 Z`;
+                        const holePaths = openingEls.map(el => buildOpeningPagePathPx(el, pxPerCm));
+                        const compoundD = [outerRect, ...holePaths].join(' ');
+                        return (
+                          <svg
+                            key={element.id}
+                            data-canvas-element="true"
+                            style={{
+                              position: 'absolute', left: 0, top: 0,
+                              width: pageW, height: pageH,
+                              zIndex: element.zIndex,
+                              opacity: element.opacity,
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                            }}
+                          >
+                            {element.paperImageUrl && (
+                              <defs>
+                                <pattern
+                                  id={`fp-img-${element.id}`}
+                                  x="0" y="0"
+                                  width={pageW} height={pageH}
+                                  patternUnits="userSpaceOnUse"
+                                >
+                                  <image
+                                    href={element.paperImageUrl}
+                                    x="0" y="0"
+                                    width={pageW} height={pageH}
+                                    preserveAspectRatio="xMidYMid slice"
+                                  />
+                                </pattern>
+                              </defs>
+                            )}
+                            <path
+                              fillRule="evenodd"
+                              fill={element.paperImageUrl
+                                ? `url(#fp-img-${element.id})`
+                                : (element.openingColor || '#ffffff')}
+                              d={compoundD}
+                            />
+                          </svg>
+                        );
+                      })()
+                    ) : null}
                     {/* Rendu pêle-mêle : UN seul SVG avec fill-rule="evenodd"
                         Le <path> composé = rect pleine page + sous-paths des trous.
                         fill-rule="evenodd" rend les trous VRAIMENT transparents (pas de couleur).
@@ -7773,7 +8020,7 @@ export default function CreationsAtelierV2({
                       })()
                     ) : null}
                     {/* Rendu spécial pour shape='line' : SVG absolu couvrant toute la page */}
-                    {/* pelemele-paper est rendu uniquement via le SVG ci-dessus — ne pas tomber dans le div normal */}
+                    {/* pelemele-paper et fond-passe-partout : rendus via leur SVG propre — pas de div */}
                     {element.type === 'shape' && element.shape === 'line' ? (
                       <svg
                         key={element.id}
@@ -7894,7 +8141,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : element.type === 'pelemele-paper' ? null : (
+                    ) : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
