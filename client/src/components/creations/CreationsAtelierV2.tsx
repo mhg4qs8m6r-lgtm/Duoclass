@@ -52,7 +52,7 @@ const PAPER_FORMATS = [
 // Cela permet de garder des dimensions cohérentes quelle que soit l'orientation ou le zoom
 interface CanvasElement {
   id: string;
-  type: "image" | "text" | "shape" | "pelemele-paper";
+  type: "image" | "text" | "shape" | "pelemele-paper" | "opening";
   src?: string;
   text?: string;
   x: number; // Position X en cm
@@ -1278,7 +1278,7 @@ export default function CreationsAtelierV2({
       return;
     }
     const el = canvasElements.find(e => e.id === selectedElementId);
-    if (!el || el.type !== 'shape' || EXCLUDED_SHAPES_FROM_EDITOR.includes(el.shape || 'rect')) {
+    if (!el || (el.type !== 'shape' && el.type !== 'opening') || EXCLUDED_SHAPES_FROM_EDITOR.includes(el.shape || 'rect')) {
       setSegmentEditorElementId(null);
       setSegmentsRounded(false);
       setIsNodeEditMode(false);
@@ -1541,7 +1541,7 @@ export default function CreationsAtelierV2({
                 const isPeleMele = creationsProject.projectType?.includes('Pêle-mêle');
                 const filtered = isPeleMele
                   ? clamped.filter((el: any) =>
-                      el.type !== 'shape' &&
+                      el.type !== 'shape' && el.type !== 'opening' &&
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
@@ -2512,7 +2512,7 @@ export default function CreationsAtelierV2({
     
     const imageElements = canvasElements.filter(el => el.type === 'image' && el.src);
     const textElements = canvasElements.filter(el => el.type === 'text');
-    const openingElements = canvasElements.filter(el => el.type === 'shape');
+    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
     if (imageElements.length === 0 && textElements.length === 0 && openingElements.length === 0) {
       toast.error(language === 'fr' ? 'Aucun élément à capturer' : 'No elements to capture');
       return null;
@@ -2561,8 +2561,8 @@ export default function CreationsAtelierV2({
       diagLines.push(`${allDomImgs.length} img[data-element-id] dans le DOM`);
       
       for (const element of sortedElements) {
-        // --- Éléments de type 'shape' (puzzle, rect, round, oval, arch) ---
-        if (element.type === 'shape') {
+        // --- Éléments de type 'shape' ou 'opening' (puzzle, rect, round, oval, arch…) ---
+        if (element.type === 'shape' || element.type === 'opening') {
           const x = element.x * PX_PER_CM;
           const y = element.y * PX_PER_CM;
           const w = element.width * PX_PER_CM;
@@ -2574,7 +2574,8 @@ export default function CreationsAtelierV2({
           ctx.translate(cx, cy);
           ctx.rotate((element.rotation * Math.PI) / 180);
 
-          const fillColor = element.openingColor || '#ffffff';
+          // Les éléments 'opening' sont des contours SVG vides (fill=none) — pas de remplissage couleur
+          const fillColor = element.type === 'opening' ? null : (element.openingColor || '#ffffff');
           const strokeColor = '#000000';
           const strokeWidth = EXP_STROKE_THICK;
 
@@ -2708,8 +2709,11 @@ export default function CreationsAtelierV2({
             } else {
               ctx.rect(0, 0, w, h);
             }
-            ctx.fillStyle = fillColor;
-            ctx.fill();
+            // 'opening' = contour seul (fill=none) ; 'shape' = remplissage couleur
+            if (fillColor) {
+              ctx.fillStyle = fillColor;
+              ctx.fill();
+            }
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = strokeWidth;
             ctx.stroke();
@@ -6065,7 +6069,7 @@ export default function CreationsAtelierV2({
                       const safeColor = color && color !== 'transparent' ? color : '#ffffff';
                       const newOpening: CanvasElement = {
                         id: `opening-${Date.now()}`,
-                        type: 'shape',
+                        type: 'opening',
                         shape,
                         x: (formatW - defaultW) / 2,
                         y: (formatH - defaultH) / 2,
@@ -6095,7 +6099,7 @@ export default function CreationsAtelierV2({
                     }}
                     onApplyColorToOpenings={(color: string, targetIds: string[]) => {
                       setCanvasElements(prev => prev.map(el =>
-                        el.type === 'shape' && targetIds.includes(el.id)
+                        (el.type === 'shape' || el.type === 'opening') && targetIds.includes(el.id)
                           ? { ...el, openingColor: color }
                           : el
                       ));
@@ -6103,7 +6107,7 @@ export default function CreationsAtelierV2({
                     onGenerateFromOpenings={(bgColor: string, patternSrc: string | null, patternOpacity: number) => {
                       // Récupérer toutes les découpes validées
                       // Toutes les shapes sont utilisées (pas de filtre validé)
-                      const openings = canvasElements.filter(el => el.type === 'shape');
+                      const openings = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
                       if (openings.length === 0) {
                         toast.error(language === 'fr' ? 'Aucune découpe à générer' : 'No opening to generate');
                         return;
@@ -6178,11 +6182,11 @@ export default function CreationsAtelierV2({
                             originalWidthPx: img.naturalWidth,
                             originalHeightPx: img.naturalHeight,
                           };
-                          // Supprimer les découpes shape du canvas et ajouter l'image générée
+                          // Supprimer les découpes shape/opening du canvas et ajouter l'image générée
                           setCanvasElements(prev => [
                             newEl,
                             ...prev
-                              .filter(el => el.type !== 'shape')
+                              .filter(el => el.type !== 'shape' && el.type !== 'opening')
                               .map(el => ({ ...el, zIndex: el.zIndex + 1 })),
                           ]);
                           setSelectedElementId(newEl.id);
@@ -6200,7 +6204,7 @@ export default function CreationsAtelierV2({
                         renderAndAdd(null);
                       }
                     }}
-                    canvasOpenings={canvasElements.filter(el => el.type === 'shape').map(el => ({
+                    canvasOpenings={canvasElements.filter(el => el.type === 'shape' || el.type === 'opening').map(el => ({
                       id: el.id,
                       shape: el.shape || 'rect',
                       openingColor: el.openingColor || '#ffffff',
@@ -6289,7 +6293,7 @@ export default function CreationsAtelierV2({
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
                       const W = formatW * 10; // cm → mm
                       const H = formatH * 10;
-                      const shapes = canvasElements.filter(el => el.type === 'shape');
+                      const shapes = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
 
                       // Construire le path de chaque ouverture
                       const openingPaths = shapes.map(el => {
@@ -6575,7 +6579,7 @@ export default function CreationsAtelierV2({
                             width: cellW,
                             height: cellH,
                             rotation: 0,
-                            zIndex: canvasElements.filter(el => el.type !== 'shape').length + 10 + idx,
+                            zIndex: canvasElements.filter(el => el.type !== 'shape' && el.type !== 'opening').length + 10 + idx,
                             opacity: 1,
                             validated: true,
                             locked: true,
@@ -6598,7 +6602,7 @@ export default function CreationsAtelierV2({
                         }
                       }
                       setCanvasElements(prev => [
-                        ...prev.filter(el => el.type !== 'shape'),
+                        ...prev.filter(el => el.type !== 'shape' && el.type !== 'opening'),
                         ...newPieces,
                       ]);
                       toast.success(
@@ -6612,7 +6616,7 @@ export default function CreationsAtelierV2({
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
                       const maxExistingIdx = canvasElements
-                        .filter(el => el.type === 'shape' && el.openingIndex != null)
+                        .filter(el => (el.type === 'shape' || el.type === 'opening') && el.openingIndex != null)
                         .reduce((max, el) => Math.max(max, el.openingIndex!), 0);
                       const maxZIndex = canvasElements.reduce((max, el) => Math.max(max, el.zIndex), 0);
                       const newOpenings: CanvasElement[] = openings.map((op, i) => {
@@ -6620,7 +6624,7 @@ export default function CreationsAtelierV2({
                         openingCounterRef.current = Math.max(openingCounterRef.current, idx);
                         return {
                           id: `opening-${Date.now()}-${i}`,
-                          type: 'shape' as const,
+                          type: 'opening' as const,
                           shape: op.shape,
                           x: op.xFrac * formatW,
                           y: op.yFrac * formatH,
@@ -6646,7 +6650,7 @@ export default function CreationsAtelierV2({
                     onGetCurrentShapes={() => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
-                      const shapes = canvasElements.filter(el => el.type === 'shape');
+                      const shapes = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
                       if (shapes.length === 0) return null;
                       return shapes.map(el => ({
                         shape: el.shape || 'rect',
@@ -7244,7 +7248,7 @@ export default function CreationsAtelierV2({
                     const cmY = pxY / canvasDimensions.pxPerCm;
                     // Snap sur le périmètre de la forme sélectionnée
                     const el = canvasElements.find(e => e.id === selectedElementId);
-                    if (el && el.type === 'shape') {
+                    if (el && (el.type === 'shape' || el.type === 'opening')) {
                       const segs = buildShapeSegments(el);
                       if (segs) {
                         const snapped = snapToPerimeter(cmX, cmY, segs);
@@ -7289,7 +7293,7 @@ export default function CreationsAtelierV2({
                     const cmX = pxX / canvasDimensions.pxPerCm;
                     const cmY = pxY / canvasDimensions.pxPerCm;
                     const el = canvasElements.find(e => e.id === selectedElementId);
-                    if (el && el.type === 'shape') {
+                    if (el && (el.type === 'shape' || el.type === 'opening')) {
                       const segs = buildShapeSegments(el);
                       if (segs) {
                         const snapped = snapToPerimeter(cmX, cmY, segs);
@@ -7456,7 +7460,7 @@ export default function CreationsAtelierV2({
                   // Mode découpe : effectuer la découpe
                   if (isCutMode && cutStart && cutEnd && selectedElementId) {
                     const el = canvasElements.find(e => e.id === selectedElementId);
-                    if (el && el.type === 'shape') {
+                    if (el && (el.type === 'shape' || el.type === 'opening')) {
                       const result = cutShapeByLine(el, cutStart, cutEnd);
                       if (result) {
                         const groupId = `cut-group-${Date.now()}`;
@@ -8017,6 +8021,89 @@ export default function CreationsAtelierV2({
                       />
                     )}
 
+                    {/* Rendu ouverture SVG (type opening) — fill=none, contour noir fin */}
+                    {element.type === "opening" && (() => {
+                      const w = elementWidthPx;
+                      const h = elementHeightPx;
+                      let pathD = '';
+                      switch (element.shape) {
+                        case 'square': {
+                          const side = Math.min(w, h);
+                          const ox = (w - side) / 2; const oy = (h - side) / 2;
+                          pathD = `M${ox},${oy} h${side} v${side} h-${side} Z`;
+                          break;
+                        }
+                        case 'round': {
+                          const r = Math.min(w, h) / 2;
+                          pathD = `M${w/2 - r},${h/2} a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 -${r*2},0`;
+                          break;
+                        }
+                        case 'oval':
+                          pathD = `M${w/2},0 a${w/2},${h/2} 0 1,0 0.001,0 Z`;
+                          break;
+                        case 'arch':
+                          pathD = `M0,${h} L0,${h/2} Q0,0 ${w/2},0 Q${w},0 ${w},${h/2} L${w},${h} Z`;
+                          break;
+                        case 'heart': {
+                          const depth = (element.heartDepth ?? 50) / 100;
+                          const notchY = h * (0.25 + depth * 0.25);
+                          pathD = [
+                            `M ${w*0.5} ${notchY}`,
+                            `C ${w*0.5} ${h*0.10} ${w*0.0} ${h*0.10} ${w*0.0} ${h*0.35}`,
+                            `C ${w*0.0} ${h*0.60} ${w*0.5} ${h*0.75} ${w*0.5} ${h*1.0}`,
+                            `C ${w*0.5} ${h*0.75} ${w*1.0} ${h*0.60} ${w*1.0} ${h*0.35}`,
+                            `C ${w*1.0} ${h*0.10} ${w*0.5} ${h*0.10} ${w*0.5} ${notchY} Z`,
+                          ].join(' ');
+                          break;
+                        }
+                        case 'star': {
+                          const scx = w/2, scy = h/2;
+                          const outerR = Math.min(w,h)/2;
+                          const innerR = outerR * 0.42;
+                          const branches = element.starBranches ?? 5;
+                          const pts: string[] = [];
+                          for (let i = 0; i < branches * 2; i++) {
+                            const angle = (i * Math.PI) / branches - Math.PI / 2;
+                            const r = i % 2 === 0 ? outerR : innerR;
+                            pts.push(`${i===0?'M':'L'} ${scx+r*Math.cos(angle)} ${scy+r*Math.sin(angle)}`);
+                          }
+                          pathD = pts.join(' ') + ' Z';
+                          break;
+                        }
+                        case 'diamond':
+                          pathD = `M ${w/2} 0 L ${w} ${h/2} L ${w/2} ${h} L 0 ${h/2} Z`;
+                          break;
+                        case 'hexagon': {
+                          const pts: string[] = [];
+                          for (let i = 0; i < 6; i++) {
+                            const a = (i * Math.PI) / 3 - Math.PI / 6;
+                            pts.push(`${i===0?'M':'L'} ${w/2+w/2*Math.cos(a)} ${h/2+h/2*Math.sin(a)}`);
+                          }
+                          pathD = pts.join(' ') + ' Z';
+                          break;
+                        }
+                        default: // rect
+                          pathD = `M0,0 h${w} v${h} h-${w} Z`;
+                      }
+                      return (
+                        <svg
+                          width={w} height={h}
+                          viewBox={`0 0 ${w} ${h}`}
+                          className="absolute inset-0"
+                          style={{ overflow: 'visible', pointerEvents: 'none' }}
+                        >
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke={isSelected ? '#6366f1' : '#000000'}
+                            strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      );
+                    })()}
+
                     {/* Rendu découpe interactive (type shape) */}
                     {element.type === "shape" && (() => {
                       const w = elementWidthPx;
@@ -8525,7 +8612,7 @@ export default function CreationsAtelierV2({
                           </div>
                         )}
                         {/* Bouton corbeille (supprimer la forme) */}
-                        {selectedElementId === element.id && element.type === 'shape' && (
+                        {selectedElementId === element.id && (element.type === 'shape' || element.type === 'opening') && (
                           <div
                             className="absolute -top-4 -right-4 w-6 h-6 bg-red-500 border-2 border-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-red-600 z-[110]"
                             draggable={false}
@@ -9255,7 +9342,7 @@ export default function CreationsAtelierV2({
                     Les coordonnées sont en px (pxPerCm de canvasDimensions). */}
                 {filets.length > 0 && (() => {
                   const { pxPerCm, pageOffsetX, pageOffsetY, pageWidth, pageHeight } = canvasDimensions;
-                  const openingEls = canvasElements.filter(el => el.type === 'shape');
+                  const openingEls = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening');
                   if (openingEls.length === 0) return null;
                   return (
                     <svg
@@ -10551,7 +10638,7 @@ export default function CreationsAtelierV2({
                 const nameCounts = new Map<string, number>();
                 const sortedByZAsc = [...sorted].reverse();
                 for (const el of sortedByZAsc) {
-                  const baseName = el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : el.type === 'shape' ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`);
+                  const baseName = el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : (el.type === 'shape' || el.type === 'opening') ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`);
                   const count = (nameCounts.get(baseName) || 0) + 1;
                   nameCounts.set(baseName, count);
                   displayNames.set(el.id, baseName);
@@ -10626,6 +10713,8 @@ export default function CreationsAtelierV2({
                           <span className="text-[10px] text-gray-600 font-medium truncate px-1">Aa</span>
                         ) : el.type === 'shape' ? (
                           <div className="w-8 h-8 rounded" style={{ backgroundColor: el.openingColor || '#ccc' }} />
+                        ) : el.type === 'opening' ? (
+                          <div className="w-8 h-8 rounded border-2 border-black bg-transparent" />
                         ) : (
                           <Image className="w-4 h-4 text-gray-300" />
                         )}
