@@ -3993,8 +3993,34 @@ export default function CreationsAtelierV2({
       // Si un papier pêle-mêle existe, détecter si le drop tombe dans un trou
       // et placer la photo derrière le papier (zIndex inférieur).
       const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
+      const fondPP   = canvasElements.find(el => el.type === 'fond-passe-partout');
       let assignedHoleId: string | undefined;
       let assignedZIndex = canvasElements.length + 1;
+
+      // ── Fond passe-partout : toujours placer la photo derrière ──────────────
+      if (fondPP) {
+        // La photo passe sous le fond percé (zIndex = fond - 1 minimum)
+        const belowZ = Math.max(1, fondPP.zIndex - 1);
+        // Si on a un point de drop, chercher l'opening touché pour centrer + scaler
+        if (dropPositionCm) {
+          const openings = canvasElements.filter(el => el.type === 'opening');
+          const hit = openings.find(op =>
+            dropPositionCm!.x >= op.x && dropPositionCm!.x <= op.x + op.width &&
+            dropPositionCm!.y >= op.y && dropPositionCm!.y <= op.y + op.height
+          );
+          if (hit) {
+            // Scaler pour couvrir le trou (cover) et centrer
+            const scaleW = hit.width / widthCm;
+            const scaleH = hit.height / heightCm;
+            const scale = Math.max(scaleW, scaleH);
+            widthCm  = widthCm  * scale;
+            heightCm = heightCm * scale;
+            xCm = hit.x + (hit.width  - widthCm)  / 2;
+            yCm = hit.y + (hit.height - heightCm) / 2;
+          }
+        }
+        assignedZIndex = belowZ;
+      }
 
       if (pelePaper && dropPositionCm && pelePaper.holes) {
         // Si drop sur un trou → assigner, recadrer et placer derrière le papier
@@ -8180,6 +8206,11 @@ export default function CreationsAtelierV2({
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
+                        // Ouvertures SVG : transparentes aux événements quand un fond percé est appliqué
+                        // → les clics passent aux photos situées derrière le fond
+                        pointerEvents: (element.type === 'opening' && canvasElements.some(el => el.type === 'fond-passe-partout'))
+                          ? 'none'
+                          : undefined,
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
