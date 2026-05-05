@@ -1538,10 +1538,12 @@ export default function CreationsAtelierV2({
                 // Projets pêle-mêle : supprimer les artefacts de l'ancienne architecture
                 // (éléments 'shape' indépendants = anciens gabarits passe-partout)
                 // et les 'pelemele-paper' sans trous (papier vide = rectangle inutile).
+                // NOTE : 'opening' et 'fond-passe-partout' appartiennent au système passe-partout
+                // et doivent TOUJOURS être conservés, quel que soit le type de projet.
                 const isPeleMele = creationsProject.projectType?.includes('Pêle-mêle');
                 const filtered = isPeleMele
                   ? clamped.filter((el: any) =>
-                      el.type !== 'shape' && el.type !== 'opening' &&
+                      el.type !== 'shape' &&
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
