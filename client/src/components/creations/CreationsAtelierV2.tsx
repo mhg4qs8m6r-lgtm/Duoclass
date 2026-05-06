@@ -11070,7 +11070,32 @@ export default function CreationsAtelierV2({
                   });
                 }
 
-                return sorted.map((el, idx) => {
+                // Rôle lisible selon le type d'élément
+                const getRole = (el: CanvasElement): string => {
+                  if (language === 'fr') {
+                    switch (el.type) {
+                      case 'fond-passe-partout': return 'Fond percé';
+                      case 'image':              return 'Photo';
+                      case 'opening':            return 'Contour d\'ouverture';
+                      case 'shape':              return 'Forme colorée';
+                      case 'text':               return 'Texte';
+                      case 'pelemele-paper':     return 'Papier pêle-mêle';
+                      default:                   return el.type;
+                    }
+                  } else {
+                    switch (el.type) {
+                      case 'fond-passe-partout': return 'Perforated background';
+                      case 'image':              return 'Photo';
+                      case 'opening':            return 'Opening outline';
+                      case 'shape':              return 'Colored shape';
+                      case 'text':               return 'Text';
+                      case 'pelemele-paper':     return 'Photo collage paper';
+                      default:                   return el.type;
+                    }
+                  }
+                };
+
+                const layerItems = sorted.map((el, idx) => {
                   const position = sorted.length - idx;
                   const isBack = idx === sorted.length - 1;
                   const isSelected = selectedElementId === el.id;
@@ -11109,15 +11134,14 @@ export default function CreationsAtelierV2({
                         )}
                       </div>
 
-                      {/* Nom + niveau + position */}
+                      {/* Nom + rôle + description contextuelle */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">
                           {displayNames.get(el.id) || el.name || el.type}
                         </p>
-                        {levelLabel ? (
-                          <p className="text-[10px] text-purple-500 font-medium">{levelLabel}</p>
-                        ) : (
-                          <p className="text-xs text-gray-400">z-index: {el.zIndex}</p>
+                        <p className="text-[10px] text-blue-500 font-medium">{getRole(el)}</p>
+                        {levelLabel && (
+                          <p className="text-[10px] text-purple-500 font-medium leading-tight">{levelLabel}</p>
                         )}
                       </div>
 
@@ -11171,6 +11195,12 @@ export default function CreationsAtelierV2({
                                 if (item.id === above.id) return { ...item, zIndex: tempZ };
                                 return item;
                               }));
+                              toast.success(
+                                language === 'fr'
+                                  ? `"${displayNames.get(el.id) || el.name}" est maintenant au-dessus de "${displayNames.get(above.id) || above.name}"`
+                                  : `"${displayNames.get(el.id) || el.name}" is now above "${displayNames.get(above.id) || above.name}"`,
+                                { duration: 1800 }
+                              );
                             }
                           }}
                           disabled={idx === 0}
@@ -11190,6 +11220,12 @@ export default function CreationsAtelierV2({
                                 if (item.id === below.id) return { ...item, zIndex: tempZ };
                                 return item;
                               }));
+                              toast.success(
+                                language === 'fr'
+                                  ? `"${displayNames.get(el.id) || el.name}" est maintenant en dessous de "${displayNames.get(below.id) || below.name}"`
+                                  : `"${displayNames.get(el.id) || el.name}" is now below "${displayNames.get(below.id) || below.name}"`,
+                                { duration: 1800 }
+                              );
                             }
                           }}
                           disabled={idx === sorted.length - 1}
@@ -11221,6 +11257,15 @@ export default function CreationsAtelierV2({
                     </div>
                   );
                 });
+                return [
+                  <div key="__au-dessus__" className="text-center text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 tracking-wide uppercase select-none">
+                    ↑ {language === 'fr' ? 'Au-dessus — premier plan' : 'Above — front'}
+                  </div>,
+                  ...layerItems,
+                  <div key="__en-dessous__" className="text-center text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 rounded-lg py-1.5 tracking-wide uppercase select-none">
+                    ↓ {language === 'fr' ? 'En dessous — arrière-plan' : 'Below — back'}
+                  </div>,
+                ];
               })()}
 
               {/* Ligne fixe — Zone de travail (format) */}
