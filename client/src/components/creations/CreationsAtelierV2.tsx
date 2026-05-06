@@ -11306,13 +11306,21 @@ export default function CreationsAtelierV2({
 
                   const allOpenings = canvasElements.filter(el => el.type === 'opening');
                   const isInHole = (el: CanvasElement): boolean => {
-                    if (el.assignedHoleId) return true; // pelemele-paper
+                    if (el.assignedHoleId) return true; // pelemele-paper — toujours fiable
+                    // Fond-passe-partout : le centre de la photo doit être dans l'ouverture
+                    // ET l'ouverture doit couvrir au moins 20 % de la surface de la photo.
+                    // Cela empêche un grand fond décoratif (pleine page) d'être classé "dans
+                    // le trou" simplement parce que son centre tombe dans le bounding-box de
+                    // l'ouverture.
                     const cx = el.x + el.width  / 2;
                     const cy = el.y + el.height / 2;
-                    return allOpenings.some(op =>
-                      cx >= op.x && cx <= op.x + op.width &&
-                      cy >= op.y && cy <= op.y + op.height
-                    );
+                    const photoArea = el.width * el.height;
+                    return allOpenings.some(op => {
+                      if (cx < op.x || cx > op.x + op.width ||
+                          cy < op.y || cy > op.y + op.height) return false;
+                      const opArea = op.width * op.height;
+                      return opArea / photoArea >= 0.2; // ouverture ≥ 20 % de la photo
+                    });
                   };
 
                   const photosInHoles  = canvasElements.filter(el => el.type === 'image' && isInHole(el));
