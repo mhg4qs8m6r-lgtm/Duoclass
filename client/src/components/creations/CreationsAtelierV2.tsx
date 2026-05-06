@@ -2514,7 +2514,7 @@ export default function CreationsAtelierV2({
     
     const imageElements = canvasElements.filter(el => el.type === 'image' && el.src);
     const textElements = canvasElements.filter(el => el.type === 'text');
-    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening' || el.type === 'fond-passe-partout');
+    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening' || el.type === 'fond-passe-partout' || el.type === 'pelemele-paper');
     if (imageElements.length === 0 && textElements.length === 0 && openingElements.length === 0) {
       toast.error(language === 'fr' ? 'Aucun élément à capturer' : 'No elements to capture');
       return null;
@@ -2566,10 +2566,11 @@ export default function CreationsAtelierV2({
 
       for (const element of sortedElements) {
         // --- Éléments de type 'shape' ou 'opening' (puzzle, rect, round, oval, arch…) ---
-        // Les 'opening' sont skippés si un fond-passe-partout existe : les trous sont
-        // déjà représentés par destination-out dans le fond, pas besoin de redessiner les contours.
-        if (element.type === 'opening' && hasFondPassePartout) {
-          diagLines.push(`Opening "${element.name}" -> SKIP (fond-passe-partout gère les trous)`);
+        // Les 'opening' ET les 'shape' sont skippés si un fond-passe-partout existe : les trous sont
+        // déjà représentés par destination-out dans le fond, pas besoin de redessiner les contours
+        // (les shape en tant qu'ouvertures seraient exportées comme formes opaques sinon).
+        if ((element.type === 'opening' || element.type === 'shape') && hasFondPassePartout) {
+          diagLines.push(`${element.type} "${element.name}" -> SKIP (fond-passe-partout gère les trous)`);
           continue;
         }
         if (element.type === 'shape' || element.type === 'opening') {
@@ -2957,9 +2958,55 @@ export default function CreationsAtelierV2({
           const y = element.y * PX_PER_CM;
           const w = element.width * PX_PER_CM;
           const h = element.height * PX_PER_CM;
-          
+
           ctx.save();
           ctx.globalAlpha = element.opacity;
+
+          // ── Bug 3 : clip de la photo à la forme de son ouverture ─────────────
+          // Cas 1 – fond-passe-partout : trouver l'opening qui contient le centre de la photo
+          if (hasFondPassePartout) {
+            const imgCxCm = element.x + element.width / 2;
+            const imgCyCm = element.y + element.height / 2;
+            const relatedOp = canvasElements.find(op =>
+              op.type === 'opening' &&
+              imgCxCm >= op.x && imgCxCm <= op.x + op.width &&
+              imgCyCm >= op.y && imgCyCm <= op.y + op.height
+            );
+            if (relatedOp) {
+              const opX = relatedOp.x * PX_PER_CM;
+              const opY = relatedOp.y * PX_PER_CM;
+              const opW = relatedOp.width * PX_PER_CM;
+              const opH = relatedOp.height * PX_PER_CM;
+              const opCx = opX + opW / 2;
+              const opCy = opY + opH / 2;
+              ctx.translate(opCx, opCy);
+              ctx.rotate((relatedOp.rotation * Math.PI) / 180);
+              ctx.beginPath();
+              drawOpeningPath(ctx, relatedOp.shape || 'rect', -opW / 2, -opH / 2, opW, opH);
+              ctx.clip();
+              // Réinitialiser la matrice de transformation (le clip reste actif)
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              diagLines.push(`  -> clippé à opening "${relatedOp.name}" (${relatedOp.shape})`);
+            }
+          }
+          // Cas 2 – pelemele-paper : clip au trou via assignedHoleId
+          if (element.assignedHoleId) {
+            const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
+            const hole = pelePaper?.holes?.find(h => h.id === element.assignedHoleId);
+            if (hole) {
+              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
+              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
+              ctx.translate(hcx, hcy);
+              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
+              ctx.beginPath();
+              drawHolePathCanvas(ctx, hole, PX_PER_CM);
+              ctx.clip();
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              diagLines.push(`  -> clippé au trou pêle-mêle "${hole.id}" (${hole.shape})`);
+            }
+          }
+          // ─────────────────────────────────────────────────────────────────────
+
           const cx = x + w / 2;
           const cy = y + h / 2;
           ctx.translate(cx, cy);
