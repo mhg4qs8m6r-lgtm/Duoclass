@@ -2562,8 +2562,16 @@ export default function CreationsAtelierV2({
       const allDomImgs = page.querySelectorAll('img[data-element-id]');
       diagLines.push(`${allDomImgs.length} img[data-element-id] dans le DOM`);
       
+      const hasFondPassePartout = canvasElements.some(el => el.type === 'fond-passe-partout');
+
       for (const element of sortedElements) {
         // --- Éléments de type 'shape' ou 'opening' (puzzle, rect, round, oval, arch…) ---
+        // Les 'opening' sont skippés si un fond-passe-partout existe : les trous sont
+        // déjà représentés par destination-out dans le fond, pas besoin de redessiner les contours.
+        if (element.type === 'opening' && hasFondPassePartout) {
+          diagLines.push(`Opening "${element.name}" -> SKIP (fond-passe-partout gère les trous)`);
+          continue;
+        }
         if (element.type === 'shape' || element.type === 'opening') {
           const x = element.x * PX_PER_CM;
           const y = element.y * PX_PER_CM;
@@ -2586,8 +2594,10 @@ export default function CreationsAtelierV2({
             const svgPath = buildPuzzlePath(w, h, edges, element.puzzleCutStyle ?? 'classique', element.puzzleShowBorder ?? true, 0, 0, element.puzzleEdgeSeeds);
             const path2d = new Path2D(svgPath);
             ctx.translate(-w / 2, -h / 2);
-            ctx.fillStyle = 'none';
-            ctx.fill(path2d);
+            if (fillColor) {
+              ctx.fillStyle = fillColor;
+              ctx.fill(path2d);
+            }
             // Trait de découpe laser
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = EXP_STROKE_PUZZLE;
@@ -3570,7 +3580,8 @@ export default function CreationsAtelierV2({
     x: number,
     y: number,
     w: number,
-    h: number
+    h: number,
+    heartDepth = 50
   ) => {
     switch (shape) {
       case 'square': {
@@ -3593,6 +3604,51 @@ export default function CreationsAtelierV2({
         ctx.arcTo(x, y, x + w / 2, y, w / 2);
         ctx.arcTo(x + w, y, x + w, y + h / 2, w / 2);
         ctx.lineTo(x + w, y + h);
+        ctx.closePath();
+        break;
+      }
+      case 'heart': {
+        const hd = heartDepth / 100;
+        const notchY = y + h * (0.25 + hd * 0.25);
+        ctx.moveTo(x + w * 0.5, notchY);
+        ctx.bezierCurveTo(x + w * 0.5, y + h * 0.10, x, y + h * 0.10, x, y + h * 0.35);
+        ctx.bezierCurveTo(x, y + h * 0.60, x + w * 0.5, y + h * 0.75, x + w * 0.5, y + h);
+        ctx.bezierCurveTo(x + w * 0.5, y + h * 0.75, x + w, y + h * 0.60, x + w, y + h * 0.35);
+        ctx.bezierCurveTo(x + w, y + h * 0.10, x + w * 0.5, y + h * 0.10, x + w * 0.5, notchY);
+        ctx.closePath();
+        break;
+      }
+      case 'star': {
+        const outerR = Math.min(w, h) / 2;
+        const innerR = outerR * 0.42;
+        const scx = x + w / 2, scy = y + h / 2;
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * Math.PI) / 5 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          const px = scx + r * Math.cos(angle);
+          const py = scy + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        break;
+      }
+      case 'diamond': {
+        ctx.moveTo(x + w / 2, y);
+        ctx.lineTo(x + w, y + h / 2);
+        ctx.lineTo(x + w / 2, y + h);
+        ctx.lineTo(x, y + h / 2);
+        ctx.closePath();
+        break;
+      }
+      case 'hexagon': {
+        const hcx = x + w / 2, hcy = y + h / 2;
+        const hrx = w / 2, hry = h / 2;
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3 - Math.PI / 6;
+          const px = hcx + hrx * Math.cos(a);
+          const py = hcy + hry * Math.sin(a);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
         ctx.closePath();
         break;
       }
@@ -5225,9 +5281,20 @@ export default function CreationsAtelierV2({
                       <span className="text-sm font-bold" style={{ color: '#f97316' }}>Version Admin</span>
                     )}
                   </div>
-                  <p className="text-sm text-purple-500 font-medium ml-3 mt-0.5">
-                    {currentProjectType || 'Projet libre'}
-                  </p>
+                  <div className="flex items-center gap-2 ml-3 mt-0.5">
+                    <p className="text-sm text-purple-500 font-medium">
+                      {currentProjectType || 'Projet libre'}
+                    </p>
+                    {(currentProjectType?.includes('Pêle-mêle') || currentProjectType?.includes('Passe-partout')) && (
+                      <button
+                        onClick={() => window.open('/assets/Guide_Final_DuoClass.pdf', '_blank')}
+                        className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-colors"
+                        title="Ouvrir le guide d'utilisation"
+                      >
+                        ℹ️ Infos
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
