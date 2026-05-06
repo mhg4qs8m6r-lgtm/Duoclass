@@ -8372,6 +8372,10 @@ export default function CreationsAtelierV2({
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
+                        // opening/shape : le div lui-même ne capte pas les clics (zone transparente)
+                        // Les enfants (poignées resize/rotation) gardent pointer-events:auto par défaut.
+                        // La sélection se fait via les SVG paths internes (hit area transparent).
+                        pointerEvents: (element.type === 'opening' || element.type === 'shape') ? 'none' : undefined,
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
@@ -8524,13 +8528,51 @@ export default function CreationsAtelierV2({
                         default: // rect
                           pathD = `M0,0 h${w} v${h} h-${w} Z`;
                       }
+                      const handleOpeningDown = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        handleMouseDown(e, element.id);
+                      };
+                      const handleOpeningClick = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (!isDragging && !element.locked) {
+                          if (e.shiftKey) {
+                            setSelectedElementIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(element.id) && next.size > 1) next.delete(element.id);
+                              else next.add(element.id);
+                              return next;
+                            });
+                            setSelectedElementId(element.id);
+                          } else {
+                            selectElementWithGroup(element.id);
+                          }
+                        }
+                        closeContextMenu();
+                      };
+                      const handleOpeningCtx = (e: React.MouseEvent) => {
+                        e.stopPropagation(); e.preventDefault();
+                        handleContextMenu(e, element.id);
+                      };
                       return (
                         <svg
                           width={w} height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible', pointerEvents: 'none' }}
+                          style={{ overflow: 'visible' }}
                         >
+                          {/* Zone de clic transparente 16px — sélection même avec contour fin */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke="transparent"
+                            strokeWidth={16}
+                            pointerEvents="stroke"
+                            style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                            onMouseDown={handleOpeningDown}
+                            onClick={handleOpeningClick}
+                            onContextMenu={handleOpeningCtx}
+                          />
+                          {/* Contour visuel (non interactif) */}
                           <path
                             d={pathD}
                             fill="none"
@@ -8538,6 +8580,7 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
+                            style={{ pointerEvents: 'none' }}
                           />
                         </svg>
                       );
@@ -8574,12 +8617,34 @@ export default function CreationsAtelierV2({
                             return `${cmd}${converted[0].toFixed(2)},${converted[1].toFixed(2)} `;
                           }
                         );
+                        const handleCPDown = (e: React.MouseEvent) => { e.stopPropagation(); handleMouseDown(e, element.id); };
+                        const handleCPClick = (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          if (!isDragging && !element.locked) {
+                            if (e.shiftKey) {
+                              setSelectedElementIds(prev => { const next = new Set(prev); if (next.has(element.id) && next.size > 1) next.delete(element.id); else next.add(element.id); return next; });
+                              setSelectedElementId(element.id);
+                            } else { selectElementWithGroup(element.id); }
+                          }
+                          closeContextMenu();
+                        };
                         return (
                           <svg
                             width={w} height={h}
                             viewBox={`0 0 ${w} ${h}`}
-                            style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
+                            style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
                           >
+                            <path
+                              d={localPath}
+                              fill="transparent"
+                              stroke="transparent"
+                              strokeWidth={16}
+                              pointerEvents="all"
+                              style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                              onMouseDown={handleCPDown}
+                              onClick={handleCPClick}
+                              onContextMenu={(e) => { e.stopPropagation(); e.preventDefault(); handleContextMenu(e, element.id); }}
+                            />
                             <path
                               d={localPath}
                               fill={fillColor}
@@ -8587,6 +8652,7 @@ export default function CreationsAtelierV2({
                               strokeWidth={STROKE_SVG}
                               strokeLinecap="round"
                               strokeLinejoin="round"
+                              style={{ pointerEvents: 'none' }}
                             />
                           </svg>
                         );
@@ -8729,16 +8795,53 @@ export default function CreationsAtelierV2({
                         default: // rect
                           pathD = `M0,0 h${w} v${h} h-${w} Z`;
                       }
+                      const handleShapeDown = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        handleMouseDown(e, element.id);
+                      };
+                      const handleShapeClick = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (!isDragging && !element.locked) {
+                          if (e.shiftKey) {
+                            setSelectedElementIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(element.id) && next.size > 1) next.delete(element.id);
+                              else next.add(element.id);
+                              return next;
+                            });
+                            setSelectedElementId(element.id);
+                          } else {
+                            selectElementWithGroup(element.id);
+                          }
+                        }
+                        closeContextMenu();
+                      };
+                      const handleShapeCtx = (e: React.MouseEvent) => {
+                        e.stopPropagation(); e.preventDefault();
+                        handleContextMenu(e, element.id);
+                      };
                       return (
                         <svg
                           width={w}
                           height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible', pointerEvents: 'none' }}
+                          style={{ overflow: 'visible' }}
                         >
+                          {/* Hit area transparent — couvre fill + contour élargi 16px */}
+                          <path
+                            d={pathD}
+                            fill="transparent"
+                            stroke="transparent"
+                            strokeWidth={16}
+                            pointerEvents="all"
+                            style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                            onMouseDown={handleShapeDown}
+                            onClick={handleShapeClick}
+                            onContextMenu={handleShapeCtx}
+                          />
                           {/* Couleur de la découpe (transparent pour puzzle = gabarit vierge) */}
-                          <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} />
+                          <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} style={{ pointerEvents: 'none' }} />
                           <path
                             d={pathD}
                             fill="none"
@@ -8746,6 +8849,7 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
+                            style={{ pointerEvents: 'none' }}
                           />
                           {/* Numéro de pièce au centre (optionnel, pour puzzles enfants) */}
                           {element.shape === 'puzzle' && element.puzzleShowNumber && element.openingIndex != null && (
