@@ -3192,6 +3192,13 @@ export default function CreationsAtelierV2({
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
   const [showLayerOrderModal, setShowLayerOrderModal] = useState(false);
+  // Sélecteur Photo / Clipart affiché lors d'un drop libre (sans trou assigné)
+  const [pendingImageDrop, setPendingImageDrop] = useState<{
+    src: string; name: string;
+    xCm: number; yCm: number; widthCm: number; heightCm: number;
+    originalWidthPx: number; originalHeightPx: number;
+    groupId?: string;
+  } | null>(null);
 
   // Album de destination : "Images projets" (catégorie cat_mes_projets)
   const IMAGES_PROJETS_ALBUM_ID = 'album_images_projets';
@@ -4099,36 +4106,42 @@ export default function CreationsAtelierV2({
       // et placer la photo derrière le papier (zIndex inférieur).
       const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
       const fondPP   = canvasElements.find(el => el.type === 'fond-passe-partout');
+      // ── Architecture z-index : bandes fixes ──────────────────────────────────
+      // B2 : photos       1–499  (libres entre elles)
+      // B3 : fond + formes  500  (même niveau, imposé à la création)
+      // B4 : extras       600+  (textes, cliparts)
+      // null → drop libre → afficher le sélecteur Photo / Clipart
       let assignedHoleId: string | undefined;
-      let assignedZIndex = canvasElements.length + 1;
+      let assignedZIndex: number | null = null; // null = montrer le sélecteur
 
-      // ── Fond passe-partout : toujours placer la photo derrière ──────────────
-      if (fondPP) {
-        // La photo passe sous le fond percé (zIndex = fond - 1 minimum)
-        const belowZ = Math.max(1, fondPP.zIndex - 1);
-        // Si on a un point de drop, chercher l'opening touché pour centrer + scaler
-        if (dropPositionCm) {
-          const openings = canvasElements.filter(el => el.type === 'opening');
-          const hit = openings.find(op =>
-            dropPositionCm!.x >= op.x && dropPositionCm!.x <= op.x + op.width &&
-            dropPositionCm!.y >= op.y && dropPositionCm!.y <= op.y + op.height
-          );
-          if (hit) {
-            // Scaler pour couvrir le trou (cover) et centrer
-            const scaleW = hit.width / widthCm;
-            const scaleH = hit.height / heightCm;
-            const scale = Math.max(scaleW, scaleH);
-            widthCm  = widthCm  * scale;
-            heightCm = heightCm * scale;
-            xCm = hit.x + (hit.width  - widthCm)  / 2;
-            yCm = hit.y + (hit.height - heightCm) / 2;
-          }
+      const nextPhotoZ = () => {
+        const max = canvasElements
+          .filter(e => e.type === 'image' && e.zIndex < 500)
+          .reduce((m, e) => Math.max(m, e.zIndex), 0);
+        return Math.min(499, max + 1);
+      };
+
+      // Cas 1 – drop sur une ouverture du fond-passe-partout
+      if (fondPP && dropPositionCm) {
+        const openings = canvasElements.filter(el => el.type === 'opening');
+        const hit = openings.find(op =>
+          dropPositionCm!.x >= op.x && dropPositionCm!.x <= op.x + op.width &&
+          dropPositionCm!.y >= op.y && dropPositionCm!.y <= op.y + op.height
+        );
+        if (hit) {
+          const scaleW = hit.width / widthCm;
+          const scaleH = hit.height / heightCm;
+          const scale = Math.max(scaleW, scaleH);
+          widthCm  = widthCm  * scale;
+          heightCm = heightCm * scale;
+          xCm = hit.x + (hit.width  - widthCm)  / 2;
+          yCm = hit.y + (hit.height - heightCm) / 2;
+          assignedZIndex = nextPhotoZ();
         }
-        assignedZIndex = belowZ;
       }
 
+      // Cas 2 – drop sur un trou du papier pêle-mêle
       if (pelePaper && dropPositionCm && pelePaper.holes) {
-        // Si drop sur un trou → assigner, recadrer et placer derrière le papier
         const hit = pelePaper.holes.find(hole => {
           const inX = dropPositionCm!.x >= hole.x && dropPositionCm!.x <= hole.x + hole.w;
           const inY = dropPositionCm!.y >= hole.y && dropPositionCm!.y <= hole.y + hole.h;
@@ -4136,20 +4149,32 @@ export default function CreationsAtelierV2({
         });
         if (hit) {
           assignedHoleId = hit.id;
-          assignedZIndex = Math.max(1, (pelePaper.zIndex ?? 2) - 1);
-          // Recadrer la photo pour remplir le trou tout en conservant les proportions
           const scaleW = hit.w / widthCm;
           const scaleH = hit.h / heightCm;
           const scale = Math.max(scaleW, scaleH);
           widthCm = widthCm * scale;
           heightCm = heightCm * scale;
-          // Centrer sur le trou
           xCm = hit.x + (hit.w - widthCm) / 2;
           yCm = hit.y + (hit.h - heightCm) / 2;
+          assignedZIndex = nextPhotoZ();
         }
-        // Sinon : photo déposée hors d'un trou → z-index normal (sur le papier)
       }
 
+      // Cas 3 – drop libre → sélecteur Photo / Clipart (pas de timeout)
+      if (assignedZIndex === null) {
+        setPendingImageDrop({
+          src,
+          name: name || (language === 'fr' ? 'Élément' : 'Element'),
+          xCm, yCm, widthCm, heightCm,
+          originalWidthPx: img.naturalWidth,
+          originalHeightPx: img.naturalHeight,
+          ...(assignGroupId ? { groupId: assignGroupId } : {}),
+        });
+        setActiveCanvasPhoto(src);
+        return; // ne pas ajouter au canvas avant le choix de l'user
+      }
+
+      // Drop assigné à un trou → ajout direct en bande 2
       const newElement: CanvasElement = {
         id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: "image",
@@ -4174,6 +4199,29 @@ export default function CreationsAtelierV2({
     img.src = src;
   };
   
+  // Confirme le sélecteur Photo / Clipart et ajoute l'élément au canvas
+  const confirmImageDrop = (band: 'photo' | 'extra') => {
+    if (!pendingImageDrop) return;
+    const { src, name, xCm, yCm, widthCm, heightCm, originalWidthPx, originalHeightPx, groupId } = pendingImageDrop;
+    const photoMaxZ = canvasElements.filter(e => e.type === 'image' && e.zIndex < 500).reduce((m, e) => Math.max(m, e.zIndex), 0);
+    const extraMaxZ = canvasElements.filter(e => e.zIndex >= 600).reduce((m, e) => Math.max(m, e.zIndex), 0);
+    const zIndex = band === 'photo'
+      ? Math.min(499, photoMaxZ + 1)
+      : (extraMaxZ === 0 ? 600 : extraMaxZ + 1);
+    const newEl: CanvasElement = {
+      id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: 'image',
+      src, x: xCm, y: yCm, width: widthCm, height: heightCm,
+      rotation: 0, zIndex, opacity: 1, name,
+      originalWidthPx, originalHeightPx,
+      ...(groupId ? { groupId } : {}),
+    };
+    setCanvasElements(prev => [...prev, newEl]);
+    setSelectedElementId(newEl.id);
+    setActiveCanvasPhoto(src);
+    setPendingImageDrop(null);
+  };
+
   // Ajouter au collecteur (pièces détourées / éléments) — persiste dans IndexedDB
   const addToCollector = async (src: string, name: string, type: CollectorItem["type"] = "detourage", widthCm?: number, heightCm?: number) => {
     if (currentProjectId) {
@@ -6219,7 +6267,10 @@ export default function CreationsAtelierV2({
                         width: 10,
                         height: 3,
                         rotation: 0,
-                        zIndex: canvasElements.length + 1,
+                        zIndex: (() => { // bande extras (600+)
+                          const m = canvasElements.filter(e => e.zIndex >= 600).reduce((a, e) => Math.max(a, e.zIndex), 0);
+                          return m === 0 ? 600 : m + 1;
+                        })(),
                         opacity: 1,
                         name: "Texte",
                         fontFamily: textProps.fontFamily,
@@ -6363,7 +6414,7 @@ export default function CreationsAtelierV2({
                         width: defaultW,
                         height: defaultH,
                         rotation: 0,
-                        zIndex: canvasElements.length + 10,
+                        zIndex: 500, // bande fixe : fond + formes
                         opacity: 1,
                         openingIndex: idx,
                         name: language === 'fr' ? `Découpe ${idx}` : `Opening ${idx}`,
@@ -6516,8 +6567,7 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            // zIndex entre le fond plat (0) et les ouvertures
-                            zIndex: Math.max(1, maxOpeningZ - 1),
+                            zIndex: 500, // bande fixe : fond + formes
                             opacity: 1,
                             locked: true,
                             name: language === 'fr' ? 'Fond passe-partout' : 'Mat background',
@@ -6566,7 +6616,7 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1,
+                            zIndex: 500, // bande fixe : fond + formes
                             opacity: 1,
                             openingColor: bgColor,
                             holes: [],
@@ -6968,7 +7018,7 @@ export default function CreationsAtelierV2({
                           width: op.wFrac * formatW,
                           height: op.hFrac * formatH,
                           rotation: 0,
-                          zIndex: maxZIndex + 1 + i,
+                          zIndex: 500, // bande fixe : fond + formes
                           opacity: 1,
                           validated: true,
                           openingIndex: idx,
@@ -7419,7 +7469,7 @@ export default function CreationsAtelierV2({
                           type: 'pelemele-paper' as const,
                           x: 0, y: 0,
                           width: fmtW, height: fmtH,
-                          rotation: 0, zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1, opacity: 1,
+                          rotation: 0, zIndex: 500, opacity: 1, // bande fixe : fond + formes
                           openingColor: '#f0e6d3',
                           holes: [newHole],
                         }]);
@@ -7742,7 +7792,7 @@ export default function CreationsAtelierV2({
                             width: actualEnd.x,
                             height: actualEnd.y,
                             rotation: 0,
-                            zIndex: canvasElements.length + 10,
+                            zIndex: 500, // bande fixe : fond + formes
                             opacity: 1,
                             openingIndex: idx,
                             name: language === 'fr' ? `Ligne ${idx}` : `Line ${idx}`,
@@ -11145,28 +11195,36 @@ export default function CreationsAtelierV2({
                         )}
                       </div>
 
-                      {/* Saisie numéro de position */}
-                      <input
-                        type="number"
-                        min={1}
-                        max={canvasElements.length}
-                        value={position}
-                        onChange={(e) => {
-                          const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
-                          const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
-                          const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
-                          withoutCurrent.splice(newPos - 1, 0, el);
-                          setCanvasElements(canvasElements.map(item => {
-                            const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
-                            return { ...item, zIndex: newIdx + 1 };
-                          }));
-                        }}
-                        className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
-                        title={language === 'fr' ? 'Position du calque' : 'Layer position'}
-                      />
+                      {/* Saisie numéro de position — photos uniquement */}
+                      {el.type === 'image' && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={canvasElements.length}
+                          value={position}
+                          onChange={(e) => {
+                            const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
+                            const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
+                            const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
+                            withoutCurrent.splice(newPos - 1, 0, el);
+                            setCanvasElements(canvasElements.map(item => {
+                              const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
+                              return { ...item, zIndex: newIdx + 1 };
+                            }));
+                          }}
+                          className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
+                          title={language === 'fr' ? 'Position du calque' : 'Layer position'}
+                        />
+                      )}
 
-                      {/* Boutons de réorganisation */}
+                      {/* Boutons de réorganisation — photos uniquement ; badge fixe pour les autres */}
                       <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        {el.type !== 'image' ? (
+                          <span className="px-2 py-1 text-[10px] font-semibold rounded bg-gray-100 text-gray-400 text-center select-none" title={language === 'fr' ? 'Niveau fixe — non déplaçable' : 'Fixed level'}>
+                            🔒 {language === 'fr' ? 'Niveau fixe' : 'Fixed'}
+                          </span>
+                        ) : (
+                          <>
                         {idx === 0 ? (
                           <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
                             {language === 'fr' ? '✓ Devant' : '✓ Front'}
@@ -11253,6 +11311,8 @@ export default function CreationsAtelierV2({
                             {language === 'fr' ? 'Dernier' : 'Back'}
                           </button>
                         )}
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -11288,89 +11348,60 @@ export default function CreationsAtelierV2({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-between flex-shrink-0 gap-3">
-              {/* Bouton réorganisation automatique */}
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 flex items-center gap-1.5"
-                onClick={() => {
-                  // ── Catégorisation des éléments en 4 groupes (devant → arrière) ──
-                  //  G1 : ouvertures et contours (opening / shape)
-                  //  G2 : fond percé et papier pêle-mêle
-                  //  G3 : images décoratives (hors trou) + textes
-                  //  G4 : images dans les trous (centre dans une ouverture ou assignedHoleId)
-                  const openingEls = canvasElements.filter(el => el.type === 'opening' || el.type === 'shape');
-                  const fondEls    = canvasElements.filter(el => el.type === 'fond-passe-partout' || el.type === 'pelemele-paper');
-                  const textEls    = canvasElements.filter(el => el.type === 'text');
-
-                  const allOpenings = canvasElements.filter(el => el.type === 'opening');
-                  const isInHole = (el: CanvasElement): boolean => {
-                    if (el.assignedHoleId) return true; // pelemele-paper — toujours fiable
-                    // Fond-passe-partout : le centre de la photo doit être dans l'ouverture
-                    // ET l'ouverture doit couvrir au moins 20 % de la surface de la photo.
-                    // Cela empêche un grand fond décoratif (pleine page) d'être classé "dans
-                    // le trou" simplement parce que son centre tombe dans le bounding-box de
-                    // l'ouverture.
-                    const cx = el.x + el.width  / 2;
-                    const cy = el.y + el.height / 2;
-                    const photoArea = el.width * el.height;
-                    return allOpenings.some(op => {
-                      if (cx < op.x || cx > op.x + op.width ||
-                          cy < op.y || cy > op.y + op.height) return false;
-                      const opArea = op.width * op.height;
-                      return opArea / photoArea >= 0.2; // ouverture ≥ 20 % de la photo
-                    });
-                  };
-
-                  const photosInHoles  = canvasElements.filter(el => el.type === 'image' && isInHole(el));
-                  const photosInHoleIds = new Set(photosInHoles.map(e => e.id));
-                  const photosDeco     = canvasElements.filter(el => el.type === 'image' && !photosInHoleIds.has(el.id));
-
-                  // Éléments non classés dans aucun groupe
-                  const allGroupedIds = new Set([
-                    ...openingEls, ...fondEls, ...textEls, ...photosInHoles, ...photosDeco,
-                  ].map(e => e.id));
-                  const otherEls = canvasElements.filter(el => !allGroupedIds.has(el.id));
-
-                  // Groupes du devant vers l'arrière
-                  const groups: CanvasElement[][] = [
-                    openingEls,                              // G1 — devant
-                    fondEls,                                 // G2 — fond percé
-                    [...photosDeco, ...textEls, ...otherEls], // G3 — décoratif
-                    photosInHoles,                           // G4 — arrière
-                  ];
-
-                  // Assigner les zIndex : le premier groupe reçoit les valeurs les plus hautes
-                  const total = canvasElements.length;
-                  let z = total;
-                  const updates = new Map<string, number>();
-                  for (const group of groups) {
-                    for (const el of group) {
-                      updates.set(el.id, z);
-                      z--;
-                    }
-                  }
-
-                  setCanvasElements(prev =>
-                    prev.map(el => updates.has(el.id) ? { ...el, zIndex: updates.get(el.id)! } : el)
-                  );
-                  toast.success(
-                    language === 'fr'
-                      ? `Calques réorganisés : ${openingEls.length} contour(s) · ${fondEls.length} fond(s) · ${photosDeco.length} déco · ${photosInHoles.length} dans les trous`
-                      : `Layers reordered: ${openingEls.length} outline(s) · ${fondEls.length} background(s) · ${photosDeco.length} deco · ${photosInHoles.length} in holes`,
-                    { duration: 3000 }
-                  );
-                }}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                {language === 'fr' ? 'Réorganiser automatiquement' : 'Auto-reorder'}
-              </Button>
-
+            <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-end flex-shrink-0 gap-3">
               <Button size="sm" variant="outline" onClick={() => setShowLayerOrderModal(false)}>
                 {language === 'fr' ? 'Fermer' : 'Close'}
               </Button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Sélecteur Photo / Clipart — affiché quand un drop libre est en attente */}
+      {pendingImageDrop && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 flex flex-col items-center gap-4">
+            <h3 className="text-base font-bold text-gray-800 text-center">
+              {language === 'fr' ? 'Quel type d\'élément ?' : 'What type of element?'}
+            </h3>
+            <p className="text-sm text-gray-500 text-center leading-snug">
+              {language === 'fr'
+                ? 'Choisissez le rôle de cette image dans le projet.'
+                : 'Choose the role of this image in the project.'}
+            </p>
+            <div className="flex flex-col gap-3 w-full">
+              <button
+                className="w-full px-4 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-3"
+                onClick={() => confirmImageDrop('photo')}
+              >
+                <span className="text-xl">🖼️</span>
+                <div className="text-left">
+                  <div>{language === 'fr' ? 'Photo' : 'Photo'}</div>
+                  <div className="text-[11px] font-normal opacity-80">
+                    {language === 'fr' ? 'Derrière le fond percé' : 'Behind perforated background'}
+                  </div>
+                </div>
+              </button>
+              <button
+                className="w-full px-4 py-3 rounded-xl bg-purple-100 text-purple-800 font-semibold text-sm hover:bg-purple-200 transition-colors flex items-center gap-3"
+                onClick={() => confirmImageDrop('extra')}
+              >
+                <span className="text-xl">✂️</span>
+                <div className="text-left">
+                  <div>{language === 'fr' ? 'Clipart / Décoration' : 'Clipart / Decoration'}</div>
+                  <div className="text-[11px] font-normal opacity-70">
+                    {language === 'fr' ? 'Devant le fond percé' : 'In front of perforated background'}
+                  </div>
+                </div>
+              </button>
+            </div>
+            <button
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1"
+              onClick={() => setPendingImageDrop(null)}
+            >
+              {language === 'fr' ? 'Annuler' : 'Cancel'}
+            </button>
           </div>
         </div>,
         document.body
