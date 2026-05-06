@@ -11288,7 +11288,77 @@ export default function CreationsAtelierV2({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 bg-gray-50 border-t flex justify-end flex-shrink-0">
+            <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-between flex-shrink-0 gap-3">
+              {/* Bouton réorganisation automatique */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 flex items-center gap-1.5"
+                onClick={() => {
+                  // ── Catégorisation des éléments en 4 groupes (devant → arrière) ──
+                  //  G1 : ouvertures et contours (opening / shape)
+                  //  G2 : fond percé et papier pêle-mêle
+                  //  G3 : images décoratives (hors trou) + textes
+                  //  G4 : images dans les trous (centre dans une ouverture ou assignedHoleId)
+                  const openingEls = canvasElements.filter(el => el.type === 'opening' || el.type === 'shape');
+                  const fondEls    = canvasElements.filter(el => el.type === 'fond-passe-partout' || el.type === 'pelemele-paper');
+                  const textEls    = canvasElements.filter(el => el.type === 'text');
+
+                  const allOpenings = canvasElements.filter(el => el.type === 'opening');
+                  const isInHole = (el: CanvasElement): boolean => {
+                    if (el.assignedHoleId) return true; // pelemele-paper
+                    const cx = el.x + el.width  / 2;
+                    const cy = el.y + el.height / 2;
+                    return allOpenings.some(op =>
+                      cx >= op.x && cx <= op.x + op.width &&
+                      cy >= op.y && cy <= op.y + op.height
+                    );
+                  };
+
+                  const photosInHoles  = canvasElements.filter(el => el.type === 'image' && isInHole(el));
+                  const photosInHoleIds = new Set(photosInHoles.map(e => e.id));
+                  const photosDeco     = canvasElements.filter(el => el.type === 'image' && !photosInHoleIds.has(el.id));
+
+                  // Éléments non classés dans aucun groupe
+                  const allGroupedIds = new Set([
+                    ...openingEls, ...fondEls, ...textEls, ...photosInHoles, ...photosDeco,
+                  ].map(e => e.id));
+                  const otherEls = canvasElements.filter(el => !allGroupedIds.has(el.id));
+
+                  // Groupes du devant vers l'arrière
+                  const groups: CanvasElement[][] = [
+                    openingEls,                              // G1 — devant
+                    fondEls,                                 // G2 — fond percé
+                    [...photosDeco, ...textEls, ...otherEls], // G3 — décoratif
+                    photosInHoles,                           // G4 — arrière
+                  ];
+
+                  // Assigner les zIndex : le premier groupe reçoit les valeurs les plus hautes
+                  const total = canvasElements.length;
+                  let z = total;
+                  const updates = new Map<string, number>();
+                  for (const group of groups) {
+                    for (const el of group) {
+                      updates.set(el.id, z);
+                      z--;
+                    }
+                  }
+
+                  setCanvasElements(prev =>
+                    prev.map(el => updates.has(el.id) ? { ...el, zIndex: updates.get(el.id)! } : el)
+                  );
+                  toast.success(
+                    language === 'fr'
+                      ? `Calques réorganisés : ${openingEls.length} contour(s) · ${fondEls.length} fond(s) · ${photosDeco.length} déco · ${photosInHoles.length} dans les trous`
+                      : `Layers reordered: ${openingEls.length} outline(s) · ${fondEls.length} background(s) · ${photosDeco.length} deco · ${photosInHoles.length} in holes`,
+                    { duration: 3000 }
+                  );
+                }}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                {language === 'fr' ? 'Réorganiser automatiquement' : 'Auto-reorder'}
+              </Button>
+
               <Button size="sm" variant="outline" onClick={() => setShowLayerOrderModal(false)}>
                 {language === 'fr' ? 'Fermer' : 'Close'}
               </Button>
