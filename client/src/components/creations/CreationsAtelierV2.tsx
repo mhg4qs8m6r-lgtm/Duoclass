@@ -1547,8 +1547,24 @@ export default function CreationsAtelierV2({
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
-                console.log(`[Créations] ${filtered.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
-                setCanvasElements(filtered);
+                // Nettoyage automatique : si un fond-passe-partout existe, supprimer les
+                // pelemele-paper résiduels de l'ancienne architecture (zIndex ≠ 500).
+                const hasFondPP = filtered.some((el: any) => el.type === 'fond-passe-partout');
+                const cleanedElements = hasFondPP
+                  ? filtered.filter((el: any) => !(el.type === 'pelemele-paper' && el.zIndex !== 500))
+                  : filtered;
+                const removedLegacy = filtered.length - cleanedElements.length;
+                if (removedLegacy > 0) {
+                  console.log(`[Créations] ${removedLegacy} pelemele-paper résiduel(s) supprimé(s) (fond-passe-partout détecté)`);
+                  setTimeout(() => toast.info(
+                    language === 'fr'
+                      ? `Nettoyage automatique : ${removedLegacy} fond${removedLegacy > 1 ? 's' : ''} pêle-mêle résiduel${removedLegacy > 1 ? 's' : ''} supprimé${removedLegacy > 1 ? 's' : ''}`
+                      : `Auto-cleanup: ${removedLegacy} legacy pêle-mêle background${removedLegacy > 1 ? 's' : ''} removed`,
+                    { duration: 3500 }
+                  ), 800);
+                }
+                console.log(`[Créations] ${cleanedElements.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
+                setCanvasElements(cleanedElements);
               }
 
               // Les éléments du collecteur sont gérés par la live query IndexedDB
