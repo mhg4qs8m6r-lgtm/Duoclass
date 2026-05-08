@@ -8208,7 +8208,8 @@ export default function CreationsAtelierV2({
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         // Ouvertures SVG : transparentes aux événements quand un fond percé est appliqué
                         // → les clics passent aux photos situées derrière le fond
-                        pointerEvents: (element.type === 'opening' && canvasElements.some(el => el.type === 'fond-passe-partout'))
+                        // Exception : l'opening sélectionné reste toujours manipulable
+                        pointerEvents: (element.type === 'opening' && canvasElements.some(el => el.type === 'fond-passe-partout') && element.id !== selectedElementId)
                           ? 'none'
                           : undefined,
                       }}
