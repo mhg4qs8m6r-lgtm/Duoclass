@@ -6591,7 +6591,7 @@ export default function CreationsAtelierV2({
                             paperImageUrl,
                           };
                           setCanvasElements(prev => [
-                            ...prev.filter(el => el.type !== 'fond-passe-partout'),
+                            ...prev.filter(el => el.type !== 'fond-passe-partout' && el.type !== 'pelemele-paper'),
                             fondEl,
                           ]);
                           toast.success(language === 'fr' ? 'Fond appliqué' : 'Background applied');
@@ -6620,25 +6620,15 @@ export default function CreationsAtelierV2({
                         return;
                       }
 
-                      // En contexte pêle-mêle : crée/met à jour le fond percé au lieu d'un fond image
+                      // En contexte pêle-mêle : mettre à jour la couleur si un papier percé existe déjà
+                      // Ne JAMAIS créer un pelemele-paper automatiquement (source du fond vert résiduel)
                       if (currentProjectType.includes('Pêle-mêle') && !patternSrc) {
                         const existing = canvasElements.find(el => el.type === 'pelemele-paper');
                         if (existing) {
                           updateCanvasElement(existing.id, { openingColor: bgColor });
-                        } else {
-                          setCanvasElements(prev => [...prev, {
-                            id: `pm-paper-${Date.now()}`,
-                            type: 'pelemele-paper' as const,
-                            x: 0, y: 0,
-                            width: formatW, height: formatH,
-                            rotation: 0,
-                            zIndex: 500, // bande fixe : fond + formes
-                            opacity: 1,
-                            openingColor: bgColor,
-                            holes: [],
-                          }]);
+                          toast.success(language === 'fr' ? 'Fond percé appliqué' : 'Perforated paper applied');
                         }
-                        toast.success(language === 'fr' ? 'Fond percé appliqué' : 'Perforated paper applied');
+                        // Pas de papier existant → rien à faire (pas de fond automatique)
                         return;
                       }
 
