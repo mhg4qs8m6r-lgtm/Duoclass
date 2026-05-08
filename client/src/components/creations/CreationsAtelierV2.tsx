@@ -1547,24 +1547,8 @@ export default function CreationsAtelierV2({
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
-                // Nettoyage automatique : si un fond-passe-partout existe, supprimer les
-                // pelemele-paper résiduels de l'ancienne architecture (zIndex ≠ 500).
-                const hasFondPP = filtered.some((el: any) => el.type === 'fond-passe-partout');
-                const cleanedElements = hasFondPP
-                  ? filtered.filter((el: any) => !(el.type === 'pelemele-paper' && el.zIndex !== 500))
-                  : filtered;
-                const removedLegacy = filtered.length - cleanedElements.length;
-                if (removedLegacy > 0) {
-                  console.log(`[Créations] ${removedLegacy} pelemele-paper résiduel(s) supprimé(s) (fond-passe-partout détecté)`);
-                  setTimeout(() => toast.info(
-                    language === 'fr'
-                      ? `Nettoyage automatique : ${removedLegacy} fond${removedLegacy > 1 ? 's' : ''} pêle-mêle résiduel${removedLegacy > 1 ? 's' : ''} supprimé${removedLegacy > 1 ? 's' : ''}`
-                      : `Auto-cleanup: ${removedLegacy} legacy pêle-mêle background${removedLegacy > 1 ? 's' : ''} removed`,
-                    { duration: 3500 }
-                  ), 800);
-                }
-                console.log(`[Créations] ${cleanedElements.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
-                setCanvasElements(cleanedElements);
+                console.log(`[Créations] ${filtered.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
+                setCanvasElements(filtered);
               }
 
               // Les éléments du collecteur sont gérés par la live query IndexedDB
@@ -3208,13 +3192,6 @@ export default function CreationsAtelierV2({
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
   const [showLayerOrderModal, setShowLayerOrderModal] = useState(false);
-  // Sélecteur Photo / Clipart affiché lors d'un drop libre (sans trou assigné)
-  const [pendingImageDrop, setPendingImageDrop] = useState<{
-    src: string; name: string;
-    xCm: number; yCm: number; widthCm: number; heightCm: number;
-    originalWidthPx: number; originalHeightPx: number;
-    groupId?: string;
-  } | null>(null);
 
   // Album de destination : "Images projets" (catégorie cat_mes_projets)
   const IMAGES_PROJETS_ALBUM_ID = 'album_images_projets';
@@ -4122,42 +4099,36 @@ export default function CreationsAtelierV2({
       // et placer la photo derrière le papier (zIndex inférieur).
       const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
       const fondPP   = canvasElements.find(el => el.type === 'fond-passe-partout');
-      // ── Architecture z-index : bandes fixes ──────────────────────────────────
-      // B2 : photos       1–499  (libres entre elles)
-      // B3 : fond + formes  500  (même niveau, imposé à la création)
-      // B4 : extras       600+  (textes, cliparts)
-      // null → drop libre → afficher le sélecteur Photo / Clipart
       let assignedHoleId: string | undefined;
-      let assignedZIndex: number | null = null; // null = montrer le sélecteur
+      let assignedZIndex = canvasElements.length + 1;
 
-      const nextPhotoZ = () => {
-        const max = canvasElements
-          .filter(e => e.type === 'image' && e.zIndex < 500)
-          .reduce((m, e) => Math.max(m, e.zIndex), 0);
-        return Math.min(499, max + 1);
-      };
-
-      // Cas 1 – drop sur une ouverture du fond-passe-partout
-      if (fondPP && dropPositionCm) {
-        const openings = canvasElements.filter(el => el.type === 'opening');
-        const hit = openings.find(op =>
-          dropPositionCm!.x >= op.x && dropPositionCm!.x <= op.x + op.width &&
-          dropPositionCm!.y >= op.y && dropPositionCm!.y <= op.y + op.height
-        );
-        if (hit) {
-          const scaleW = hit.width / widthCm;
-          const scaleH = hit.height / heightCm;
-          const scale = Math.max(scaleW, scaleH);
-          widthCm  = widthCm  * scale;
-          heightCm = heightCm * scale;
-          xCm = hit.x + (hit.width  - widthCm)  / 2;
-          yCm = hit.y + (hit.height - heightCm) / 2;
-          assignedZIndex = nextPhotoZ();
+      // ── Fond passe-partout : toujours placer la photo derrière ──────────────
+      if (fondPP) {
+        // La photo passe sous le fond percé (zIndex = fond - 1 minimum)
+        const belowZ = Math.max(1, fondPP.zIndex - 1);
+        // Si on a un point de drop, chercher l'opening touché pour centrer + scaler
+        if (dropPositionCm) {
+          const openings = canvasElements.filter(el => el.type === 'opening');
+          const hit = openings.find(op =>
+            dropPositionCm!.x >= op.x && dropPositionCm!.x <= op.x + op.width &&
+            dropPositionCm!.y >= op.y && dropPositionCm!.y <= op.y + op.height
+          );
+          if (hit) {
+            // Scaler pour couvrir le trou (cover) et centrer
+            const scaleW = hit.width / widthCm;
+            const scaleH = hit.height / heightCm;
+            const scale = Math.max(scaleW, scaleH);
+            widthCm  = widthCm  * scale;
+            heightCm = heightCm * scale;
+            xCm = hit.x + (hit.width  - widthCm)  / 2;
+            yCm = hit.y + (hit.height - heightCm) / 2;
+          }
         }
+        assignedZIndex = belowZ;
       }
 
-      // Cas 2 – drop sur un trou du papier pêle-mêle
       if (pelePaper && dropPositionCm && pelePaper.holes) {
+        // Si drop sur un trou → assigner, recadrer et placer derrière le papier
         const hit = pelePaper.holes.find(hole => {
           const inX = dropPositionCm!.x >= hole.x && dropPositionCm!.x <= hole.x + hole.w;
           const inY = dropPositionCm!.y >= hole.y && dropPositionCm!.y <= hole.y + hole.h;
@@ -4165,32 +4136,20 @@ export default function CreationsAtelierV2({
         });
         if (hit) {
           assignedHoleId = hit.id;
+          assignedZIndex = Math.max(1, (pelePaper.zIndex ?? 2) - 1);
+          // Recadrer la photo pour remplir le trou tout en conservant les proportions
           const scaleW = hit.w / widthCm;
           const scaleH = hit.h / heightCm;
           const scale = Math.max(scaleW, scaleH);
           widthCm = widthCm * scale;
           heightCm = heightCm * scale;
+          // Centrer sur le trou
           xCm = hit.x + (hit.w - widthCm) / 2;
           yCm = hit.y + (hit.h - heightCm) / 2;
-          assignedZIndex = nextPhotoZ();
         }
+        // Sinon : photo déposée hors d'un trou → z-index normal (sur le papier)
       }
 
-      // Cas 3 – drop libre → sélecteur Photo / Clipart (pas de timeout)
-      if (assignedZIndex === null) {
-        setPendingImageDrop({
-          src,
-          name: name || (language === 'fr' ? 'Élément' : 'Element'),
-          xCm, yCm, widthCm, heightCm,
-          originalWidthPx: img.naturalWidth,
-          originalHeightPx: img.naturalHeight,
-          ...(assignGroupId ? { groupId: assignGroupId } : {}),
-        });
-        setActiveCanvasPhoto(src);
-        return; // ne pas ajouter au canvas avant le choix de l'user
-      }
-
-      // Drop assigné à un trou → ajout direct en bande 2
       const newElement: CanvasElement = {
         id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: "image",
@@ -4215,29 +4174,6 @@ export default function CreationsAtelierV2({
     img.src = src;
   };
   
-  // Confirme le sélecteur Photo / Clipart et ajoute l'élément au canvas
-  const confirmImageDrop = (band: 'photo' | 'extra') => {
-    if (!pendingImageDrop) return;
-    const { src, name, xCm, yCm, widthCm, heightCm, originalWidthPx, originalHeightPx, groupId } = pendingImageDrop;
-    const photoMaxZ = canvasElements.filter(e => e.type === 'image' && e.zIndex < 500).reduce((m, e) => Math.max(m, e.zIndex), 0);
-    const extraMaxZ = canvasElements.filter(e => e.zIndex >= 600).reduce((m, e) => Math.max(m, e.zIndex), 0);
-    const zIndex = band === 'photo'
-      ? Math.min(499, photoMaxZ + 1)
-      : (extraMaxZ === 0 ? 600 : extraMaxZ + 1);
-    const newEl: CanvasElement = {
-      id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      type: 'image',
-      src, x: xCm, y: yCm, width: widthCm, height: heightCm,
-      rotation: 0, zIndex, opacity: 1, name,
-      originalWidthPx, originalHeightPx,
-      ...(groupId ? { groupId } : {}),
-    };
-    setCanvasElements(prev => [...prev, newEl]);
-    setSelectedElementId(newEl.id);
-    setActiveCanvasPhoto(src);
-    setPendingImageDrop(null);
-  };
-
   // Ajouter au collecteur (pièces détourées / éléments) — persiste dans IndexedDB
   const addToCollector = async (src: string, name: string, type: CollectorItem["type"] = "detourage", widthCm?: number, heightCm?: number) => {
     if (currentProjectId) {
@@ -6283,10 +6219,7 @@ export default function CreationsAtelierV2({
                         width: 10,
                         height: 3,
                         rotation: 0,
-                        zIndex: (() => { // bande extras (600+)
-                          const m = canvasElements.filter(e => e.zIndex >= 600).reduce((a, e) => Math.max(a, e.zIndex), 0);
-                          return m === 0 ? 600 : m + 1;
-                        })(),
+                        zIndex: canvasElements.length + 1,
                         opacity: 1,
                         name: "Texte",
                         fontFamily: textProps.fontFamily,
@@ -6430,7 +6363,7 @@ export default function CreationsAtelierV2({
                         width: defaultW,
                         height: defaultH,
                         rotation: 0,
-                        zIndex: 500, // bande fixe : fond + formes
+                        zIndex: canvasElements.length + 10,
                         opacity: 1,
                         openingIndex: idx,
                         name: language === 'fr' ? `Découpe ${idx}` : `Opening ${idx}`,
@@ -6583,7 +6516,8 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            zIndex: 500, // bande fixe : fond + formes
+                            // zIndex entre le fond plat (0) et les ouvertures
+                            zIndex: Math.max(1, maxOpeningZ - 1),
                             opacity: 1,
                             locked: true,
                             name: language === 'fr' ? 'Fond passe-partout' : 'Mat background',
@@ -6591,7 +6525,7 @@ export default function CreationsAtelierV2({
                             paperImageUrl,
                           };
                           setCanvasElements(prev => [
-                            ...prev.filter(el => el.type !== 'fond-passe-partout' && el.type !== 'pelemele-paper'),
+                            ...prev.filter(el => el.type !== 'fond-passe-partout'),
                             fondEl,
                           ]);
                           toast.success(language === 'fr' ? 'Fond appliqué' : 'Background applied');
@@ -6620,15 +6554,25 @@ export default function CreationsAtelierV2({
                         return;
                       }
 
-                      // En contexte pêle-mêle : mettre à jour la couleur si un papier percé existe déjà
-                      // Ne JAMAIS créer un pelemele-paper automatiquement (source du fond vert résiduel)
+                      // En contexte pêle-mêle : crée/met à jour le fond percé au lieu d'un fond image
                       if (currentProjectType.includes('Pêle-mêle') && !patternSrc) {
                         const existing = canvasElements.find(el => el.type === 'pelemele-paper');
                         if (existing) {
                           updateCanvasElement(existing.id, { openingColor: bgColor });
-                          toast.success(language === 'fr' ? 'Fond percé appliqué' : 'Perforated paper applied');
+                        } else {
+                          setCanvasElements(prev => [...prev, {
+                            id: `pm-paper-${Date.now()}`,
+                            type: 'pelemele-paper' as const,
+                            x: 0, y: 0,
+                            width: formatW, height: formatH,
+                            rotation: 0,
+                            zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1,
+                            opacity: 1,
+                            openingColor: bgColor,
+                            holes: [],
+                          }]);
                         }
-                        // Pas de papier existant → rien à faire (pas de fond automatique)
+                        toast.success(language === 'fr' ? 'Fond percé appliqué' : 'Perforated paper applied');
                         return;
                       }
 
@@ -7024,7 +6968,7 @@ export default function CreationsAtelierV2({
                           width: op.wFrac * formatW,
                           height: op.hFrac * formatH,
                           rotation: 0,
-                          zIndex: 500, // bande fixe : fond + formes
+                          zIndex: maxZIndex + 1 + i,
                           opacity: 1,
                           validated: true,
                           openingIndex: idx,
@@ -7475,7 +7419,7 @@ export default function CreationsAtelierV2({
                           type: 'pelemele-paper' as const,
                           x: 0, y: 0,
                           width: fmtW, height: fmtH,
-                          rotation: 0, zIndex: 500, opacity: 1, // bande fixe : fond + formes
+                          rotation: 0, zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1, opacity: 1,
                           openingColor: '#f0e6d3',
                           holes: [newHole],
                         }]);
@@ -7798,7 +7742,7 @@ export default function CreationsAtelierV2({
                             width: actualEnd.x,
                             height: actualEnd.y,
                             rotation: 0,
-                            zIndex: 500, // bande fixe : fond + formes
+                            zIndex: canvasElements.length + 10,
                             opacity: 1,
                             openingIndex: idx,
                             name: language === 'fr' ? `Ligne ${idx}` : `Line ${idx}`,
@@ -8378,10 +8322,6 @@ export default function CreationsAtelierV2({
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
-                        // opening/shape : le div lui-même ne capte pas les clics (zone transparente)
-                        // Les enfants (poignées resize/rotation) gardent pointer-events:auto par défaut.
-                        // La sélection se fait via les SVG paths internes (hit area transparent).
-                        pointerEvents: (element.type === 'opening' || element.type === 'shape') ? 'none' : undefined,
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
@@ -8534,51 +8474,13 @@ export default function CreationsAtelierV2({
                         default: // rect
                           pathD = `M0,0 h${w} v${h} h-${w} Z`;
                       }
-                      const handleOpeningDown = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        handleMouseDown(e, element.id);
-                      };
-                      const handleOpeningClick = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        if (!isDragging && !element.locked) {
-                          if (e.shiftKey) {
-                            setSelectedElementIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(element.id) && next.size > 1) next.delete(element.id);
-                              else next.add(element.id);
-                              return next;
-                            });
-                            setSelectedElementId(element.id);
-                          } else {
-                            selectElementWithGroup(element.id);
-                          }
-                        }
-                        closeContextMenu();
-                      };
-                      const handleOpeningCtx = (e: React.MouseEvent) => {
-                        e.stopPropagation(); e.preventDefault();
-                        handleContextMenu(e, element.id);
-                      };
                       return (
                         <svg
                           width={w} height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible' }}
+                          style={{ overflow: 'visible', pointerEvents: 'none' }}
                         >
-                          {/* Zone de clic transparente 16px — sélection même avec contour fin */}
-                          <path
-                            d={pathD}
-                            fill="none"
-                            stroke="transparent"
-                            strokeWidth={16}
-                            pointerEvents="stroke"
-                            style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                            onMouseDown={handleOpeningDown}
-                            onClick={handleOpeningClick}
-                            onContextMenu={handleOpeningCtx}
-                          />
-                          {/* Contour visuel (non interactif) */}
                           <path
                             d={pathD}
                             fill="none"
@@ -8586,7 +8488,6 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            style={{ pointerEvents: 'none' }}
                           />
                         </svg>
                       );
@@ -8623,34 +8524,12 @@ export default function CreationsAtelierV2({
                             return `${cmd}${converted[0].toFixed(2)},${converted[1].toFixed(2)} `;
                           }
                         );
-                        const handleCPDown = (e: React.MouseEvent) => { e.stopPropagation(); handleMouseDown(e, element.id); };
-                        const handleCPClick = (e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          if (!isDragging && !element.locked) {
-                            if (e.shiftKey) {
-                              setSelectedElementIds(prev => { const next = new Set(prev); if (next.has(element.id) && next.size > 1) next.delete(element.id); else next.add(element.id); return next; });
-                              setSelectedElementId(element.id);
-                            } else { selectElementWithGroup(element.id); }
-                          }
-                          closeContextMenu();
-                        };
                         return (
                           <svg
                             width={w} height={h}
                             viewBox={`0 0 ${w} ${h}`}
-                            style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
+                            style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
                           >
-                            <path
-                              d={localPath}
-                              fill="transparent"
-                              stroke="transparent"
-                              strokeWidth={16}
-                              pointerEvents="all"
-                              style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                              onMouseDown={handleCPDown}
-                              onClick={handleCPClick}
-                              onContextMenu={(e) => { e.stopPropagation(); e.preventDefault(); handleContextMenu(e, element.id); }}
-                            />
                             <path
                               d={localPath}
                               fill={fillColor}
@@ -8658,7 +8537,6 @@ export default function CreationsAtelierV2({
                               strokeWidth={STROKE_SVG}
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              style={{ pointerEvents: 'none' }}
                             />
                           </svg>
                         );
@@ -8801,53 +8679,16 @@ export default function CreationsAtelierV2({
                         default: // rect
                           pathD = `M0,0 h${w} v${h} h-${w} Z`;
                       }
-                      const handleShapeDown = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        handleMouseDown(e, element.id);
-                      };
-                      const handleShapeClick = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        if (!isDragging && !element.locked) {
-                          if (e.shiftKey) {
-                            setSelectedElementIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(element.id) && next.size > 1) next.delete(element.id);
-                              else next.add(element.id);
-                              return next;
-                            });
-                            setSelectedElementId(element.id);
-                          } else {
-                            selectElementWithGroup(element.id);
-                          }
-                        }
-                        closeContextMenu();
-                      };
-                      const handleShapeCtx = (e: React.MouseEvent) => {
-                        e.stopPropagation(); e.preventDefault();
-                        handleContextMenu(e, element.id);
-                      };
                       return (
                         <svg
                           width={w}
                           height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible' }}
+                          style={{ overflow: 'visible', pointerEvents: 'none' }}
                         >
-                          {/* Hit area transparent — couvre fill + contour élargi 16px */}
-                          <path
-                            d={pathD}
-                            fill="transparent"
-                            stroke="transparent"
-                            strokeWidth={16}
-                            pointerEvents="all"
-                            style={{ cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                            onMouseDown={handleShapeDown}
-                            onClick={handleShapeClick}
-                            onContextMenu={handleShapeCtx}
-                          />
                           {/* Couleur de la découpe (transparent pour puzzle = gabarit vierge) */}
-                          <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} style={{ pointerEvents: 'none' }} />
+                          <path d={pathD} fill={element.shape === 'puzzle' ? 'none' : fillColor} />
                           <path
                             d={pathD}
                             fill="none"
@@ -8855,7 +8696,6 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            style={{ pointerEvents: 'none' }}
                           />
                           {/* Numéro de pièce au centre (optionnel, pour puzzles enfants) */}
                           {element.shape === 'puzzle' && element.puzzleShowNumber && element.openingIndex != null && (
@@ -11230,32 +11070,7 @@ export default function CreationsAtelierV2({
                   });
                 }
 
-                // Rôle lisible selon le type d'élément
-                const getRole = (el: CanvasElement): string => {
-                  if (language === 'fr') {
-                    switch (el.type) {
-                      case 'fond-passe-partout': return 'Fond percé';
-                      case 'image':              return 'Photo';
-                      case 'opening':            return 'Contour d\'ouverture';
-                      case 'shape':              return 'Forme colorée';
-                      case 'text':               return 'Texte';
-                      case 'pelemele-paper':     return 'Papier pêle-mêle';
-                      default:                   return el.type;
-                    }
-                  } else {
-                    switch (el.type) {
-                      case 'fond-passe-partout': return 'Perforated background';
-                      case 'image':              return 'Photo';
-                      case 'opening':            return 'Opening outline';
-                      case 'shape':              return 'Colored shape';
-                      case 'text':               return 'Text';
-                      case 'pelemele-paper':     return 'Photo collage paper';
-                      default:                   return el.type;
-                    }
-                  }
-                };
-
-                const layerItems = sorted.map((el, idx) => {
+                return sorted.map((el, idx) => {
                   const position = sorted.length - idx;
                   const isBack = idx === sorted.length - 1;
                   const isSelected = selectedElementId === el.id;
@@ -11294,47 +11109,40 @@ export default function CreationsAtelierV2({
                         )}
                       </div>
 
-                      {/* Nom + rôle + description contextuelle */}
+                      {/* Nom + niveau + position */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">
                           {displayNames.get(el.id) || el.name || el.type}
                         </p>
-                        <p className="text-[10px] text-blue-500 font-medium">{getRole(el)}</p>
-                        {levelLabel && (
-                          <p className="text-[10px] text-purple-500 font-medium leading-tight">{levelLabel}</p>
+                        {levelLabel ? (
+                          <p className="text-[10px] text-purple-500 font-medium">{levelLabel}</p>
+                        ) : (
+                          <p className="text-xs text-gray-400">z-index: {el.zIndex}</p>
                         )}
                       </div>
 
-                      {/* Saisie numéro de position — photos uniquement */}
-                      {el.type === 'image' && (
-                        <input
-                          type="number"
-                          min={1}
-                          max={canvasElements.length}
-                          value={position}
-                          onChange={(e) => {
-                            const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
-                            const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
-                            const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
-                            withoutCurrent.splice(newPos - 1, 0, el);
-                            setCanvasElements(canvasElements.map(item => {
-                              const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
-                              return { ...item, zIndex: newIdx + 1 };
-                            }));
-                          }}
-                          className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
-                          title={language === 'fr' ? 'Position du calque' : 'Layer position'}
-                        />
-                      )}
+                      {/* Saisie numéro de position */}
+                      <input
+                        type="number"
+                        min={1}
+                        max={canvasElements.length}
+                        value={position}
+                        onChange={(e) => {
+                          const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
+                          const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
+                          const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
+                          withoutCurrent.splice(newPos - 1, 0, el);
+                          setCanvasElements(canvasElements.map(item => {
+                            const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
+                            return { ...item, zIndex: newIdx + 1 };
+                          }));
+                        }}
+                        className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
+                        title={language === 'fr' ? 'Position du calque' : 'Layer position'}
+                      />
 
-                      {/* Boutons de réorganisation — photos uniquement ; badge fixe pour les autres */}
+                      {/* Boutons de réorganisation */}
                       <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        {el.type !== 'image' ? (
-                          <span className="px-2 py-1 text-[10px] font-semibold rounded bg-gray-100 text-gray-400 text-center select-none" title={language === 'fr' ? 'Niveau fixe — non déplaçable' : 'Fixed level'}>
-                            🔒 {language === 'fr' ? 'Niveau fixe' : 'Fixed'}
-                          </span>
-                        ) : (
-                          <>
                         {idx === 0 ? (
                           <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
                             {language === 'fr' ? '✓ Devant' : '✓ Front'}
@@ -11363,12 +11171,6 @@ export default function CreationsAtelierV2({
                                 if (item.id === above.id) return { ...item, zIndex: tempZ };
                                 return item;
                               }));
-                              toast.success(
-                                language === 'fr'
-                                  ? `"${displayNames.get(el.id) || el.name}" est maintenant au-dessus de "${displayNames.get(above.id) || above.name}"`
-                                  : `"${displayNames.get(el.id) || el.name}" is now above "${displayNames.get(above.id) || above.name}"`,
-                                { duration: 1800 }
-                              );
                             }
                           }}
                           disabled={idx === 0}
@@ -11388,12 +11190,6 @@ export default function CreationsAtelierV2({
                                 if (item.id === below.id) return { ...item, zIndex: tempZ };
                                 return item;
                               }));
-                              toast.success(
-                                language === 'fr'
-                                  ? `"${displayNames.get(el.id) || el.name}" est maintenant en dessous de "${displayNames.get(below.id) || below.name}"`
-                                  : `"${displayNames.get(el.id) || el.name}" is now below "${displayNames.get(below.id) || below.name}"`,
-                                { duration: 1800 }
-                              );
                             }
                           }}
                           disabled={idx === sorted.length - 1}
@@ -11421,21 +11217,10 @@ export default function CreationsAtelierV2({
                             {language === 'fr' ? 'Dernier' : 'Back'}
                           </button>
                         )}
-                          </>
-                        )}
                       </div>
                     </div>
                   );
                 });
-                return [
-                  <div key="__au-dessus__" className="text-center text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 tracking-wide uppercase select-none">
-                    ↑ {language === 'fr' ? 'Au-dessus — premier plan' : 'Above — front'}
-                  </div>,
-                  ...layerItems,
-                  <div key="__en-dessous__" className="text-center text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 rounded-lg py-1.5 tracking-wide uppercase select-none">
-                    ↓ {language === 'fr' ? 'En dessous — arrière-plan' : 'Below — back'}
-                  </div>,
-                ];
               })()}
 
               {/* Ligne fixe — Zone de travail (format) */}
@@ -11458,60 +11243,11 @@ export default function CreationsAtelierV2({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-end flex-shrink-0 gap-3">
+            <div className="px-6 py-3 bg-gray-50 border-t flex justify-end flex-shrink-0">
               <Button size="sm" variant="outline" onClick={() => setShowLayerOrderModal(false)}>
                 {language === 'fr' ? 'Fermer' : 'Close'}
               </Button>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Sélecteur Photo / Clipart — affiché quand un drop libre est en attente */}
-      {pendingImageDrop && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 flex flex-col items-center gap-4">
-            <h3 className="text-base font-bold text-gray-800 text-center">
-              {language === 'fr' ? 'Quel type d\'élément ?' : 'What type of element?'}
-            </h3>
-            <p className="text-sm text-gray-500 text-center leading-snug">
-              {language === 'fr'
-                ? 'Choisissez le rôle de cette image dans le projet.'
-                : 'Choose the role of this image in the project.'}
-            </p>
-            <div className="flex flex-col gap-3 w-full">
-              <button
-                className="w-full px-4 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-3"
-                onClick={() => confirmImageDrop('photo')}
-              >
-                <span className="text-xl">🖼️</span>
-                <div className="text-left">
-                  <div>{language === 'fr' ? 'Photo' : 'Photo'}</div>
-                  <div className="text-[11px] font-normal opacity-80">
-                    {language === 'fr' ? 'Derrière le fond percé' : 'Behind perforated background'}
-                  </div>
-                </div>
-              </button>
-              <button
-                className="w-full px-4 py-3 rounded-xl bg-purple-100 text-purple-800 font-semibold text-sm hover:bg-purple-200 transition-colors flex items-center gap-3"
-                onClick={() => confirmImageDrop('extra')}
-              >
-                <span className="text-xl">✂️</span>
-                <div className="text-left">
-                  <div>{language === 'fr' ? 'Clipart / Décoration' : 'Clipart / Decoration'}</div>
-                  <div className="text-[11px] font-normal opacity-70">
-                    {language === 'fr' ? 'Devant le fond percé' : 'In front of perforated background'}
-                  </div>
-                </div>
-              </button>
-            </div>
-            <button
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1"
-              onClick={() => setPendingImageDrop(null)}
-            >
-              {language === 'fr' ? 'Annuler' : 'Cancel'}
-            </button>
           </div>
         </div>,
         document.body
