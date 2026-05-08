@@ -1538,12 +1538,10 @@ export default function CreationsAtelierV2({
                 // Projets pêle-mêle : supprimer les artefacts de l'ancienne architecture
                 // (éléments 'shape' indépendants = anciens gabarits passe-partout)
                 // et les 'pelemele-paper' sans trous (papier vide = rectangle inutile).
-                // NOTE : 'opening' et 'fond-passe-partout' appartiennent au système passe-partout
-                // et doivent TOUJOURS être conservés, quel que soit le type de projet.
                 const isPeleMele = creationsProject.projectType?.includes('Pêle-mêle');
                 const filtered = isPeleMele
                   ? clamped.filter((el: any) =>
-                      el.type !== 'shape' &&
+                      el.type !== 'shape' && el.type !== 'opening' &&
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
@@ -2514,7 +2512,7 @@ export default function CreationsAtelierV2({
     
     const imageElements = canvasElements.filter(el => el.type === 'image' && el.src);
     const textElements = canvasElements.filter(el => el.type === 'text');
-    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening' || el.type === 'fond-passe-partout' || el.type === 'pelemele-paper');
+    const openingElements = canvasElements.filter(el => el.type === 'shape' || el.type === 'opening' || el.type === 'fond-passe-partout');
     if (imageElements.length === 0 && textElements.length === 0 && openingElements.length === 0) {
       toast.error(language === 'fr' ? 'Aucun élément à capturer' : 'No elements to capture');
       return null;
@@ -2562,17 +2560,8 @@ export default function CreationsAtelierV2({
       const allDomImgs = page.querySelectorAll('img[data-element-id]');
       diagLines.push(`${allDomImgs.length} img[data-element-id] dans le DOM`);
       
-      const hasFondPassePartout = canvasElements.some(el => el.type === 'fond-passe-partout');
-
       for (const element of sortedElements) {
         // --- Éléments de type 'shape' ou 'opening' (puzzle, rect, round, oval, arch…) ---
-        // Les 'opening' ET les 'shape' sont skippés si un fond-passe-partout existe : les trous sont
-        // déjà représentés par destination-out dans le fond, pas besoin de redessiner les contours
-        // (les shape en tant qu'ouvertures seraient exportées comme formes opaques sinon).
-        if ((element.type === 'opening' || element.type === 'shape') && hasFondPassePartout) {
-          diagLines.push(`${element.type} "${element.name}" -> SKIP (fond-passe-partout gère les trous)`);
-          continue;
-        }
         if (element.type === 'shape' || element.type === 'opening') {
           const x = element.x * PX_PER_CM;
           const y = element.y * PX_PER_CM;
@@ -2595,10 +2584,8 @@ export default function CreationsAtelierV2({
             const svgPath = buildPuzzlePath(w, h, edges, element.puzzleCutStyle ?? 'classique', element.puzzleShowBorder ?? true, 0, 0, element.puzzleEdgeSeeds);
             const path2d = new Path2D(svgPath);
             ctx.translate(-w / 2, -h / 2);
-            if (fillColor) {
-              ctx.fillStyle = fillColor;
-              ctx.fill(path2d);
-            }
+            ctx.fillStyle = 'none';
+            ctx.fill(path2d);
             // Trait de découpe laser
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = EXP_STROKE_PUZZLE;
@@ -2958,55 +2945,9 @@ export default function CreationsAtelierV2({
           const y = element.y * PX_PER_CM;
           const w = element.width * PX_PER_CM;
           const h = element.height * PX_PER_CM;
-
+          
           ctx.save();
           ctx.globalAlpha = element.opacity;
-
-          // ── Bug 3 : clip de la photo à la forme de son ouverture ─────────────
-          // Cas 1 – fond-passe-partout : trouver l'opening qui contient le centre de la photo
-          if (hasFondPassePartout) {
-            const imgCxCm = element.x + element.width / 2;
-            const imgCyCm = element.y + element.height / 2;
-            const relatedOp = canvasElements.find(op =>
-              op.type === 'opening' &&
-              imgCxCm >= op.x && imgCxCm <= op.x + op.width &&
-              imgCyCm >= op.y && imgCyCm <= op.y + op.height
-            );
-            if (relatedOp) {
-              const opX = relatedOp.x * PX_PER_CM;
-              const opY = relatedOp.y * PX_PER_CM;
-              const opW = relatedOp.width * PX_PER_CM;
-              const opH = relatedOp.height * PX_PER_CM;
-              const opCx = opX + opW / 2;
-              const opCy = opY + opH / 2;
-              ctx.translate(opCx, opCy);
-              ctx.rotate((relatedOp.rotation * Math.PI) / 180);
-              ctx.beginPath();
-              drawOpeningPath(ctx, relatedOp.shape || 'rect', -opW / 2, -opH / 2, opW, opH);
-              ctx.clip();
-              // Réinitialiser la matrice de transformation (le clip reste actif)
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              diagLines.push(`  -> clippé à opening "${relatedOp.name}" (${relatedOp.shape})`);
-            }
-          }
-          // Cas 2 – pelemele-paper : clip au trou via assignedHoleId
-          if (element.assignedHoleId) {
-            const pelePaper = canvasElements.find(el => el.type === 'pelemele-paper');
-            const hole = pelePaper?.holes?.find(h => h.id === element.assignedHoleId);
-            if (hole) {
-              const hcx = (hole.x + hole.w / 2) * PX_PER_CM;
-              const hcy = (hole.y + hole.h / 2) * PX_PER_CM;
-              ctx.translate(hcx, hcy);
-              ctx.rotate((hole.rotation || 0) * Math.PI / 180);
-              ctx.beginPath();
-              drawHolePathCanvas(ctx, hole, PX_PER_CM);
-              ctx.clip();
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              diagLines.push(`  -> clippé au trou pêle-mêle "${hole.id}" (${hole.shape})`);
-            }
-          }
-          // ─────────────────────────────────────────────────────────────────────
-
           const cx = x + w / 2;
           const cy = y + h / 2;
           ctx.translate(cx, cy);
@@ -3627,8 +3568,7 @@ export default function CreationsAtelierV2({
     x: number,
     y: number,
     w: number,
-    h: number,
-    heartDepth = 50
+    h: number
   ) => {
     switch (shape) {
       case 'square': {
@@ -3651,51 +3591,6 @@ export default function CreationsAtelierV2({
         ctx.arcTo(x, y, x + w / 2, y, w / 2);
         ctx.arcTo(x + w, y, x + w, y + h / 2, w / 2);
         ctx.lineTo(x + w, y + h);
-        ctx.closePath();
-        break;
-      }
-      case 'heart': {
-        const hd = heartDepth / 100;
-        const notchY = y + h * (0.25 + hd * 0.25);
-        ctx.moveTo(x + w * 0.5, notchY);
-        ctx.bezierCurveTo(x + w * 0.5, y + h * 0.10, x, y + h * 0.10, x, y + h * 0.35);
-        ctx.bezierCurveTo(x, y + h * 0.60, x + w * 0.5, y + h * 0.75, x + w * 0.5, y + h);
-        ctx.bezierCurveTo(x + w * 0.5, y + h * 0.75, x + w, y + h * 0.60, x + w, y + h * 0.35);
-        ctx.bezierCurveTo(x + w, y + h * 0.10, x + w * 0.5, y + h * 0.10, x + w * 0.5, notchY);
-        ctx.closePath();
-        break;
-      }
-      case 'star': {
-        const outerR = Math.min(w, h) / 2;
-        const innerR = outerR * 0.42;
-        const scx = x + w / 2, scy = y + h / 2;
-        for (let i = 0; i < 10; i++) {
-          const angle = (i * Math.PI) / 5 - Math.PI / 2;
-          const r = i % 2 === 0 ? outerR : innerR;
-          const px = scx + r * Math.cos(angle);
-          const py = scy + r * Math.sin(angle);
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        break;
-      }
-      case 'diamond': {
-        ctx.moveTo(x + w / 2, y);
-        ctx.lineTo(x + w, y + h / 2);
-        ctx.lineTo(x + w / 2, y + h);
-        ctx.lineTo(x, y + h / 2);
-        ctx.closePath();
-        break;
-      }
-      case 'hexagon': {
-        const hcx = x + w / 2, hcy = y + h / 2;
-        const hrx = w / 2, hry = h / 2;
-        for (let i = 0; i < 6; i++) {
-          const a = (i * Math.PI) / 3 - Math.PI / 6;
-          const px = hcx + hrx * Math.cos(a);
-          const py = hcy + hry * Math.sin(a);
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
         ctx.closePath();
         break;
       }
@@ -5328,20 +5223,9 @@ export default function CreationsAtelierV2({
                       <span className="text-sm font-bold" style={{ color: '#f97316' }}>Version Admin</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 ml-3 mt-0.5">
-                    <p className="text-sm text-purple-500 font-medium">
-                      {currentProjectType || 'Projet libre'}
-                    </p>
-                    {(currentProjectType?.includes('Pêle-mêle') || currentProjectType?.includes('Passe-partout')) && (
-                      <button
-                        onClick={() => window.open('/assets/Guide_Final_DuoClass.pdf', '_blank')}
-                        className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-colors"
-                        title="Ouvrir le guide d'utilisation"
-                      >
-                        ℹ️ Infos
-                      </button>
-                    )}
-                  </div>
+                  <p className="text-sm text-purple-500 font-medium ml-3 mt-0.5">
+                    {currentProjectType || 'Projet libre'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -8322,6 +8206,11 @@ export default function CreationsAtelierV2({
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
+                        // Ouvertures SVG : transparentes aux événements quand un fond percé est appliqué
+                        // → les clics passent aux photos situées derrière le fond
+                        pointerEvents: (element.type === 'opening' && canvasElements.some(el => el.type === 'fond-passe-partout'))
+                          ? 'none'
+                          : undefined,
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
