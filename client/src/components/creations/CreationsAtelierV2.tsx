@@ -8184,7 +8184,11 @@ export default function CreationsAtelierV2({
                         height: elementHeightPx,
                         transform: `rotate(${element.rotation}deg) ${element.flipX ? "scaleX(-1)" : ""} ${element.flipY ? "scaleY(-1)" : ""}`,
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
-                        zIndex: element.zIndex,
+                        // Élément sélectionné : garantir qu'il s'affiche au-dessus du SVG pelemele-paper
+                        // pour que les poignées et l'outline restent visibles.
+                        zIndex: (isSelected || isInMultiSelection)
+                          ? Math.max(element.zIndex, (canvasElements.find(el => el.type === 'pelemele-paper')?.zIndex ?? 0) + 1)
+                          : element.zIndex,
                         opacity: element.opacity,
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
