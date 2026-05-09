@@ -8002,7 +8002,7 @@ export default function CreationsAtelierV2({
                               height: pageH,
                               zIndex: element.zIndex,
                               opacity: element.opacity,
-                              pointerEvents: 'none',
+                              pointerEvents: 'all',
                               overflow: 'visible',
                             }}
                           >
@@ -8028,6 +8028,9 @@ export default function CreationsAtelierV2({
                               fillRule="evenodd"
                               fill={element.paperImageUrl ? `url(#pm-img-${element.id})` : (element.openingColor || '#f0e6d3')}
                               d={compoundD}
+                              style={{ pointerEvents: 'fill', cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                              onMouseDown={(e) => { e.stopPropagation(); if (!isLineDrawMode) handleMouseDown(e, element.id); }}
+                              onClick={(e) => { e.stopPropagation(); if (!isDragging && !element.locked) { selectElementWithGroup(element.id); } }}
                             />
                             {/* Contours fins autour de chaque trou */}
                             {holes.map(hole => (
@@ -8167,7 +8170,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : element.type === 'fond-passe-partout' ? null : (
+                    ) : element.type === 'fond-passe-partout' || element.type === 'pelemele-paper' ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
