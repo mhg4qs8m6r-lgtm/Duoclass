@@ -1538,10 +1538,12 @@ export default function CreationsAtelierV2({
                 // Projets pêle-mêle : supprimer les artefacts de l'ancienne architecture
                 // (éléments 'shape' indépendants = anciens gabarits passe-partout)
                 // et les 'pelemele-paper' sans trous (papier vide = rectangle inutile).
+                // NOTE : 'opening' et 'fond-passe-partout' appartiennent au système passe-partout
+                // et doivent TOUJOURS être conservés, quel que soit le type de projet.
                 const isPeleMele = creationsProject.projectType?.includes('Pêle-mêle');
                 const filtered = isPeleMele
                   ? clamped.filter((el: any) =>
-                      el.type !== 'shape' && el.type !== 'opening' &&
+                      el.type !== 'shape' &&
                       !(el.type === 'pelemele-paper' && (!el.holes || el.holes.length === 0))
                     )
                   : clamped;
@@ -8002,7 +8004,7 @@ export default function CreationsAtelierV2({
                               height: pageH,
                               zIndex: element.zIndex,
                               opacity: element.opacity,
-                              pointerEvents: 'all',
+                              pointerEvents: 'none',
                               overflow: 'visible',
                             }}
                           >
@@ -8028,9 +8030,6 @@ export default function CreationsAtelierV2({
                               fillRule="evenodd"
                               fill={element.paperImageUrl ? `url(#pm-img-${element.id})` : (element.openingColor || '#f0e6d3')}
                               d={compoundD}
-                              style={{ pointerEvents: 'fill', cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                              onMouseDown={(e) => { e.stopPropagation(); if (!isLineDrawMode) handleMouseDown(e, element.id); }}
-                              onClick={(e) => { e.stopPropagation(); if (!isDragging && !element.locked) { selectElementWithGroup(element.id); } }}
                             />
                             {/* Contours fins autour de chaque trou */}
                             {holes.map(hole => (
@@ -8170,7 +8169,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : element.type === 'fond-passe-partout' || element.type === 'pelemele-paper' ? null : (
+                    ) : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
@@ -8184,11 +8183,7 @@ export default function CreationsAtelierV2({
                         height: elementHeightPx,
                         transform: `rotate(${element.rotation}deg) ${element.flipX ? "scaleX(-1)" : ""} ${element.flipY ? "scaleY(-1)" : ""}`,
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
-                        // Élément sélectionné : garantir qu'il s'affiche au-dessus du SVG pelemele-paper
-                        // pour que les poignées et l'outline restent visibles.
-                        zIndex: (isSelected || isInMultiSelection)
-                          ? Math.max(element.zIndex, (canvasElements.find(el => el.type === 'pelemele-paper')?.zIndex ?? 0) + 1)
-                          : element.zIndex,
+                        zIndex: element.zIndex,
                         opacity: element.opacity,
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
                         userSelect: 'none',
@@ -8213,12 +8208,6 @@ export default function CreationsAtelierV2({
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
                         marginBottom: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
-                        // Ouvertures SVG : transparentes aux événements quand un fond percé est appliqué
-                        // → les clics passent aux photos situées derrière le fond
-                        // Exception : l'opening sélectionné reste toujours manipulable
-                        pointerEvents: (element.type === 'opening' && canvasElements.some(el => el.type === 'fond-passe-partout') && element.id !== selectedElementId)
-                          ? 'none'
-                          : undefined,
                       }}
                       draggable={false}
                       onMouseDown={(e) => {
