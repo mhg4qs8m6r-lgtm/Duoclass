@@ -4518,7 +4518,8 @@ export default function CreationsAtelierV2({
     if (isLineDrawMode) return;
 
     const element = canvasElements.find(el => el.id === elementId);
-    if (!element || element.locked) return;
+    if (!element) return;
+    if (element.locked && element.type !== 'fond-passe-partout') return;
 
     // NOTE : undoBatchStart() est désormais appelé dans handleMouseMove quand le seuil de drag est atteint
 
@@ -8169,7 +8170,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : (element.type === 'fond-passe-partout') ? null : (
+                    ) : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
