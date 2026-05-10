@@ -3999,10 +3999,10 @@ export default function CreationsAtelierV2({
       let assignedHoleId: string | undefined;
       let assignedZIndex = canvasElements.length + 1;
 
-      // ── Fond passe-partout : toujours placer la photo derrière ──────────────
+      // ── Fond passe-partout : placer la photo au-dessus du fond, sous les openings ──
       if (fondPP) {
-        // La photo passe sous le fond percé (zIndex = fond - 1 minimum)
-        const belowZ = Math.max(1, fondPP.zIndex - 1);
+        // L'image se place au-dessus du fond (z=1) mais sous les openings (z≥10)
+        assignedZIndex = fondPP.zIndex + 4; // → 5
         // Si on a un point de drop, chercher l'opening touché pour centrer + scaler
         if (dropPositionCm) {
           const openings = canvasElements.filter(el => el.type === 'opening');
@@ -4021,7 +4021,6 @@ export default function CreationsAtelierV2({
             yCm = hit.y + (hit.height - heightCm) / 2;
           }
         }
-        assignedZIndex = belowZ;
       }
 
       if (pelePaper && dropPositionCm && pelePaper.holes) {
