@@ -4518,8 +4518,7 @@ export default function CreationsAtelierV2({
     if (isLineDrawMode) return;
 
     const element = canvasElements.find(el => el.id === elementId);
-    if (!element) return;
-    if (element.locked && element.type !== 'fond-passe-partout') return;
+    if (!element || element.locked) return;
 
     // NOTE : undoBatchStart() est désormais appelé dans handleMouseMove quand le seuil de drag est atteint
 
@@ -6395,7 +6394,7 @@ export default function CreationsAtelierV2({
                       const openingEls = canvasElements.filter(el => el.type === 'opening');
                       if (openingEls.length > 0) {
                         const fondColor = bgColor && bgColor !== 'transparent' ? bgColor : '#ffffff';
-                        const minOpeningZ = Math.min(...openingEls.map(e => e.zIndex));
+                        const maxOpeningZ = Math.max(...openingEls.map(e => e.zIndex));
                         const applyFond = (paperImageUrl: string | undefined) => {
                           const fondEl: CanvasElement = {
                             id: `fond-passe-partout-${Date.now()}`,
@@ -6403,8 +6402,8 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            // zIndex strictement inférieur à tous les openings
-                            zIndex: Math.max(1, minOpeningZ - 1),
+                            // zIndex entre le fond plat (0) et les ouvertures
+                            zIndex: Math.max(1, maxOpeningZ - 1),
                             opacity: 1,
                             locked: true,
                             name: language === 'fr' ? 'Fond passe-partout' : 'Mat background',
@@ -8170,7 +8169,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : (
+                    ) : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
