@@ -1669,13 +1669,21 @@ export default function CreationsAtelierV2({
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         if (selectedElementIds.size > 0) {
           e.preventDefault();
-          const count = selectedElementIds.size;
-          setCanvasElements(prev => prev.filter(el => !selectedElementIds.has(el.id)));
+          const selectedEls = canvasElements.filter(el => selectedElementIds.has(el.id));
+          // Si la sélection contient des openings, ne jamais supprimer les images en même temps
+          const hasOpenings = selectedEls.some(el => el.type === 'opening' || el.type === 'shape');
+          const toDelete = new Set(
+            hasOpenings
+              ? selectedEls.filter(el => el.type !== 'image').map(el => el.id)
+              : selectedEls.map(el => el.id)
+          );
+          const count = toDelete.size;
+          setCanvasElements(prev => prev.filter(el => !toDelete.has(el.id)));
           setSelectedElementIds(new Set());
           setSelectedElementId(null);
           setActiveCanvasPhoto(null);
-          toast.info(language === 'fr' 
-            ? `${count} élément(s) supprimé(s)` 
+          toast.info(language === 'fr'
+            ? `${count} élément(s) supprimé(s)`
             : `${count} element(s) deleted`);
         }
       }
@@ -10322,7 +10330,13 @@ export default function CreationsAtelierV2({
                       <button
                         className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-3"
                         onClick={() => {
-                          selectedElementIds.forEach(id => removeFromCanvas(id));
+                          const selectedEls = canvasElements.filter(el => selectedElementIds.has(el.id));
+                          // Si la sélection contient des openings, ne jamais supprimer les images en même temps
+                          const hasOpenings = selectedEls.some(el => el.type === 'opening' || el.type === 'shape');
+                          const toDelete = hasOpenings
+                            ? selectedEls.filter(el => el.type !== 'image').map(el => el.id)
+                            : selectedEls.map(el => el.id);
+                          toDelete.forEach(id => removeFromCanvas(id));
                           setSelectedElementIds(new Set());
                           setSelectedElementId(null);
                           setActiveCanvasPhoto(null);
