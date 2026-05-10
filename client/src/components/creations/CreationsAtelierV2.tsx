@@ -6394,7 +6394,6 @@ export default function CreationsAtelierV2({
                       const openingEls = canvasElements.filter(el => el.type === 'opening');
                       if (openingEls.length > 0) {
                         const fondColor = bgColor && bgColor !== 'transparent' ? bgColor : '#ffffff';
-                        const maxOpeningZ = Math.max(...openingEls.map(e => e.zIndex));
                         const applyFond = (paperImageUrl: string | undefined) => {
                           const fondEl: CanvasElement = {
                             id: `fond-passe-partout-${Date.now()}`,
@@ -6402,8 +6401,8 @@ export default function CreationsAtelierV2({
                             x: 0, y: 0,
                             width: formatW, height: formatH,
                             rotation: 0,
-                            // zIndex entre le fond plat (0) et les ouvertures
-                            zIndex: Math.max(1, maxOpeningZ - 1),
+                            // Le fond est toujours à z=1 (en dessous de tous les openings)
+                            zIndex: 1,
                             opacity: 1,
                             locked: true,
                             name: language === 'fr' ? 'Fond passe-partout' : 'Mat background',
@@ -6411,7 +6410,10 @@ export default function CreationsAtelierV2({
                             paperImageUrl,
                           };
                           setCanvasElements(prev => [
-                            ...prev.filter(el => el.type !== 'fond-passe-partout'),
+                            ...prev
+                              .filter(el => el.type !== 'fond-passe-partout')
+                              // Garantir que tous les openings ont zIndex >= 2
+                              .map(el => el.type === 'opening' && el.zIndex < 2 ? { ...el, zIndex: 2 } : el),
                             fondEl,
                           ]);
                           toast.success(language === 'fr' ? 'Fond appliqué' : 'Background applied');
