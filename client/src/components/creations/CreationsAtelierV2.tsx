@@ -8169,7 +8169,7 @@ export default function CreationsAtelierV2({
                           </>
                         )}
                       </svg>
-                    ) : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
+                    ) : (element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
