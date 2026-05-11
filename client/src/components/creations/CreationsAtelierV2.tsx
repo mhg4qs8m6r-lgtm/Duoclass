@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info, Send } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -23,6 +23,7 @@ import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./D
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
 import { type HoleDescriptor, type PeleMelePaperState } from "./PeleMelePanel";
 import Collecteur from "../Collecteur";
+import ClipToShapeToolbox from "../ClipToShapeToolbox";
 
 interface CreationsAtelierProps {
   isOpen: boolean;
@@ -886,6 +887,18 @@ export default function CreationsAtelierV2({
     console.log("[Undo] restored to", prev.length, "elements, remaining stack:", undoStackRef.current.length);
   }, []);
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
+
+  // Toolbox contextuelle : image + shape sélectionnées simultanément
+  const selectedElementsForClip = canvasElements.filter(el => selectedElementIds.has(el.id));
+  const showClipToolbox =
+    selectedElementsForClip.some(el => el.type === "image" && el.src) &&
+    selectedElementsForClip.some(el => el.type === "shape");
+
+  const handleClipToShape = () => {
+    // TODO étape 2 : logique de détourage par la forme
+    toast.info(language === "fr" ? "Fonctionnalité à venir" : "Coming soon");
+  };
+
   // Modale d'aperçu SVG laser
   const [svgPreviewModal, setSvgPreviewModal] = useState<{ svgContent: string; filename: string } | null>(null);
   
@@ -992,17 +1005,6 @@ export default function CreationsAtelierV2({
     return map[currentProjectType] || { showDetourage: true, sections: null }; // Projet libre → tout
   }, [currentProjectType, showAllTools]);
 
-  // Catégories de la bibliothèque de modèles selon le type de projet
-  const bibliothequeCategories = useMemo<string[]>(() => {
-    const map: Record<string, string[]> = {
-      "Passe-partout modèle":         ["passe-partout"],
-      "Montage photos/Passe-partout": ["passe-partout"],
-      "Pêle-mêle modèle":            ["pele-mele"],
-      "Montage photos/Pêle-mêle":    ["pele-mele"],
-      "Collage":                      ["cadres", "bordures"],
-    };
-    return map[currentProjectType] || ["passe-partout", "pele-mele", "cadres", "bordures"];
-  }, [currentProjectType]);
 
   const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
 
@@ -1205,8 +1207,6 @@ export default function CreationsAtelierV2({
   const justDidRightClickRef = useRef(false); // Flag pour empêcher onClick de désélectionner après un clic droit
   const justFinishedLassoRef = useRef(false); // Flag pour empêcher onClick de désélectionner après un lasso
   
-  // État pour la confirmation "Envoyer dans le Collecteur"
-  const [confirmCollectorSend, setConfirmCollectorSend] = useState<string | null>(null); // elementId à envoyer
   // État pour la confirmation avant de quitter
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -2496,9 +2496,6 @@ export default function CreationsAtelierV2({
   // === EXPORT : Télécharger, Imprimer, @Mail ===
   const [isExporting, setIsExporting] = useState(false);
 
-  // === Envoyer dans l'appli : dialogue de confirmation ===
-  const [showSendToAppDialog, setShowSendToAppDialog] = useState(false);
-  
   // Convertir une data: URL en Blob (utilitaire pour captureCanvas)
   const dataUrlToBlob = (dataUrl: string): Blob => {
     const parts = dataUrl.split(',');
@@ -3142,8 +3139,6 @@ export default function CreationsAtelierV2({
   // === SAUVER COMME : modale de saisie du nom puis capture et sauvegarde dans l'album ===
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
-  const [showLayerOrderModal, setShowLayerOrderModal] = useState(false);
-
   // Album de destination : "Images projets" (catégorie cat_mes_projets)
   const IMAGES_PROJETS_ALBUM_ID = 'album_images_projets';
   const IMAGES_PROJETS_ALBUM_NAME = 'Images projets';
@@ -3272,91 +3267,6 @@ export default function CreationsAtelierV2({
     if (!sharedModelesQuery.data) return 0;
     return Object.values(sharedModelesQuery.data).reduce((sum, arr) => sum + arr.length, 0);
   }, [sharedModelesQuery.data]);
-
-  /** Envoi effectif du modèle dans l'appli (upload + marquage projet) */
-  const doSendToApp = async (replaceModeleId?: number) => {
-    if (isExporting) return;
-    setIsExporting(true);
-    toast.info(language === "fr" ? "Capture en cours..." : "Capturing...");
-    try {
-      // Si remplacement, supprimer l'ancien modèle
-      if (replaceModeleId) {
-        await deleteModeleMut.mutateAsync({ id: replaceModeleId });
-      }
-
-      const canvas = await captureCanvas(3);
-      if (!canvas) return;
-      const blob = await canvasToBlob(canvas, "image/png");
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      // Auto-numérotation : Modèle N°X
-      const numero = replaceModeleId
-        ? totalModelesCount // remplacement → même rang
-        : totalModelesCount + 1; // nouvelle entrée
-      const filename = `${language === "fr" ? "Modèle" : "Template"} N°${numero}.png`;
-      const result = await uploadModeleMut.mutateAsync({
-        category: saveAsModeleCategory as "passe-partout" | "pele-mele" | "cadres" | "bordures",
-        filename,
-        imageData: dataUrl,
-      });
-      if (!result.success) {
-        toast.error(
-          language === "fr"
-            ? "Échec de l'envoi — la table sharedModeles existe-t-elle en base ?"
-            : "Upload failed — does the sharedModeles table exist?"
-        );
-        return;
-      }
-      // Marquer le projet comme envoyé
-      if (currentProjectId && result.modele) {
-        await updateCreationsProject(currentProjectId, {
-          sentToAppAt: Date.now(),
-          sentToAppModeleId: result.modele.id,
-        });
-      }
-      // Rafraîchir la liste des modèles
-      sharedModelesQuery.refetch();
-      toast.success(
-        language === "fr"
-          ? `${filename} envoyé dans l'appli !`
-          : `${filename} sent to app!`
-      );
-    } catch (err) {
-      console.error("Erreur sauver comme modèle:", err);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(language === "fr" ? `Erreur: ${errMsg}` : `Error: ${errMsg}`);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  /** Bouton "Envoyer dans l'appli" — logique des 3 cas */
-  const handleSaveAsModele = async () => {
-    if (isExporting) return;
-    // Lire le projet pour connaître l'état d'envoi
-    const project = currentProjectId ? await getCreationsProject(currentProjectId) : null;
-    const alreadySent = project?.sentToAppAt;
-    const modifiedSinceSend = alreadySent && project.updatedAt > alreadySent;
-
-    if (!alreadySent) {
-      // Cas 1 : jamais envoyé → envoi direct
-      await doSendToApp();
-    } else if (!modifiedSinceSend) {
-      // Cas 2 : déjà envoyé, pas modifié → bloqué
-      toast.info(
-        language === "fr"
-          ? "Ce modèle est déjà dans l'appli"
-          : "This template is already in the app"
-      );
-    } else {
-      // Cas 3 : déjà envoyé et modifié → dialogue
-      setShowSendToAppDialog(true);
-    }
-  };
 
   // La zone de travail est fixe, mais la PAGE est dessinée à l'intérieur
   // avec les proportions exactes du format sélectionné
@@ -5646,6 +5556,12 @@ export default function CreationsAtelierV2({
             {/* Zone Outils - overflow-y-auto + min-h-0 garantit le défilement dans un flex-col */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-4">
+                {showClipToolbox && (
+                  <ClipToShapeToolbox
+                    language={language}
+                    onClip={handleClipToShape}
+                  />
+                )}
                 {/* Détourage (section accordéon) */}
                 {toolsFilter.showDetourage && (
                 <div className="border border-gray-200 rounded-lg overflow-hidden mb-1">
@@ -6202,7 +6118,6 @@ export default function CreationsAtelierV2({
                     onLineColorChange={setLineDrawColor}
                     lineStrokeWidth={lineDrawStrokeWidth}
                     onLineStrokeWidthChange={setLineDrawStrokeWidth}
-                    onOpenLayerOrder={() => setShowLayerOrderModal(true)}
                     onRoundLine={() => {
                       if (!selectedElementId) return;
                       const el = canvasElements.find(e => e.id === selectedElementId);
@@ -7245,13 +7160,6 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
-                    bibliothequeCategories={bibliothequeCategories}
-                    onSelectModele={(url, filename) => {
-                      // Les modèles de la bibliothèque sont des gabarits pleine page
-                      const fmtW = orientation === "portrait" ? paperFormat.width : paperFormat.height;
-                      const fmtH = orientation === "portrait" ? paperFormat.height : paperFormat.width;
-                      addToCanvas(url, filename, undefined, undefined, { w: fmtW, h: fmtH });
-                    }}
                     // ── Pêle-mêle ──────────────────────────────────────────
                     peleMelePaper={(() => {
                       const p = canvasElements.find(el => el.type === 'pelemele-paper');
@@ -8806,88 +8714,6 @@ export default function CreationsAtelierV2({
                             <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
                           </div>
                         )}
-                        {/* Bouton "Envoyer dans le Collecteur" — avec confirmation */}
-                        {selectedElementId === element.id && element.type === 'image' && element.src && (
-                          confirmCollectorSend === element.id ? (
-                            <div
-                              className="absolute -top-10 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 rounded-lg px-3 py-1.5 shadow-lg z-[120] flex items-center gap-2 whitespace-nowrap"
-                              draggable={false}
-                              onMouseDown={(e) => e.stopPropagation()}
-                            >
-                              <span className="text-[11px] text-gray-700">{language === 'fr' ? 'Envoyer dans le Collecteur ?' : 'Send to Collector?'}</span>
-                              <button
-                                className="text-[11px] font-semibold bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 rounded"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  setConfirmCollectorSend(null);
-                                  if (element.groupId) {
-                                    const groupImages = canvasElements.filter(el => el.groupId === element.groupId && el.type === 'image' && el.src);
-                                    if (groupImages.length === 0) return;
-                                    const newItem: CollectorItem = {
-                                      id: `collector_${Date.now()}`,
-                                      type: 'photo',
-                                      src: groupImages[0].src!,
-                                      name: (language === 'fr' ? 'Groupe' : 'Group') + ` (${groupImages.length})`,
-                                      thumbnail: groupImages[0].src!,
-                                      widthCm: groupImages[0].width,
-                                      heightCm: groupImages[0].height,
-                                      groupId: element.groupId,
-                                      groupSrcs: groupImages.map(el => el.src!),
-                                      groupNames: groupImages.map(el => el.name || (language === 'fr' ? 'Image' : 'Image')),
-                                      groupWidths: groupImages.map(el => el.width),
-                                      groupHeights: groupImages.map(el => el.height),
-                                      groupXs: groupImages.map(el => el.x),
-                                      groupYs: groupImages.map(el => el.y),
-                                    };
-                                    if (currentProjectId) {
-                                      await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
-                                    } else {
-                                      setCollectorItems(prev => [...prev, newItem]);
-                                    }
-                                    toast.success(language === 'fr'
-                                      ? `Groupe (${groupImages.length} images) envoyé dans le Collecteur`
-                                      : `Group (${groupImages.length} images) sent to Collector`);
-                                  } else {
-                                    const newItem: CollectorItem = {
-                                      id: `collector_${Date.now()}`,
-                                      type: 'photo',
-                                      src: element.src!,
-                                      name: element.name || (language === 'fr' ? 'Image' : 'Image'),
-                                      thumbnail: element.src!,
-                                      widthCm: element.width,
-                                      heightCm: element.height,
-                                    };
-                                    if (currentProjectId) {
-                                      await db.collecteur.put({ ...newItem, id: `collecteur_${Date.now()}_${Math.random().toString(36).slice(2)}`, photoUrl: newItem.src, addedAt: Date.now(), projectId: currentProjectId } as any);
-                                    } else {
-                                      setCollectorItems(prev => [...prev, newItem]);
-                                    }
-                                    toast.success(language === 'fr' ? 'Image envoyée dans le Collecteur' : 'Image sent to Collector');
-                                  }
-                                }}
-                              >
-                                {language === 'fr' ? 'Oui' : 'Yes'}
-                              </button>
-                              <button
-                                className="text-[11px] font-semibold bg-gray-300 hover:bg-gray-400 text-gray-700 px-2 py-0.5 rounded"
-                                onClick={(e) => { e.stopPropagation(); setConfirmCollectorSend(null); }}
-                              >
-                                {language === 'fr' ? 'Non' : 'No'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div
-                              className="absolute -top-9 left-1/2 -translate-x-1/2 bg-white border-2 border-purple-400 hover:bg-purple-50 text-purple-700 rounded-full px-3 py-1 shadow-lg cursor-pointer z-[120] flex items-center gap-1.5 whitespace-nowrap"
-                              draggable={false}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => { e.stopPropagation(); setConfirmCollectorSend(element.id); }}
-                            >
-                              <span className="text-[11px] font-semibold">
-                                {language === 'fr' ? '→ Envoyer dans le Collecteur' : '→ Send to Collector'}
-                              </span>
-                            </div>
-                          )
-                        )}
                         {/* Bouton menu contextuel ⋮ (en haut à droite de l'élément sélectionné) */}
                         {selectedElementId === element.id && (
                           <div
@@ -10006,12 +9832,6 @@ export default function CreationsAtelierV2({
               <Save className="w-3 h-3" />
               {language === "fr" ? "Sauvegarder" : "Save"}
             </Button>
-            {isAdmin && (
-              <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2 border-green-400 text-green-600 hover:bg-green-50" onClick={handleSaveAsModele} disabled={isExporting}>
-                <Send className="w-3 h-3" />
-                {language === "fr" ? "Envoyer dans l'appli" : "Send to app"}
-              </Button>
-            )}
             <Button variant="outline" size="sm" className="flex-shrink-0 text-[11px] h-6 px-2" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>
@@ -10019,71 +9839,6 @@ export default function CreationsAtelierV2({
         </div>
       </div>
       
-      {/* Modale : Envoyer dans l'appli — modèle modifié */}
-      {showSendToAppDialog && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
-          <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b bg-gradient-to-r from-green-50 to-emerald-50">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                <Send className="w-5 h-5 text-green-500" />
-                {language === "fr" ? "Modèle modifié" : "Template modified"}
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {language === "fr"
-                  ? "Ce modèle a été modifié depuis son dernier envoi. Que souhaitez-vous faire ?"
-                  : "This template has been modified since last sent. What would you like to do?"}
-              </p>
-            </div>
-            <div className="px-6 py-4 space-y-3">
-              <button
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-green-200 hover:bg-green-50 transition-colors text-left"
-                onClick={async () => {
-                  setShowSendToAppDialog(false);
-                  await doSendToApp();
-                }}
-              >
-                <Copy className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">
-                    {language === "fr" ? "Conserver les deux" : "Keep both"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {language === "fr"
-                      ? "Crée une nouvelle référence avec un nouveau numéro"
-                      : "Creates a new reference with a new number"}
-                  </p>
-                </div>
-              </button>
-              <button
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors text-left"
-                onClick={async () => {
-                  setShowSendToAppDialog(false);
-                  const project = currentProjectId ? await getCreationsProject(currentProjectId) : null;
-                  await doSendToApp(project?.sentToAppModeleId);
-                }}
-              >
-                <RotateCcw className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">
-                    {language === "fr" ? "Remplacer l'existant" : "Replace existing"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {language === "fr"
-                      ? "Écrase l'ancien modèle dans l'appli"
-                      : "Overwrites the old template in the app"}
-                  </p>
-                </div>
-              </button>
-            </div>
-            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setShowSendToAppDialog(false)}>
-                {language === "fr" ? "Annuler" : "Cancel"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modale de confirmation avant de quitter */}
 
       {/* Modale : Choix de catégorie avant sauvegarde */}
@@ -10899,271 +10654,6 @@ export default function CreationsAtelierV2({
         document.body
       )}
 
-      {/* Modale Ordre des calques du projet */}
-      {showLayerOrderModal && createPortal(
-        <div className="fixed inset-0 bg-black/30 z-[9999]" onClick={() => setShowLayerOrderModal(false)}>
-          <div className="fixed left-4 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-[420px] max-h-[80vh] overflow-hidden animate-in fade-in slide-in-from-left-4 duration-200 flex flex-col" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex items-center justify-between flex-shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-purple-500" />
-                  {language === 'fr' ? 'Ordre des calques du projet' : 'Project layer order'}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1 ml-7">
-                  {language === 'fr' ? 'Du devant (premier plan) à l\'arrière-plan' : 'From front to back'}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowLayerOrderModal(false)}
-                className="p-1 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Liste des calques */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {(() => {
-                const isSystemElement = (el: CanvasElement) => {
-                  if (el.locked) return true;
-                  const n = (el.name || '').toLowerCase();
-                  return n.includes('découpe') || n.includes('decoupe') || n.includes('fond');
-                };
-                const filtered = isAdmin
-                  ? canvasElements
-                  : canvasElements.filter(el => !isSystemElement(el));
-                const sorted = [...filtered].sort((a, b) => b.zIndex - a.zIndex);
-                // Nommage unique automatique : dédupliquer les noms par z-index croissant
-                const displayNames = new Map<string, string>();
-                const nameCounts = new Map<string, number>();
-                const sortedByZAsc = [...sorted].reverse();
-                for (const el of sortedByZAsc) {
-                  const baseName = el.name || (el.type === 'text' ? (el.text?.slice(0, 20) || 'Texte') : (el.type === 'shape' || el.type === 'opening') ? (el.shape || 'Forme') : `Élément ${el.id.slice(-4)}`);
-                  const count = (nameCounts.get(baseName) || 0) + 1;
-                  nameCounts.set(baseName, count);
-                  displayNames.set(el.id, baseName);
-                }
-                // Pour les noms en doublon, renuméroter
-                const nameOccurrence = new Map<string, number>();
-                for (const el of sortedByZAsc) {
-                  const baseName = displayNames.get(el.id)!;
-                  if ((nameCounts.get(baseName) || 0) > 1) {
-                    const occ = (nameOccurrence.get(baseName) || 0) + 1;
-                    nameOccurrence.set(baseName, occ);
-                    // Retirer le numéro trailing existant et renuméroter
-                    const stripped = baseName.replace(/\s*\d+$/, '');
-                    displayNames.set(el.id, `${stripped} ${occ}`);
-                  }
-                }
-                if (sorted.length === 0) {
-                  return (
-                    <p className="text-gray-400 text-center py-8 text-sm">
-                      {language === 'fr' ? 'Aucun élément sur le canvas' : 'No elements on canvas'}
-                    </p>
-                  );
-                }
-                // Pré-calculer les labels des découpes par surface décroissante
-                const decoupeElements = sorted.filter(el => {
-                  const n = (el.name || '').toLowerCase();
-                  return n.startsWith('découpe') || n.startsWith('decoupe') || n.startsWith('opening');
-                });
-                const decoupeLabelMap = new Map<string, string>();
-                if (decoupeElements.length > 0) {
-                  const bySurfaceDesc = [...decoupeElements].sort((a, b) => (b.width * b.height) - (a.width * a.height));
-                  bySurfaceDesc.forEach((el, i) => {
-                    if (i === 0) {
-                      decoupeLabelMap.set(el.id, language === 'fr' ? 'Contour extérieur du passe-partout' : 'Mat frame outer contour');
-                    } else if (decoupeElements.length === 2 && i === 1) {
-                      decoupeLabelMap.set(el.id, language === 'fr' ? 'Ouverture intérieure du passe-partout' : 'Mat frame inner opening');
-                    } else {
-                      decoupeLabelMap.set(el.id, language === 'fr' ? `Ouverture ${i}` : `Opening ${i}`);
-                    }
-                  });
-                }
-
-                return sorted.map((el, idx) => {
-                  const position = sorted.length - idx;
-                  const isBack = idx === sorted.length - 1;
-                  const isSelected = selectedElementId === el.id;
-                  // Déterminer le label contextuel
-                  const elName = (el.name || '').toLowerCase();
-                  const isFond = elName === 'fond' || elName === 'background';
-                  const isPP = elName === 'passe-partout' || elName === 'mat frame';
-                  const isDecoupe = decoupeLabelMap.has(el.id);
-                  const levelLabel = isFond
-                    ? (language === 'fr' ? 'Fond couleur / Image de fond' : 'Background color / image')
-                    : isPP
-                    ? (language === 'fr' ? 'Passe-partout généré' : 'Generated mat frame')
-                    : isDecoupe
-                    ? decoupeLabelMap.get(el.id)!
-                    : null;
-                  return (
-                    <div
-                      key={el.id}
-                      className={`flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer ${isSelected ? 'border-purple-400 bg-purple-50 ring-1 ring-purple-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
-                      onClick={() => setSelectedElementId(el.id)}
-                    >
-                      {/* Miniature */}
-                      <div className="w-12 h-12 rounded border border-gray-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {isBack ? (
-                          <span className="text-[8px] text-gray-400 italic text-center leading-tight px-0.5">Zone de travail</span>
-                        ) : el.type === 'image' && el.src ? (
-                          <img src={el.src} alt={el.name || ''} className="w-full h-full object-contain" />
-                        ) : el.type === 'text' ? (
-                          <span className="text-[10px] text-gray-600 font-medium truncate px-1">Aa</span>
-                        ) : el.type === 'shape' ? (
-                          <div className="w-8 h-8 rounded" style={{ backgroundColor: el.openingColor || '#ccc' }} />
-                        ) : el.type === 'opening' ? (
-                          <div className="w-8 h-8 rounded border-2 border-black bg-transparent" />
-                        ) : (
-                          <Image className="w-4 h-4 text-gray-300" />
-                        )}
-                      </div>
-
-                      {/* Nom + niveau + position */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
-                          {displayNames.get(el.id) || el.name || el.type}
-                        </p>
-                        {levelLabel ? (
-                          <p className="text-[10px] text-purple-500 font-medium">{levelLabel}</p>
-                        ) : (
-                          <p className="text-xs text-gray-400">z-index: {el.zIndex}</p>
-                        )}
-                      </div>
-
-                      {/* Saisie numéro de position */}
-                      <input
-                        type="number"
-                        min={1}
-                        max={canvasElements.length}
-                        value={position}
-                        onChange={(e) => {
-                          const newPos = Math.max(1, Math.min(canvasElements.length, parseInt(e.target.value) || 1));
-                          const sortedByZ = [...canvasElements].sort((a, b) => a.zIndex - b.zIndex);
-                          const withoutCurrent = sortedByZ.filter(item => item.id !== el.id);
-                          withoutCurrent.splice(newPos - 1, 0, el);
-                          setCanvasElements(canvasElements.map(item => {
-                            const newIdx = withoutCurrent.findIndex(s => s.id === item.id);
-                            return { ...item, zIndex: newIdx + 1 };
-                          }));
-                        }}
-                        className="w-12 h-8 text-center text-sm border border-gray-300 rounded bg-white"
-                        title={language === 'fr' ? 'Position du calque' : 'Layer position'}
-                      />
-
-                      {/* Boutons de réorganisation */}
-                      <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        {idx === 0 ? (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
-                            {language === 'fr' ? '✓ Devant' : '✓ Front'}
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              const maxZ = Math.max(...canvasElements.map(e => e.zIndex));
-                              setCanvasElements(canvasElements.map(item =>
-                                item.id === el.id ? { ...item, zIndex: maxZ + 1 } : item
-                              ));
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
-                            title={language === 'fr' ? 'Premier plan' : 'Bring to front'}
-                          >
-                            {language === 'fr' ? 'Premier' : 'Front'}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            const above = sorted[idx - 1];
-                            if (above) {
-                              const tempZ = el.zIndex;
-                              setCanvasElements(canvasElements.map(item => {
-                                if (item.id === el.id) return { ...item, zIndex: above.zIndex };
-                                if (item.id === above.id) return { ...item, zIndex: tempZ };
-                                return item;
-                              }));
-                            }
-                          }}
-                          disabled={idx === 0}
-                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-0.5"
-                          title={language === 'fr' ? 'Monter' : 'Move up'}
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                          {language === 'fr' ? 'Monter' : 'Up'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const below = sorted[idx + 1];
-                            if (below) {
-                              const tempZ = el.zIndex;
-                              setCanvasElements(canvasElements.map(item => {
-                                if (item.id === el.id) return { ...item, zIndex: below.zIndex };
-                                if (item.id === below.id) return { ...item, zIndex: tempZ };
-                                return item;
-                              }));
-                            }
-                          }}
-                          disabled={idx === sorted.length - 1}
-                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-0.5"
-                          title={language === 'fr' ? 'Descendre' : 'Move down'}
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                          {language === 'fr' ? 'Descendre' : 'Down'}
-                        </button>
-                        {idx === sorted.length - 1 ? (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-700 text-center">
-                            {language === 'fr' ? '✓ Arrière' : '✓ Back'}
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              const minZ = Math.min(...canvasElements.map(e => e.zIndex));
-                              setCanvasElements(canvasElements.map(item =>
-                                item.id === el.id ? { ...item, zIndex: minZ - 1 } : item
-                              ));
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
-                            title={language === 'fr' ? 'Arrière-plan' : 'Send to back'}
-                          >
-                            {language === 'fr' ? 'Dernier' : 'Back'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-
-              {/* Ligne fixe — Zone de travail (format) */}
-              <div className="flex items-center gap-3 p-2 rounded-lg border border-gray-300 bg-gray-100/80 opacity-75 mt-1">
-                <div className="w-12 h-12 rounded border border-gray-300 bg-gray-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-bold text-gray-500">{paperFormat.label || paperFormat.id.toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-500">
-                    {language === 'fr' ? `Zone de travail (Format ${paperFormat.label || paperFormat.id.toUpperCase()})` : `Work area (${paperFormat.label || paperFormat.id.toUpperCase()} format)`}
-                  </p>
-                  <p className="text-[10px] text-gray-400 font-medium">
-                    {language === 'fr' ? 'Niv.1 — Base non modifiable' : 'Lv.1 — Fixed base'}
-                  </p>
-                </div>
-                <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-200 text-gray-500 flex-shrink-0">
-                  ⚓ Base
-                </span>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-3 bg-gray-50 border-t flex justify-end flex-shrink-0">
-              <Button size="sm" variant="outline" onClick={() => setShowLayerOrderModal(false)}>
-                {language === 'fr' ? 'Fermer' : 'Close'}
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

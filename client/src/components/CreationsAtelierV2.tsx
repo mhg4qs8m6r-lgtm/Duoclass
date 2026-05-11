@@ -19,7 +19,6 @@ import { jsPDF } from "jspdf";
 import DetourageToolsPanel, { DetourageMode, ManualTool } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig } from "./AssemblagePanel";
 import Collecteur from "./Collecteur";
-import ClipToShapeToolbox from "./ClipToShapeToolbox";
 
 interface CreationsAtelierProps {
   isOpen: boolean;
@@ -570,17 +569,6 @@ export default function CreationsAtelierV2({
   const [canvasElements, setCanvasElements] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
-
-  // Toolbox contextuelle : image + shape sélectionnées simultanément
-  const selectedElements = canvasElements.filter(el => selectedElementIds.has(el.id));
-  const showClipToolbox =
-    selectedElements.some(el => el.type === "image" && el.src) &&
-    selectedElements.some(el => el.type === "shape");
-
-  const handleClipToShape = () => {
-    // TODO étape 2 : logique de détourage par la forme
-    toast.info(language === "fr" ? "Fonctionnalité à venir" : "Coming soon");
-  };
   // Modale d'aperçu SVG laser
   const [svgPreviewModal, setSvgPreviewModal] = useState<{ svgContent: string; filename: string } | null>(null);
   
@@ -3969,12 +3957,6 @@ export default function CreationsAtelierV2({
             {/* Zone Outils - overflow-y-auto + min-h-0 garantit le défilement dans un flex-col */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-4">
-                {showClipToolbox && (
-                  <ClipToShapeToolbox
-                    language={language}
-                    onClip={handleClipToShape}
-                  />
-                )}
                 {activeMainTab === "detourage" && (
                   <>
                     <DetourageToolsPanel
