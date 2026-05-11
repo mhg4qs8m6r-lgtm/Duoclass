@@ -124,6 +124,8 @@ interface CanvasElement {
   // ── Photo assignée à un trou pêle-mêle (type === "image") ─────────────────
   /** ID du trou auquel cette photo est assignée */
   assignedHoleId?: string;
+  /** Image PNG avec transparence (ex: résultat de Mise en forme) */
+  hasTransparency?: boolean;
 
 }
 
@@ -143,6 +145,7 @@ interface CollectorItem {
   groupHeights?: number[]; // Hauteurs cm de chaque membre
   groupXs?: number[];      // Positions X cm de chaque membre
   groupYs?: number[];      // Positions Y cm de chaque membre
+  hasTransparency?: boolean; // true = image PNG transparente (ex: mise en forme)
 }
 
 // Onglet unique (legacy type conservé pour compatibilité)
@@ -1032,6 +1035,7 @@ export default function CreationsAtelierV2({
           zIndex:   Math.max(imgEl.zIndex, shapeEl.zIndex),
           opacity:  imgEl.opacity,
           name:     language === 'fr' ? 'Mise en forme' : 'Shaped image',
+          hasTransparency: true,
         };
         return [...filtered, newEl];
       });
@@ -9809,7 +9813,7 @@ export default function CreationsAtelierV2({
           {/* ZONE DROITE : Collecteur */}
           <div className="w-56 border-l relative z-[1100] h-full">
             <Collecteur
-              items={collectorItems.map(i => ({ id: i.id, src: i.src, name: i.name, thumbnail: i.thumbnail, widthCm: i.widthCm, heightCm: i.heightCm }))}
+              items={collectorItems.map(i => ({ id: i.id, src: i.src, name: i.name, thumbnail: i.thumbnail, widthCm: i.widthCm, heightCm: i.heightCm, hasTransparency: i.hasTransparency }))}
               onRemoveItem={(id) => {
                 setCollectorItems(prev => prev.filter(i => i.id !== id));
                 removeFromCollecteur(id).catch(() => {});
@@ -10439,6 +10443,7 @@ export default function CreationsAtelierV2({
                             thumbnail: element.src!,
                             widthCm: element.width,
                             heightCm: element.height,
+                            hasTransparency: element.hasTransparency,
                           };
                           setCollectorItems(prev => [...prev, newItem]);
                         }

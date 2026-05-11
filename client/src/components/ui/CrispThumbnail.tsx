@@ -22,9 +22,10 @@ interface CrispThumbnailProps {
   src: string;
   alt?: string;
   className?: string;
+  transparent?: boolean;
 }
 
-export default function CrispThumbnail({ src, alt, className }: CrispThumbnailProps) {
+export default function CrispThumbnail({ src, alt, className, transparent }: CrispThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -36,9 +37,20 @@ export default function CrispThumbnail({ src, alt, className }: CrispThumbnailPr
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      // Fond blanc
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+      if (transparent) {
+        // Fond damier pour images transparentes
+        const tileSize = 10;
+        for (let ty = 0; ty < THUMB_H; ty += tileSize) {
+          for (let tx = 0; tx < THUMB_W; tx += tileSize) {
+            ctx.fillStyle = ((tx / tileSize + ty / tileSize) % 2 === 0) ? "#cccccc" : "#ffffff";
+            ctx.fillRect(tx, ty, tileSize, tileSize);
+          }
+        }
+      } else {
+        // Fond blanc
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+      }
 
       // Scale "object-contain"
       const scale = Math.min(THUMB_W / img.naturalWidth, THUMB_H / img.naturalHeight);
@@ -47,28 +59,28 @@ export default function CrispThumbnail({ src, alt, className }: CrispThumbnailPr
       const dx = (THUMB_W - dw) / 2;
       const dy = (THUMB_H - dh) / 2;
 
-      // Ratio de réduction (ex: 756 → 400 = ratio ~1.9, 756 → 150 = ratio ~5)
-      const ratio = 1 / scale;
-
-      // Rayon de dilatation : proportionnel au ratio, min 1px
-      const dilate = Math.max(1, Math.ceil(ratio / 2));
-
       // Passe 1 : dessiner l'image normalement
       ctx.drawImage(img, dx, dy, dw, dh);
 
-      // Passe 2 : dilater les traits sombres en redessinant en mode "darken"
-      // avec des décalages dans les 8 directions (N, S, E, W, NE, NW, SE, SW)
-      ctx.globalCompositeOperation = "darken";
-      for (let ox = -dilate; ox <= dilate; ox++) {
-        for (let oy = -dilate; oy <= dilate; oy++) {
-          if (ox === 0 && oy === 0) continue;
-          ctx.drawImage(img, dx + ox, dy + oy, dw, dh);
+      if (!transparent) {
+        // Passe 2 : dilater les traits sombres en redessinant en mode "darken"
+        // avec des décalages dans les 8 directions (N, S, E, W, NE, NW, SE, SW)
+        // Ratio de réduction (ex: 756 → 400 = ratio ~1.9, 756 → 150 = ratio ~5)
+        const ratio = 1 / scale;
+        // Rayon de dilatation : proportionnel au ratio, min 1px
+        const dilate = Math.max(1, Math.ceil(ratio / 2));
+        ctx.globalCompositeOperation = "darken";
+        for (let ox = -dilate; ox <= dilate; ox++) {
+          for (let oy = -dilate; oy <= dilate; oy++) {
+            if (ox === 0 && oy === 0) continue;
+            ctx.drawImage(img, dx + ox, dy + oy, dw, dh);
+          }
         }
+        ctx.globalCompositeOperation = "source-over";
       }
-      ctx.globalCompositeOperation = "source-over";
     };
     img.src = src;
-  }, [src]);
+  }, [src, transparent]);
 
   return (
     <canvas
