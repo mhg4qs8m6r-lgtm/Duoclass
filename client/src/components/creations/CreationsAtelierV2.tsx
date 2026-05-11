@@ -8194,7 +8194,7 @@ export default function CreationsAtelierV2({
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
                         zIndex: element.zIndex,
                         opacity: element.opacity,
-                        transition: (isDragging || isResizing || isRotating) ? 'none' : 'all 0.1s ease',
+                        transition: (isDragging || isResizing || isRotating) ? 'none' : 'outline-color 0.1s ease, outline-offset 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
                         // Photos assignées à un trou : pas de clipPath nécessaire —

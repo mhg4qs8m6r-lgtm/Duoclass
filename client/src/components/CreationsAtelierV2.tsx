@@ -6102,7 +6102,7 @@ export default function CreationsAtelierV2({
                         transformOrigin: element.type === 'shape' && element.shape === 'line' ? '0 50%' : undefined,
                         zIndex: element.zIndex, // Conserver le z-index de l'élément même s'il est sélectionné
                         opacity: element.opacity,
-                        transition: (isDragging || isResizing) ? 'none' : 'all 0.1s ease',
+                        transition: (isDragging || isResizing) ? 'none' : 'outline-color 0.1s ease, outline-offset 0.1s ease',
                         userSelect: 'none',
                         // overflow:visible obligatoire pour que les poignées de redimensionnement
                         // (positionnées hors des limites du div) restent visibles et cliquables
