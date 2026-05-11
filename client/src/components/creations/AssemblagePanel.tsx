@@ -1831,10 +1831,10 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "passe-partout",    labelFr: "Passe-partout modèle",        labelEn: "Mat frame template",        icon: Frame              },
-  { id: "montage-pp",       labelFr: "Montage / Passe-partout",     labelEn: "Montage / Mat frame",       icon: Frame              },
-  { id: "pelemele-modele",  labelFr: "Pêle-mêle modèle",           labelEn: "Photo collage template",    icon: RectangleHorizontal },
-  { id: "montage-pelemele", labelFr: "Montage / Pêle-mêle",        labelEn: "Montage / Collage",         icon: RectangleHorizontal },
+  { id: "passe-partout",    labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
+  { id: "montage-pp",       labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
+  { id: "pelemele-modele",  labelFr: "Pêle-mêle",                  labelEn: "Photo collage",             icon: RectangleHorizontal },
+  { id: "montage-pelemele", labelFr: "Pêle-mêle",                  labelEn: "Photo collage",             icon: RectangleHorizontal },
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
   { id: "puzzle",           labelFr: "Puzzle",                      labelEn: "Puzzle",                    icon: Puzzle              },

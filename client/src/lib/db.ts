@@ -51,7 +51,7 @@ export interface CreationsProject {
   canvasFormatWidth?: number;
   canvasFormatHeight?: number;
   thumbnail?: string;
-  /** Type du projet : Projet libre, Passe-partout modèle, Pêle-mêle modèle, etc. */
+  /** Type du projet : Projet libre, Passe-partout, Pêle-mêle, Collage, etc. */
   projectType?: string;
   /** Catégorie du projet : en_cours, finis */
   projectCategory?: string;

@@ -994,11 +994,9 @@ export default function CreationsAtelierV2({
   const toolsFilter = useMemo<{ showDetourage: boolean; sections: SectionId[] | null }>(() => {
     if (showAllTools) return { showDetourage: true, sections: null }; // null = tout afficher
     const map: Record<string, { showDetourage: boolean; sections: SectionId[] }> = {
-      "Collage":                      { showDetourage: true,  sections: ["collage", "texte", "calques", "bibliotheque"] },
-      "Passe-partout modèle":         { showDetourage: false, sections: ["passe-partout", "texte", "calques", "bibliotheque"] },
-      "Montage photos/Passe-partout": { showDetourage: true,  sections: ["montage-pp", "texte", "calques", "bibliotheque"] },
-      "Pêle-mêle modèle":            { showDetourage: false, sections: ["pelemele-modele", "texte", "calques", "bibliotheque"] },
-      "Montage photos/Pêle-mêle":    { showDetourage: true,  sections: ["montage-pelemele", "texte", "calques", "bibliotheque"] },
+      "Collage":         { showDetourage: true, sections: ["collage", "texte"] },
+      "Passe-partout":  { showDetourage: true, sections: ["montage-pp", "texte"] },
+      "Pêle-mêle":      { showDetourage: true, sections: ["montage-pelemele", "texte"] },
       "Page de stickers":            { showDetourage: true,  sections: [] },
       "Puzzle":                      { showDetourage: true,  sections: ["puzzle", "texte"] },
     };
@@ -3252,11 +3250,9 @@ export default function CreationsAtelierV2({
 
   // Mapping type de projet → catégorie de modèle pour la sauvegarde
   const modelesCategoryForProject: Record<string, string> = {
-    "Passe-partout modèle":         "passe-partout",
-    "Montage photos/Passe-partout": "passe-partout",
-    "Pêle-mêle modèle":            "pele-mele",
-    "Montage photos/Pêle-mêle":    "pele-mele",
-    "Collage":                      "cadres",
+    "Passe-partout": "passe-partout",
+    "Pêle-mêle":    "pele-mele",
+    "Collage":       "cadres",
   };
 
   // Catégorie de modèle pour l'envoi : mappée ou fallback "cadres"
