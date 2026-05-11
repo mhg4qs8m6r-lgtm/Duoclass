@@ -8197,7 +8197,7 @@ export default function CreationsAtelierV2({
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'outline-color 0.1s ease, outline-offset 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
-                        pointerEvents: element.type === 'opening' ? 'none' : undefined,
+                        pointerEvents: element.type === 'opening' ? (isSelected ? 'all' : 'none') : undefined,
                         // Photos assignées à un trou : pas de clipPath nécessaire —
                         // le SVG pêle-mêle (fill-rule=evenodd) couvre tout sauf les trous.
                         // La photo derrière n'est visible qu'à travers les trous transparents.
