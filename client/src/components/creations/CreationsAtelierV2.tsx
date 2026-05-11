@@ -894,9 +894,155 @@ export default function CreationsAtelierV2({
     selectedElementsForClip.some(el => el.type === "image" && el.src) &&
     selectedElementsForClip.some(el => el.type === "opening" || el.type === "shape");
 
-  const handleClipToShape = () => {
-    // TODO étape 2 : logique de détourage par la forme
-    toast.info(language === "fr" ? "Fonctionnalité à venir" : "Coming soon");
+  const handleClipToShape = async () => {
+    const imgEl   = selectedElementsForClip.find(el => el.type === 'image' && el.src);
+    const shapeEl = selectedElementsForClip.find(el => el.type === 'opening' || el.type === 'shape');
+    if (!imgEl || !shapeEl || !imgEl.src) return;
+
+    const RES = 150; // px/cm — résolution offscreen fixe, indépendante du zoom écran
+    const sw  = shapeEl.width  * RES;
+    const sh  = shapeEl.height * RES;
+
+    const oc  = document.createElement('canvas');
+    oc.width  = Math.round(sw);
+    oc.height = Math.round(sh);
+    const ctx = oc.getContext('2d');
+    if (!ctx) return;
+
+    try {
+      // ── Décalage d'origine : coordonnées page → canvas ──────────────────
+      // Coin haut-gauche de la forme devient (0,0) sur le canvas offscreen
+      ctx.translate(-shapeEl.x * RES, -shapeEl.y * RES);
+
+      // ── Rotation de la forme autour de son centre (sans save/restore
+      //    pour que le clip reste actif après) ─────────────────────────────
+      const scx = (shapeEl.x + shapeEl.width  / 2) * RES;
+      const scy = (shapeEl.y + shapeEl.height / 2) * RES;
+      ctx.translate(scx, scy);
+      ctx.rotate((shapeEl.rotation * Math.PI) / 180);
+      ctx.translate(-sw / 2, -sh / 2);
+
+      // ── Clip path : forme dessinée à (0,0)–(sw,sh) ─────────────────────
+      if (shapeEl.shape === 'puzzle') {
+        const edges = shapeEl.puzzleEdges || { top: 0, right: 0, bottom: 0, left: 0 };
+        const svgPath = buildPuzzlePath(
+          sw, sh, edges,
+          shapeEl.puzzleCutStyle  ?? 'classique',
+          shapeEl.puzzleShowBorder ?? true,
+          0, 0, shapeEl.puzzleEdgeSeeds
+        );
+        ctx.clip(new Path2D(svgPath));
+      } else {
+        const shape = shapeEl.shape || 'rect';
+        ctx.beginPath();
+        if (shape === 'round') {
+          const r = Math.min(sw, sh) / 2;
+          ctx.arc(sw / 2, sh / 2, r, 0, Math.PI * 2);
+        } else if (shape === 'oval') {
+          ctx.ellipse(sw / 2, sh / 2, sw / 2, sh / 2, 0, 0, Math.PI * 2);
+        } else if (shape === 'arch') {
+          const r = sw / 2;
+          ctx.moveTo(0, sh); ctx.lineTo(0, r);
+          ctx.arc(sw / 2, r, r, Math.PI, 0);
+          ctx.lineTo(sw, sh); ctx.closePath();
+        } else if (shape === 'heart') {
+          const hd = (shapeEl.heartDepth ?? 50) / 100;
+          const ny = sh * (0.25 + hd * 0.25);
+          ctx.moveTo(sw * 0.5, ny);
+          ctx.bezierCurveTo(sw * 0.5, sh * 0.10, 0, sh * 0.10, 0, sh * 0.35);
+          ctx.bezierCurveTo(0, sh * 0.60, sw * 0.5, sh * 0.75, sw * 0.5, sh);
+          ctx.bezierCurveTo(sw * 0.5, sh * 0.75, sw, sh * 0.60, sw, sh * 0.35);
+          ctx.bezierCurveTo(sw, sh * 0.10, sw * 0.5, sh * 0.10, sw * 0.5, ny);
+          ctx.closePath();
+        } else if (shape === 'star') {
+          const branches = shapeEl.starBranches ?? 5;
+          const outerR = Math.min(sw, sh) / 2;
+          const innerR = outerR * 0.42;
+          const cx = sw / 2, cy = sh / 2;
+          for (let i = 0; i < branches * 2; i++) {
+            const angle = (i * Math.PI) / branches - Math.PI / 2;
+            const r = i % 2 === 0 ? outerR : innerR;
+            const px = cx + r * Math.cos(angle);
+            const py = cy + r * Math.sin(angle);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+        } else if (shape === 'diamond') {
+          ctx.moveTo(sw / 2, 0); ctx.lineTo(sw, sh / 2);
+          ctx.lineTo(sw / 2, sh); ctx.lineTo(0, sh / 2);
+          ctx.closePath();
+        } else if (shape === 'hexagon') {
+          const cx = sw / 2, cy = sh / 2;
+          for (let i = 0; i < 6; i++) {
+            const a = (i * Math.PI) / 3 - Math.PI / 6;
+            const px = cx + (sw / 2) * Math.cos(a);
+            const py = cy + (sh / 2) * Math.sin(a);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+        } else if (shape === 'square') {
+          const s = Math.min(sw, sh);
+          ctx.rect((sw - s) / 2, (sh - s) / 2, s, s);
+        } else {
+          ctx.rect(0, 0, sw, sh); // rect (default)
+        }
+        ctx.clip();
+      }
+
+      // ── Annuler rotation forme → revenir au repère page non-rotaté ─────
+      ctx.translate(sw / 2, sh / 2);
+      ctx.rotate(-(shapeEl.rotation * Math.PI) / 180);
+      ctx.translate(-scx, -scy);
+
+      // ── Charger l'image ─────────────────────────────────────────────────
+      // Utiliser window.Image pour éviter le conflit avec l'import lucide
+      const loadedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.onload  = () => resolve(img);
+        img.onerror = reject;
+        img.src = imgEl.src!;
+      });
+
+      // ── Dessiner l'image (position page, rotation, flip) ────────────────
+      const ix = (imgEl.x + imgEl.width  / 2) * RES;
+      const iy = (imgEl.y + imgEl.height / 2) * RES;
+      const iw = imgEl.width  * RES;
+      const ih = imgEl.height * RES;
+      ctx.translate(ix, iy);
+      ctx.rotate((imgEl.rotation * Math.PI) / 180);
+      ctx.scale(imgEl.flipX ? -1 : 1, imgEl.flipY ? -1 : 1);
+      ctx.drawImage(loadedImg, -iw / 2, -ih / 2, iw, ih);
+
+      // ── Export PNG transparent ───────────────────────────────────────────
+      const dataUrl = oc.toDataURL('image/png');
+
+      // ── Remplacer image + forme par un seul élément image ───────────────
+      const resultId = `clip_${Date.now()}`;
+      setCanvasElements(prev => {
+        const filtered = prev.filter(el => el.id !== imgEl.id && el.id !== shapeEl.id);
+        const newEl: CanvasElement = {
+          id:       resultId,
+          type:     'image',
+          src:      dataUrl,
+          x:        shapeEl.x,
+          y:        shapeEl.y,
+          width:    shapeEl.width,
+          height:   shapeEl.height,
+          rotation: shapeEl.rotation,
+          zIndex:   Math.max(imgEl.zIndex, shapeEl.zIndex),
+          opacity:  imgEl.opacity,
+          name:     language === 'fr' ? 'Mise en forme' : 'Shaped image',
+        };
+        return [...filtered, newEl];
+      });
+      setSelectedElementId(resultId);
+      setSelectedElementIds(new Set([resultId]));
+      toast.success(language === 'fr' ? 'Image mise en forme !' : 'Image shaped!');
+
+    } catch (err) {
+      console.error('[handleClipToShape]', err);
+      toast.error(language === 'fr' ? 'Erreur lors de la mise en forme' : 'Error applying shape');
+    }
   };
 
   // Modale d'aperçu SVG laser
