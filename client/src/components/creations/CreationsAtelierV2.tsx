@@ -8380,12 +8380,20 @@ export default function CreationsAtelierV2({
                           <path
                             d={pathD}
                             fill="none"
-                            stroke={isSelected ? '#6366f1' : '#000000'}
-                            strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
+                            stroke="transparent"
+                            strokeWidth={20}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             style={{ pointerEvents: 'stroke' }}
                             onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, element.id); }}
+                          />
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke={isSelected ? '#6366f1' : '#000000'}
+                            strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                           />
                         </svg>
                       );
