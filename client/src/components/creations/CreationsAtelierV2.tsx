@@ -4105,6 +4105,16 @@ export default function CreationsAtelierV2({
         // Sinon : photo déposée hors d'un trou → z-index normal (sur le papier)
       }
 
+      // Garantir que l'image est au-dessus du fond coloré (sauf si dans un trou pêle-mêle)
+      if (!assignedHoleId) {
+        const bgZIndex = canvasElements
+          .filter(el => el.type === 'fond-passe-partout' || el.type === 'pelemele-paper')
+          .reduce((max, el) => Math.max(max, el.zIndex), 0);
+        if (bgZIndex > 0 && assignedZIndex <= bgZIndex) {
+          assignedZIndex = bgZIndex + 1;
+        }
+      }
+
       const newElement: CanvasElement = {
         id: `element-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: "image",
