@@ -8197,6 +8197,7 @@ export default function CreationsAtelierV2({
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'outline-color 0.1s ease, outline-offset 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
+                        pointerEvents: element.type === 'opening' ? 'none' : undefined,
                         // Photos assignées à un trou : pas de clipPath nécessaire —
                         // le SVG pêle-mêle (fill-rule=evenodd) couvre tout sauf les trous.
                         // La photo derrière n'est visible qu'à travers les trous transparents.
@@ -8374,7 +8375,7 @@ export default function CreationsAtelierV2({
                           width={w} height={h}
                           viewBox={`0 0 ${w} ${h}`}
                           className="absolute inset-0"
-                          style={{ overflow: 'visible', pointerEvents: 'none' }}
+                          style={{ overflow: 'visible' }}
                         >
                           <path
                             d={pathD}
@@ -8383,6 +8384,8 @@ export default function CreationsAtelierV2({
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"
                             strokeLinejoin="round"
+                            style={{ pointerEvents: 'stroke' }}
+                            onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, element.id); }}
                           />
                         </svg>
                       );
