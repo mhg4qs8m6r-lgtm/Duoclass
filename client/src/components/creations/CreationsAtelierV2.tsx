@@ -1019,29 +1019,20 @@ export default function CreationsAtelierV2({
       // ── Export PNG transparent ───────────────────────────────────────────
       const dataUrl = oc.toDataURL('image/png');
 
-      // ── Remplacer image + forme par un seul élément image ───────────────
-      const resultId = `clip_${Date.now()}`;
-      setCanvasElements(prev => {
-        const filtered = prev.filter(el => el.id !== imgEl.id && el.id !== shapeEl.id);
-        const newEl: CanvasElement = {
-          id:       resultId,
-          type:     'image',
-          src:      dataUrl,
-          x:        shapeEl.x,
-          y:        shapeEl.y,
-          width:    shapeEl.width,
-          height:   shapeEl.height,
-          rotation: shapeEl.rotation,
-          zIndex:   Math.max(imgEl.zIndex, shapeEl.zIndex),
-          opacity:  imgEl.opacity,
-          name:     language === 'fr' ? 'Mise en forme' : 'Shaped image',
-          hasTransparency: true,
-        };
-        return [...filtered, newEl];
-      });
-      setSelectedElementId(resultId);
-      setSelectedElementIds(new Set([resultId]));
-      toast.success(language === 'fr' ? 'Image mise en forme !' : 'Image shaped!');
+      // ── Envoyer au Collecteur ────────────────────────────────────────────
+      await addToCollector(
+        dataUrl,
+        language === 'fr' ? 'Mise en forme' : 'Shaped image',
+        'detourage',
+        shapeEl.width,
+        shapeEl.height,
+      );
+
+      // ── Supprimer image + forme du canvas ────────────────────────────────
+      setCanvasElements(prev => prev.filter(el => el.id !== imgEl.id && el.id !== shapeEl.id));
+      setSelectedElementId(null);
+      setSelectedElementIds(new Set());
+      toast.success(language === 'fr' ? 'Image mise en forme et ajoutée au Collecteur !' : 'Image shaped and added to Collector!');
 
     } catch (err) {
       console.error('[handleClipToShape]', err);
@@ -8251,7 +8242,7 @@ export default function CreationsAtelierV2({
                         transition: (isDragging || isResizing || isRotating) ? 'none' : 'outline-color 0.1s ease, outline-offset 0.1s ease',
                         userSelect: 'none',
                         overflow: 'visible',
-                        pointerEvents: element.type === 'opening' ? (isSelected ? 'all' : 'none') : undefined,
+                        pointerEvents: element.type === 'opening' ? 'all' : undefined,
                         // Photos assignées à un trou : pas de clipPath nécessaire —
                         // le SVG pêle-mêle (fill-rule=evenodd) couvre tout sauf les trous.
                         // La photo derrière n'est visible qu'à travers les trous transparents.

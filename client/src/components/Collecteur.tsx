@@ -97,7 +97,7 @@ export default function Collecteur({ items, onRemoveItem, onClearAll }: Collecte
                 src={item.thumbnail || item.src}
                 alt={item.name}
                 className="w-full h-auto object-contain rounded"
-                transparent={item.hasTransparency}
+                transparent
               />
               {/* Croix rouge suppression individuelle */}
               <button

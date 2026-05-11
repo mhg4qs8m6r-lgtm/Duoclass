@@ -37,20 +37,9 @@ export default function CrispThumbnail({ src, alt, className, transparent }: Cri
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      if (transparent) {
-        // Fond damier pour images transparentes
-        const tileSize = 10;
-        for (let ty = 0; ty < THUMB_H; ty += tileSize) {
-          for (let tx = 0; tx < THUMB_W; tx += tileSize) {
-            ctx.fillStyle = ((tx / tileSize + ty / tileSize) % 2 === 0) ? "#cccccc" : "#ffffff";
-            ctx.fillRect(tx, ty, tileSize, tileSize);
-          }
-        }
-      } else {
-        // Fond blanc
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, THUMB_W, THUMB_H);
-      }
+      // Fond blanc (transparent ou non)
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, THUMB_W, THUMB_H);
 
       // Scale "object-contain"
       const scale = Math.min(THUMB_W / img.naturalWidth, THUMB_H / img.naturalHeight);
