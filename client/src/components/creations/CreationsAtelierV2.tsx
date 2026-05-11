@@ -892,7 +892,7 @@ export default function CreationsAtelierV2({
   const selectedElementsForClip = canvasElements.filter(el => selectedElementIds.has(el.id));
   const showClipToolbox =
     selectedElementsForClip.some(el => el.type === "image" && el.src) &&
-    selectedElementsForClip.some(el => el.type === "shape");
+    selectedElementsForClip.some(el => el.type === "opening" || el.type === "shape");
 
   const handleClipToShape = () => {
     // TODO étape 2 : logique de détourage par la forme
