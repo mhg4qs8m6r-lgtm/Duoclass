@@ -1019,24 +1019,29 @@ export default function CreationsAtelierV2({
       // ── Export PNG transparent ───────────────────────────────────────────
       const dataUrl = oc.toDataURL('image/png');
 
-      // ── Retirer image + forme du canvas ─────────────────────────────────
-      setCanvasElements(prev => prev.filter(el => el.id !== imgEl.id && el.id !== shapeEl.id));
-      setSelectedElementId(null);
-      setSelectedElementIds(new Set());
-
-      // ── Envoyer directement au Collecteur ───────────────────────────────
-      const clipName = language === 'fr' ? 'Mise en forme' : 'Shaped image';
-      setCollectorItems(prev => [...prev, {
-        id: `clip_${Date.now()}`,
-        type: 'detourage',
-        src: dataUrl,
-        name: clipName,
-        thumbnail: dataUrl,
-        widthCm: shapeEl.width,
-        heightCm: shapeEl.height,
-        hasTransparency: true,
-      }]);
-      toast.success(language === 'fr' ? 'Image mise en forme — envoyée dans le Collecteur !' : 'Image shaped — sent to Collector!');
+      // ── Remplacer image + forme par un seul élément image ───────────────
+      const resultId = `clip_${Date.now()}`;
+      setCanvasElements(prev => {
+        const filtered = prev.filter(el => el.id !== imgEl.id && el.id !== shapeEl.id);
+        const newEl: CanvasElement = {
+          id:       resultId,
+          type:     'image',
+          src:      dataUrl,
+          x:        shapeEl.x,
+          y:        shapeEl.y,
+          width:    shapeEl.width,
+          height:   shapeEl.height,
+          rotation: shapeEl.rotation,
+          zIndex:   Math.max(imgEl.zIndex, shapeEl.zIndex),
+          opacity:  imgEl.opacity,
+          name:     language === 'fr' ? 'Mise en forme' : 'Shaped image',
+          hasTransparency: true,
+        };
+        return [...filtered, newEl];
+      });
+      setSelectedElementId(resultId);
+      setSelectedElementIds(new Set([resultId]));
+      toast.success(language === 'fr' ? 'Image mise en forme !' : 'Image shaped!');
 
     } catch (err) {
       console.error('[handleClipToShape]', err);
