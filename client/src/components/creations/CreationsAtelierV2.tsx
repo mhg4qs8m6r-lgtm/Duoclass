@@ -9739,17 +9739,21 @@ export default function CreationsAtelierV2({
         <div className="flex flex-col border-t bg-gray-50 px-4 py-2 gap-1.5">
           {/* Ligne 1 : Revenir | Sélection | Grouper/Dégrouper | Aligner — TOUJOURS VISIBLE */}
           <div className="flex items-center gap-2 flex-wrap min-h-[32px]">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs h-7"
-              disabled={undoCount === 0}
-              onClick={handleUndo}
-            >
-              {language === 'fr' ? '↩ Revenir' : '↩ Undo'}
-            </Button>
+            {currentProjectType !== 'Pêle-mêle' && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs h-7"
+                  disabled={undoCount === 0}
+                  onClick={handleUndo}
+                >
+                  {language === 'fr' ? '↩ Revenir' : '↩ Undo'}
+                </Button>
 
-            <div className="w-px h-5 bg-gray-300" />
+                <div className="w-px h-5 bg-gray-300" />
+              </>
+            )}
 
             {/* Indicateur sélection / Grouper / Dégrouper */}
             {selectedElementIds.size > 1 ? (
@@ -9804,11 +9808,7 @@ export default function CreationsAtelierV2({
                   )}
                 </div>
               </>
-            ) : (
-              <span className="text-xs text-gray-400">
-                {language === 'fr' ? 'Sélectionnez 2+ éléments pour grouper / aligner' : 'Select 2+ elements to group / align'}
-              </span>
-            )}
+            ) : null}
 
             {/* Info éléments (poussé à droite) */}
             <div className="ml-auto text-xs text-gray-400">
