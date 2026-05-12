@@ -1792,7 +1792,6 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 // Composant principal : AssemblagePanel
 // ---------------------------------------------------------------------------
 export type SectionId =
-  | "passe-partout"
   | "montage-pp"
   | "montage-pelemele"
   | "collage"
@@ -1807,7 +1806,6 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "passe-partout",    labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
   { id: "montage-pp",       labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
   { id: "montage-pelemele", labelFr: "Pêle-mêle",                  labelEn: "Photo collage",             icon: RectangleHorizontal },
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
