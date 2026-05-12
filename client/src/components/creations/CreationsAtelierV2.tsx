@@ -9412,18 +9412,6 @@ export default function CreationsAtelierV2({
                 })()}
                 
                 {/* Message si canvas vide */}
-                {canvasElements.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                    <div className="text-center">
-                      <Image className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">
-                        {language === "fr" 
-                          ? "Glissez une photo depuis la colonne de droite" 
-                          : "Drag a photo from the right column"}
-                      </p>
-                    </div>
-                  </div>
-                )}
                 
                 {/* SVG pour le détourage manuel point par point - positionné sur la PAGE */}
                 {isDetourageActive && manualTool === "polygon" && selectedElementId && (
