@@ -4,7 +4,7 @@
  */
 import Dexie, { type Table } from 'dexie';
 import type { PhotoFrame, AlbumMeta, Category, CategoryMediaType, Album } from '@/types/photo';
-import { addToSyncQueue } from './syncService';
+import { addToSyncQueue, addDeletedProjectTombstone } from './syncService';
 
 // ─── Re-exports de types ───────────────────────────────────────────────────────
 
@@ -394,6 +394,9 @@ export async function deleteCreationsProject(id: string): Promise<void> {
       }
     }
   } catch {}
+  // Tombstone persistant : empêche la résurrection lors d'une sync serveur
+  // si la suppression n'a pas encore atteint SQLite (ex: 5 échecs réseau).
+  addDeletedProjectTombstone(id);
   addToSyncQueue({ entityType: 'project', action: 'delete', data: { localId: id } });
 }
 

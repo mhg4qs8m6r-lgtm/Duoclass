@@ -7,6 +7,41 @@
 const LAST_SYNC_KEY_PREFIX = 'duoclass_last_sync_timestamp';
 const SYNC_QUEUE_KEY = 'duoclass_sync_queue';
 
+// ── Tombstones de suppression ────────────────────────────────────────────────
+// Liste persistante des localId de projets supprimés localement.
+// Empêche la résurrection d'un projet lors d'une sync serveur si la
+// suppression n'a pas encore atteint le serveur (ex: 5 échecs réseau).
+const DELETED_PROJECTS_KEY = 'duoclass_deleted_projects';
+
+export function addDeletedProjectTombstone(localId: string): void {
+  try {
+    const stored = localStorage.getItem(DELETED_PROJECTS_KEY);
+    const ids: string[] = stored ? JSON.parse(stored) : [];
+    if (!ids.includes(localId)) {
+      ids.push(localId);
+      localStorage.setItem(DELETED_PROJECTS_KEY, JSON.stringify(ids));
+    }
+  } catch { /* localStorage indisponible */ }
+}
+
+export function getDeletedProjectTombstones(): Set<string> {
+  try {
+    const stored = localStorage.getItem(DELETED_PROJECTS_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function removeDeletedProjectTombstone(localId: string): void {
+  try {
+    const stored = localStorage.getItem(DELETED_PROJECTS_KEY);
+    const ids: string[] = stored ? JSON.parse(stored) : [];
+    const filtered = ids.filter(id => id !== localId);
+    localStorage.setItem(DELETED_PROJECTS_KEY, JSON.stringify(filtered));
+  } catch { /* localStorage indisponible */ }
+}
+
 // UserId courant pour scoper le timestamp — mis à jour par setCurrentSyncUserId()
 let currentSyncUserId: number | string | null = null;
 

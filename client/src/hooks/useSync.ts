@@ -15,6 +15,8 @@ import {
   setCurrentSyncUserId,
   markItemProcessed,
   markItemFailed,
+  getDeletedProjectTombstones,
+  removeDeletedProjectTombstone,
 } from '../lib/syncService';
 import { trpc } from '../lib/trpc';
 import { db } from '../lib/db';
@@ -104,9 +106,26 @@ async function populateLocalFromServer(data: any) {
     console.log(`[useSync] Populated ${data.albums.length} albums from server`);
   }
 
+  // Projets — liste des IDs supprimés (syncLog serveur + tombstones locaux)
+  // Double protection anti-résurrection :
+  //   1. syncLog : suppression confirmée côté serveur mais re-téléchargée par erreur
+  //   2. tombstones : suppression locale dont la sync a échoué (5 tentatives)
+  const serverDeletedProjectIds = new Set<string>(
+    (data.syncLog ?? [])
+      .filter((e: any) => e.entityType === 'project' && e.action === 'delete')
+      .map((e: any) => e.entityLocalId)
+  );
+  const localTombstones = getDeletedProjectTombstones();
+  const allDeletedIds = new Set([...Array.from(serverDeletedProjectIds), ...Array.from(localTombstones)]);
+
   // Projets — fusionner avec les données locales pour ne pas écraser projectType/canvasData
   if (data.projects?.length) {
     for (const p of data.projects) {
+      // Ne jamais ressusciter un projet supprimé
+      if (allDeletedIds.has(p.localId)) {
+        await db.creations_projects.delete(p.localId).catch(() => {});
+        continue;
+      }
       const existing = await db.creations_projects.get(p.localId);
       const serverData = {
         id: p.localId,
@@ -233,6 +252,8 @@ export function useSync() {
         if (entityType === 'project') {
           if (action === 'delete') {
             await deleteProjectMut.mutateAsync({ localId: data.localId });
+            // Suppression confirmée côté serveur → le tombstone peut être retiré
+            removeDeletedProjectTombstone(data.localId);
           } else {
             await upsertProject.mutateAsync(data);
           }
