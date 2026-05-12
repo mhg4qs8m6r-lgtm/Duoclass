@@ -2003,67 +2003,11 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                 )}
                 {section.id === "montage-pelemele" && (
                   <div className="space-y-2">
-                    <PeleMelePanel
-                      language={language as "fr" | "en"}
-                      paper={props.peleMelePaper ?? null}
-                      selectedHoleId={props.selectedHoleId ?? null}
-                      onCreatePaper={props.onPeleMeleCreatePaper ?? (() => {})}
-                      onRemovePaper={props.onPeleMeleRemovePaper ?? (() => {})}
-                      onSetPaperColor={props.onPeleMeleSetPaperColor ?? (() => {})}
-                      onSetPaperImage={props.onPeleMeleSetPaperImage ?? (() => {})}
-                      onAddHole={props.onPeleMeleAddHole ?? (() => {})}
-                      onRemoveHole={props.onPeleMeleRemoveHole ?? (() => {})}
-                      onSelectHole={props.onPeleMeleSelectHole ?? (() => {})}
-                    />
-                    <PassePartoutSection
-                      canvasFormat={props.canvasFormat}
-                      onAddPassePartout={props.onAddPassePartout}
-                      onReplacePassePartout={props.onReplacePassePartout}
-                      onReplaceColorOnly={props.onReplaceColorOnly}
-                      onReplacePatternOnly={props.onReplacePatternOnly}
-                      hasExistingPassePartout={props.hasExistingPassePartout}
-                      onAddOpening={props.onAddOpening}
-                      onValidateOpening={props.onValidateOpening}
-                      onDeleteOpening={props.onDeleteOpening}
-                      onApplyColorToOpenings={props.onApplyColorToOpenings}
-                      onGenerateFromOpenings={props.onGenerateFromOpenings}
-                      canvasOpenings={props.canvasOpenings}
-                      activeOpeningId={props.activeOpeningId}
-                      selectedCanvasElementId={props.selectedCanvasElementId}
-                      onApplyTemplate={props.onApplyTemplate}
-                      onGetCurrentShapes={props.onGetCurrentShapes}
-                      onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
-                      onExportLaserSVG={props.onExportLaserSVG}
-                      onAddBackground={props.onAddBackground}
-                      hasExistingBackground={props.hasExistingBackground}
-                      onRemoveBackground={props.onRemoveBackground}
-                      showFormatBorder={props.showFormatBorder}
-                      onShowFormatBorderChange={props.onShowFormatBorderChange}
-                      filets={props.filets}
-                      onFiletsChange={props.onFiletsChange}
-                      segmentEditorActive={props.segmentEditorActive}
-                      segmentsRounded={props.segmentsRounded}
-                      onRoundAllSegments={props.onRoundAllSegments}
-                      isNodeEditMode={props.isNodeEditMode}
-                      onToggleNodeEditMode={props.onToggleNodeEditMode}
-                      selectedSegmentIndex={props.selectedSegmentIndex}
-                      onRoundSegmentConcave={props.onRoundSegmentConcave}
-                      onRoundSegmentConvex={props.onRoundSegmentConvex}
-                      onDeleteSegment={props.onDeleteSegment}
-                      onStraightenSegment={props.onStraightenSegment}
-                      isCutMode={props.isCutMode}
-                      onToggleCutMode={props.onToggleCutMode}
-                      isLineDrawMode={props.isLineDrawMode}
-                      onToggleLineDrawMode={props.onToggleLineDrawMode}
-                      lineSelected={props.lineSelected}
-                      lineIsRounded={props.lineIsRounded}
-                      onRoundLine={props.onRoundLine}
-                      lineChainCount={props.lineChainCount}
-                      lineColor={props.lineColor}
-                      onLineColorChange={props.onLineColorChange}
-                      lineStrokeWidth={props.lineStrokeWidth}
-                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
-                    />
+                    <p className="text-xs text-gray-500 italic">
+                      {language === "fr"
+                        ? "Sélectionnez une image et une forme sur le canvas pour utiliser l'outil Mise en forme / Cadrage."
+                        : "Select an image and a shape on the canvas to use the Shape / Crop tool."}
+                    </p>
                   </div>
                 )}
                 {section.id === "collage" && (
