@@ -1967,7 +1967,36 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                   </>
                 )}
                 {section.id === "montage-pelemele" && (
-                  <div className="space-y-2 px-1 pt-1">
+                  <div className="space-y-3 px-1 pt-1">
+                    {/* Grille de formes */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        {language === "fr" ? "Choisir une forme" : "Choose a shape"}
+                      </p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {SHAPES.filter(s => s.id !== 'line' && s.id !== 'puzzle').map((s) => (
+                          <button
+                            key={s.id}
+                            className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-purple-200 text-xs font-medium text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all active:scale-95"
+                            onClick={() => props.onAddOpening?.(s.id, 'transparent')}
+                          >
+                            <span className="text-base leading-none">{
+                              s.id === 'rect' ? '▭' :
+                              s.id === 'square' ? '□' :
+                              s.id === 'round' ? '○' :
+                              s.id === 'oval' ? '⬭' :
+                              s.id === 'arch' ? '⌒' :
+                              s.id === 'heart' ? '♥' :
+                              s.id === 'star' ? '★' :
+                              s.id === 'diamond' ? '◇' :
+                              s.id === 'hexagon' ? '⬡' : '□'
+                            }</span>
+                            {language === "fr" ? s.labelFr : s.labelEn}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Lien guide */}
                     <button
                       className="text-xs text-indigo-600 hover:text-indigo-800 underline underline-offset-2 text-left"
                       onClick={() => setShowPeleMeleGuide(true)}
