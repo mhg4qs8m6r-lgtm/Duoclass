@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Sticker, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, Spline, CheckCircle, Minus, Pencil, Info } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, CheckCircle, Minus, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -14,14 +14,13 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { addToSyncQueue, safeLocalStorageSet } from "@/lib/syncService";
 import { toast } from "sonner";
-import { Trash2 as TrashIcon } from "lucide-react";
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
 // Import des panneaux d'outils (inline, pas de modales)
 import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
-import { type HoleDescriptor, type PeleMelePaperState } from "./PeleMelePanel";
+import { type HoleDescriptor } from "./PeleMelePanel";
 import Collecteur from "../Collecteur";
 import ClipToShapeToolbox from "../ClipToShapeToolbox";
 
@@ -150,8 +149,6 @@ interface CollectorItem {
 
 // Onglet unique (legacy type conservé pour compatibilité)
 type MainTab = "tous";
-  // Sous-onglets d'assemblage (conservé pour compatibilité éventuelle)
-type AssemblageSubTab = "bibliotheque" | "effets" | "miseenpage" | "stickers";
 
 // Composant helper : positionne le menu contextuel pour qu'il reste toujours dans la fenêtre
 const ContextMenuPositioned = ({
@@ -782,9 +779,6 @@ export default function CreationsAtelierV2({
 
   // Onglets
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("tous");
-  // activeAssemblageSubTab conservé pour éviter les erreurs de références résiduelles
-  const [activeAssemblageSubTab] = useState<AssemblageSubTab>("bibliotheque");
-  
   // Éléments sur le canvas
   const [canvasElements, setCanvasElementsRaw] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -7297,89 +7291,6 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
-                    // ── Pêle-mêle ──────────────────────────────────────────
-                    peleMelePaper={(() => {
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (!p) return null;
-                      return { color: p.openingColor || '#f0e6d3', imageUrl: p.paperImageUrl, holes: p.holes || [] } as PeleMelePaperState;
-                    })()}
-                    selectedHoleId={selectedHoleId}
-                    onPeleMeleCreatePaper={(color) => {
-                      const fmtW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
-                      const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
-                      const existing = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (existing) {
-                        updateCanvasElement(existing.id, { openingColor: color });
-                      } else {
-                        const maxZ = Math.max(1, ...canvasElements.map(e => e.zIndex));
-                        const newEl: CanvasElement = {
-                          id: `pm-paper-${Date.now()}`,
-                          type: 'pelemele-paper',
-                          x: 0, y: 0,
-                          width: fmtW, height: fmtH,
-                          rotation: 0,
-                          zIndex: maxZ + 1,
-                          opacity: 1,
-                          openingColor: color,
-                          holes: [],
-                        };
-                        setCanvasElements(prev => [...prev, newEl]);
-                      }
-                    }}
-                    onPeleMeleRemovePaper={() => {
-                      setCanvasElements(prev => prev.filter(el => el.type !== 'pelemele-paper' && !el.assignedHoleId));
-                      setSelectedHoleId(null);
-                    }}
-                    onPeleMeleSetPaperColor={(color) => {
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (p) updateCanvasElement(p.id, { openingColor: color });
-                    }}
-                    onPeleMeleSetPaperImage={(imageUrl) => {
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (p) updateCanvasElement(p.id, { paperImageUrl: imageUrl ?? undefined });
-                    }}
-                    onPeleMeleAddHole={(shape) => {
-                      const fmtW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
-                      const fmtH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
-                      const w = Math.min(6, fmtW * 0.4);
-                      const h = shape === 'square' || shape === 'round' ? w : Math.min(8, fmtH * 0.35);
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      const newHole: HoleDescriptor = {
-                        id: `hole-${Date.now()}`,
-                        shape,
-                        x: 0, y: 0, w, h, rotation: 0,
-                      };
-
-                      if (!p) {
-                        // Auto-créer le papier avec le premier trou
-                        newHole.x = (fmtW - w) / 2;
-                        newHole.y = (fmtH - h) / 2;
-                        setCanvasElements(prev => [...prev, {
-                          id: `pm-paper-${Date.now()}`,
-                          type: 'pelemele-paper' as const,
-                          x: 0, y: 0,
-                          width: fmtW, height: fmtH,
-                          rotation: 0, zIndex: Math.max(1, ...prev.map(e => e.zIndex)) + 1, opacity: 1,
-                          openingColor: '#f0e6d3',
-                          holes: [newHole],
-                        }]);
-                      } else {
-                        const existingHoles = p.holes || [];
-                        const offset = existingHoles.length * 0.5;
-                        newHole.x = (fmtW - w) / 2 + offset;
-                        newHole.y = (fmtH - h) / 2 + offset;
-                        updateCanvasElement(p.id, { holes: [...existingHoles, newHole] });
-                      }
-                      setSelectedHoleId(newHole.id);
-                    }}
-                    onPeleMeleRemoveHole={(holeId) => {
-                      const p = canvasElements.find(el => el.type === 'pelemele-paper');
-                      if (!p) return;
-                      updateCanvasElement(p.id, { holes: (p.holes || []).filter(h => h.id !== holeId) });
-                      setCanvasElements(prev => prev.filter(el => el.assignedHoleId !== holeId));
-                      if (selectedHoleId === holeId) setSelectedHoleId(null);
-                    }}
-                    onPeleMeleSelectHole={(holeId) => setSelectedHoleId(holeId)}
                   />
                 )}
               </div>

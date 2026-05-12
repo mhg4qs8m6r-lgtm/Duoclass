@@ -10,13 +10,11 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { PeleMelePanel, type HoleDescriptor, type PeleMelePaperState } from "./PeleMelePanel";
 import {
   Frame,
   ChevronDown,
   ChevronRight,
   Upload,
-  Link,
   Trash2,
   Circle,
   Square,
@@ -30,15 +28,10 @@ import {
   AlignCenter,
   AlignRight,
   Plus,
-  RefreshCw,
   Puzzle,
-  FolderOpen,
-  Spline,
   CheckCircle,
   RotateCcw,
   X as XIcon,
-  Layers,
-
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +40,6 @@ import { Slider } from "@/components/ui/slider";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { db } from "@/db";
 import { toast } from "sonner";
-import BibliothequeModeles from "./BibliothequeModeles";
 import { BASE_COLORS, COLOR_PALETTE } from "@/lib/colorPalette";
 
 // ---------------------------------------------------------------------------
@@ -253,21 +245,6 @@ export interface AssemblagePanelProps {
   lineStrokeWidth?: number;
   /** Callback quand l'utilisateur change l'épaisseur */
   onLineStrokeWidthChange?: (width: number) => void;
-  /** Catégories de modèles à afficher dans les sections passe-partout / pêle-mêle */
-  modelesCategories?: string[] | null;
-
-  // ── Pêle-mêle ──────────────────────────────────────────────────────────────
-  /** État courant du fond percé pêle-mêle (null = aucun) */
-  peleMelePaper?: PeleMelePaperState | null;
-  /** ID du trou actuellement sélectionné */
-  selectedHoleId?: string | null;
-  onPeleMeleCreatePaper?: (color: string) => void;
-  onPeleMeleRemovePaper?: () => void;
-  onPeleMeleSetPaperColor?: (color: string) => void;
-  onPeleMeleSetPaperImage?: (imageUrl: string | null) => void;
-  onPeleMeleAddHole?: (shape: HoleDescriptor["shape"]) => void;
-  onPeleMeleRemoveHole?: (holeId: string) => void;
-  onPeleMeleSelectHole?: (holeId: string | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1817,7 +1794,6 @@ function PuzzleSection({ canvasFormat, canvasOpenings, onGenerateFullPagePuzzle,
 export type SectionId =
   | "passe-partout"
   | "montage-pp"
-  | "pelemele-modele"
   | "montage-pelemele"
   | "collage"
   | "texte"
@@ -1833,7 +1809,6 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "passe-partout",    labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
   { id: "montage-pp",       labelFr: "Passe-partout",               labelEn: "Mat frame",                 icon: Frame              },
-  { id: "pelemele-modele",  labelFr: "Pêle-mêle",                  labelEn: "Photo collage",             icon: RectangleHorizontal },
   { id: "montage-pelemele", labelFr: "Pêle-mêle",                  labelEn: "Photo collage",             icon: RectangleHorizontal },
   { id: "collage",          labelFr: "Collage",                     labelEn: "Collage",                   icon: Square              },
   { id: "texte",            labelFr: "Texte & Typographie",         labelEn: "Text & Typography",         icon: Type                },
@@ -1934,72 +1909,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                     />
                   </>
-                )}
-                {section.id === "pelemele-modele" && (
-                  <div className="space-y-2">
-                    <PeleMelePanel
-                      language={language as "fr" | "en"}
-                      paper={props.peleMelePaper ?? null}
-                      selectedHoleId={props.selectedHoleId ?? null}
-                      onCreatePaper={props.onPeleMeleCreatePaper ?? (() => {})}
-                      onRemovePaper={props.onPeleMeleRemovePaper ?? (() => {})}
-                      onSetPaperColor={props.onPeleMeleSetPaperColor ?? (() => {})}
-                      onSetPaperImage={props.onPeleMeleSetPaperImage ?? (() => {})}
-                      onAddHole={props.onPeleMeleAddHole ?? (() => {})}
-                      onRemoveHole={props.onPeleMeleRemoveHole ?? (() => {})}
-                      onSelectHole={props.onPeleMeleSelectHole ?? (() => {})}
-                    />
-                    {/* PassePartoutSection conservée en dessous pour les gabarits admin existants */}
-                    <PassePartoutSection
-                      canvasFormat={props.canvasFormat}
-                      onAddPassePartout={props.onAddPassePartout}
-                      onReplacePassePartout={props.onReplacePassePartout}
-                      onReplaceColorOnly={props.onReplaceColorOnly}
-                      onReplacePatternOnly={props.onReplacePatternOnly}
-                      hasExistingPassePartout={props.hasExistingPassePartout}
-                      onAddOpening={props.onAddOpening}
-                      onValidateOpening={props.onValidateOpening}
-                      onDeleteOpening={props.onDeleteOpening}
-                      onApplyColorToOpenings={props.onApplyColorToOpenings}
-                      onGenerateFromOpenings={props.onGenerateFromOpenings}
-                      canvasOpenings={props.canvasOpenings}
-                      activeOpeningId={props.activeOpeningId}
-                      selectedCanvasElementId={props.selectedCanvasElementId}
-                      onApplyTemplate={props.onApplyTemplate}
-                      onGetCurrentShapes={props.onGetCurrentShapes}
-                      onGenerateFullPagePuzzle={props.onGenerateFullPagePuzzle}
-                      onExportLaserSVG={props.onExportLaserSVG}
-                      onAddBackground={props.onAddBackground}
-                      hasExistingBackground={props.hasExistingBackground}
-                      onRemoveBackground={props.onRemoveBackground}
-                      showFormatBorder={props.showFormatBorder}
-                      onShowFormatBorderChange={props.onShowFormatBorderChange}
-                      filets={props.filets}
-                      onFiletsChange={props.onFiletsChange}
-                      segmentEditorActive={props.segmentEditorActive}
-                      segmentsRounded={props.segmentsRounded}
-                      onRoundAllSegments={props.onRoundAllSegments}
-                      isNodeEditMode={props.isNodeEditMode}
-                      onToggleNodeEditMode={props.onToggleNodeEditMode}
-                      selectedSegmentIndex={props.selectedSegmentIndex}
-                      onRoundSegmentConcave={props.onRoundSegmentConcave}
-                      onRoundSegmentConvex={props.onRoundSegmentConvex}
-                      onDeleteSegment={props.onDeleteSegment}
-                      onStraightenSegment={props.onStraightenSegment}
-                      isCutMode={props.isCutMode}
-                      onToggleCutMode={props.onToggleCutMode}
-                      isLineDrawMode={props.isLineDrawMode}
-                      onToggleLineDrawMode={props.onToggleLineDrawMode}
-                      lineSelected={props.lineSelected}
-                      lineIsRounded={props.lineIsRounded}
-                      onRoundLine={props.onRoundLine}
-                      lineChainCount={props.lineChainCount}
-                      lineColor={props.lineColor}
-                      onLineColorChange={props.onLineColorChange}
-                      lineStrokeWidth={props.lineStrokeWidth}
-                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
-                    />
-                  </div>
                 )}
                 {section.id === "montage-pelemele" && (
                   <div className="space-y-2">

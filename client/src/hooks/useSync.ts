@@ -3,7 +3,7 @@
  * Fournit un accès facile au service de synchronisation et à son statut
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   SyncStatus,
   getSyncStatus,
