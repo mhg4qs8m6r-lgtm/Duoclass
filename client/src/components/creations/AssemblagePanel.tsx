@@ -1816,6 +1816,7 @@ const SECTIONS: SectionDef[] = [
 export default function AssemblagePanel(props: AssemblagePanelProps) {
   const { language } = useLanguage();
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
+  const [showPeleMeleGuide, setShowPeleMeleGuide] = useState(false);
 
   const toggle = (id: SectionId) => {
     setOpenSection((prev) => (prev === id ? null : id));
@@ -1825,7 +1826,64 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
     ? SECTIONS.filter((s) => props.visibleSections!.includes(s.id))
     : SECTIONS;
 
+  const peleMeleSteps = language === "fr" ? [
+    "Sur la zone de travail vide.",
+    "Placer une image en la glissant du bureau, ou du Collecteur si vous l'avez sélectionnée dans « Album ».",
+    "Placer une forme dessus (choisie dans la colonne Pêle-mêle).",
+    "Calibrez l'image et la forme comme vous le souhaitez.",
+    "Image + forme → « Appliquer » → les images vont directement dans le Collecteur.",
+    "Répéter l'opération pour toutes les images concernées.",
+    "Placer un fond ou une image (choix dans la partie Pêle-mêle, liste de gauche).",
+    "Glisser sur le fond chaque image préparée du Collecteur, organisez-les comme vous le souhaitez.",
+    "Ajouts éventuels : texte, clipart, bordure, filet…",
+    "Sauver le projet.",
+    "Sauver l'image finale, accessible dans « Images Projets ».",
+  ] : [
+    "On the empty canvas.",
+    "Place an image by dragging it from the desktop, or from the Collector if you selected it in « Album ».",
+    "Place a shape on top (chosen from the Pêle-mêle column).",
+    "Adjust the image and shape as desired.",
+    "Image + shape → « Apply » → images go directly into the Collector.",
+    "Repeat for all images concerned.",
+    "Place a background or an image (choose in the Pêle-mêle section, left list).",
+    "Drag each prepared image from the Collector onto the background and arrange them.",
+    "Optional additions: text, clipart, border, line…",
+    "Save the project.",
+    "Save the final image, accessible in « Project Images ».",
+  ];
+
   return (
+    <>
+    {showPeleMeleGuide && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setShowPeleMeleGuide(false)}
+      >
+        <div
+          className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 className="text-base font-semibold text-gray-800 mb-4">
+            {language === "fr" ? "Créer un pêle-mêle" : "Create a photo collage"}
+          </h2>
+          <ol className="space-y-2">
+            {peleMeleSteps.map((step, i) => (
+              <li key={i} className="flex gap-3 text-sm text-gray-700">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center mt-0.5">
+                  {i + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-5 flex justify-end">
+            <Button size="sm" onClick={() => setShowPeleMeleGuide(false)}>
+              {language === "fr" ? "Fermer" : "Close"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="space-y-1">
       {filteredSections.map((section) => {
         const isOpen = openSection !== null && openSection === section.id;
@@ -1909,12 +1967,15 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                   </>
                 )}
                 {section.id === "montage-pelemele" && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-gray-500 italic">
+                  <div className="space-y-2 px-1 pt-1">
+                    <button
+                      className="text-xs text-indigo-600 hover:text-indigo-800 underline underline-offset-2 text-left"
+                      onClick={() => setShowPeleMeleGuide(true)}
+                    >
                       {language === "fr"
-                        ? "Sélectionnez une image et une forme sur le canvas pour utiliser l'outil Mise en forme / Cadrage."
-                        : "Select an image and a shape on the canvas to use the Shape / Crop tool."}
-                    </p>
+                        ? "Pour créer un pêle-mêle → cliquez ici"
+                        : "How to create a photo collage → click here"}
+                    </button>
                   </div>
                 )}
                 {section.id === "collage" && (
@@ -1947,5 +2008,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
         );
       })}
     </div>
+    </>
   );
 }
