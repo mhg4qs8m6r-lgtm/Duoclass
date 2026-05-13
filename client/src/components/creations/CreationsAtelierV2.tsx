@@ -5687,7 +5687,7 @@ export default function CreationsAtelierV2({
             {/* Zone Outils - overflow-y-auto + min-h-0 garantit le défilement dans un flex-col */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="p-4">
-                {showClipToolbox && (
+                {showClipToolbox && currentProjectType !== "Pêle-mêle" && (
                   <ClipToShapeToolbox
                     language={language}
                     onClip={handleClipToShape}
@@ -6159,7 +6159,7 @@ export default function CreationsAtelierV2({
                         width: 10,
                         height: 3,
                         rotation: 0,
-                        zIndex: canvasElements.length + 1,
+                        zIndex: (canvasElements.length > 0 ? Math.max(...canvasElements.map(el => el.zIndex)) : 0) + 1,
                         opacity: 1,
                         name: "Texte",
                         fontFamily: textProps.fontFamily,
@@ -6187,7 +6187,7 @@ export default function CreationsAtelierV2({
                         id: el.id,
                         text: el.text || '',
                         fontFamily: el.fontFamily || 'Playfair Display',
-                        fontSize: el.fontSize || 36,
+                        fontSize: el.fontSize || 72,
                         fontColor: el.fontColor || '#1a1a1a',
                         fontBold: el.fontBold || false,
                         fontItalic: el.fontItalic || false,
@@ -6197,8 +6197,8 @@ export default function CreationsAtelierV2({
                         strokeWidth: el.strokeWidth || 0,
                         shadowColor: el.shadowColor || 'rgba(0,0,0,0.5)',
                         shadowBlur: el.shadowBlur || 0,
-                        shadowOffsetX: el.shadowOffsetX || 2,
-                        shadowOffsetY: el.shadowOffsetY || 2,
+                        shadowOffsetX: el.shadowOffsetX ?? 2,
+                        shadowOffsetY: el.shadowOffsetY ?? 2,
                       };
                     })()}
                     onUpdateTextElement={(id, textProps) => {
@@ -7291,6 +7291,8 @@ export default function CreationsAtelierV2({
                       });
                     }}
                     visibleSections={toolsFilter.sections ?? undefined}
+                    onApplyPeleMele={handleClipToShape}
+                    peleMeleCanApply={showClipToolbox}
                   />
                 )}
               </div>
@@ -8603,32 +8605,34 @@ export default function CreationsAtelierV2({
                     {element.type === "text" && (
                       <div
                         className="w-full h-full flex items-center overflow-hidden select-none"
-                        style={{
-                          fontFamily: element.fontFamily || "Inter",
-                          fontSize: `${(element.fontSize || 36) * pxPerCm / 37.8}px`,
-                          color: element.fontColor || "#1a1a1a",
-                          fontWeight: element.fontBold ? "bold" : "normal",
-                          fontStyle: element.fontItalic ? "italic" : "normal",
-                          textDecoration: element.fontUnderline ? "underline" : "none",
-                          textAlign: element.textAlign || "center",
-                          WebkitTextStroke: (element.strokeWidth || 0) > 0
-                            ? `${element.strokeWidth}px ${element.strokeColor || "#000"}`
-                            : undefined,
-                          textShadow: (element.shadowBlur || 0) > 0 || element.shadowOffsetX || element.shadowOffsetY
-                            ? `${element.shadowOffsetX || 0}px ${element.shadowOffsetY || 0}px ${element.shadowBlur || 0}px ${element.shadowColor || "rgba(0,0,0,0.5)"}`
-                            : undefined,
-                          padding: "4px 8px",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-wrap",
-                          lineHeight: 1.3,
-                          width: "100%",
-                        }}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setEditingTextId(element.id);
                         }}
                       >
-                        {element.text || ""}
+                        {/* Bloc interne pleine largeur : text-align fonctionne dans un contexte block, pas flex */}
+                        <div style={{
+                          width: "100%",
+                          fontFamily: element.fontFamily || "Inter",
+                          fontSize: `${(element.fontSize || 72) * pxPerCm / 37.8}px`,
+                          color: element.fontColor || "#1a1a1a",
+                          fontWeight: element.fontBold ? "bold" : "normal",
+                          fontStyle: element.fontItalic ? "italic" : "normal",
+                          textDecoration: element.fontUnderline ? "underline" : "none",
+                          textAlign: (element.textAlign as React.CSSProperties["textAlign"]) || "center",
+                          WebkitTextStroke: (element.strokeWidth || 0) > 0
+                            ? `${element.strokeWidth}px ${element.strokeColor || "#000"}`
+                            : undefined,
+                          textShadow: (element.shadowBlur || 0) > 0 || (element.shadowOffsetX ?? 0) !== 0 || (element.shadowOffsetY ?? 0) !== 0
+                            ? `${element.shadowOffsetX ?? 0}px ${element.shadowOffsetY ?? 0}px ${element.shadowBlur || 0}px ${element.shadowColor || "rgba(0,0,0,0.5)"}`
+                            : undefined,
+                          padding: "4px 8px",
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.3,
+                        }}>
+                          {element.text || ""}
+                        </div>
                       </div>
                     )}
 
@@ -8639,7 +8643,7 @@ export default function CreationsAtelierV2({
                         className="absolute inset-0 w-full h-full resize-none bg-white/90 border-2 border-purple-400 rounded p-1 z-50 focus:outline-none"
                         style={{
                           fontFamily: element.fontFamily || "Inter",
-                          fontSize: `${(element.fontSize || 36) * pxPerCm / 37.8}px`,
+                          fontSize: `${(element.fontSize || 72) * pxPerCm / 37.8}px`,
                           color: element.fontColor || "#1a1a1a",
                           fontWeight: element.fontBold ? "bold" : "normal",
                           fontStyle: element.fontItalic ? "italic" : "normal",

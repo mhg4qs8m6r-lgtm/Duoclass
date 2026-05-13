@@ -169,6 +169,10 @@ export interface AssemblagePanelProps {
   onApplyBinPackLayout?: (placements: Array<{ id: string; x: number; y: number }>) => void;
   /** Si fourni, seules les sections dont l'id est dans cette liste sont affichées */
   visibleSections?: SectionId[];
+  /** Applique le découpage image-dans-forme (pêle-mêle) */
+  onApplyPeleMele?: () => void;
+  /** Vrai quand une image ET une forme sont sélectionnées → bouton Appliquer actif */
+  peleMeleCanApply?: boolean;
   /**
    * Duplique un élément existant du canvas N fois,
    * en plaçant chaque copie aux coordonnées précalculées (en cm).
@@ -1099,7 +1103,7 @@ function TexteSection({
   const fr = language === "fr";
   const [text, setText] = useState(fr ? "Mon texte" : "My text");
   const [fontFamily, setFontFamily] = useState("Playfair Display");
-  const [fontSize, setFontSize] = useState(36);
+  const [fontSize, setFontSize] = useState(72);
   const [fontColor, setFontColor] = useState("#1a1a1a");
   const [fontBold, setFontBold] = useState(false);
   const [fontItalic, setFontItalic] = useState(false);
@@ -1114,8 +1118,9 @@ function TexteSection({
   const [shadowOffsetX, setShadowOffsetX] = useState(2);
   const [shadowOffsetY, setShadowOffsetY] = useState(2);
 
-  // Synchronisation avec l'élément texte sélectionné sur le canvas
+  // Synchronisation du panneau quand l'élément sélectionné change
   const prevSelectedIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (selectedTextElement && selectedTextElement.id !== prevSelectedIdRef.current) {
       prevSelectedIdRef.current = selectedTextElement.id;
@@ -1142,6 +1147,12 @@ function TexteSection({
     text, fontFamily, fontSize, fontColor, fontBold, fontItalic, fontUnderline,
     textAlign, strokeColor, strokeWidth, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY,
   });
+
+  // Applique immédiatement un changement partiel à l'élément sélectionné sur le canvas
+  const updateEl = (patch: Partial<TextElementProps>) => {
+    if (!selectedTextElement || !onUpdateTextElement) return;
+    onUpdateTextElement(selectedTextElement.id, { ...currentProps(), ...patch });
+  };
 
   const handleAdd = () => {
     if (!text.trim()) return;
@@ -1170,7 +1181,7 @@ function TexteSection({
 
   const previewStyle: React.CSSProperties = {
     fontFamily,
-    fontSize: Math.min(fontSize, 32),
+    fontSize: `${Math.min(fontSize, 72)}px`,
     color: fontColor,
     fontWeight: fontBold ? "bold" : "normal",
     fontStyle: fontItalic ? "italic" : "normal",
@@ -1207,7 +1218,7 @@ function TexteSection({
         </Label>
         <select
           value={fontFamily}
-          onChange={(e) => setFontFamily(e.target.value)}
+          onChange={(e) => { setFontFamily(e.target.value); updateEl({ fontFamily: e.target.value }); }}
           className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
           style={{ fontFamily }}
         >
@@ -1225,18 +1236,18 @@ function TexteSection({
           </Label>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setFontSize((s) => Math.max(8, s - 2))}
+              onClick={() => { const v = Math.max(8, fontSize - 12); setFontSize(v); updateEl({ fontSize: v }); }}
               className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
             ><Minus className="w-3 h-3" /></button>
             <input
               type="number"
-              min={8} max={200}
+              min={8} max={400}
               value={fontSize}
-              onChange={(e) => setFontSize(Number(e.target.value))}
+              onChange={(e) => { const v = Math.max(8, Math.min(400, Number(e.target.value) || 8)); setFontSize(v); updateEl({ fontSize: v }); }}
               className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-center w-0"
             />
             <button
-              onClick={() => setFontSize((s) => Math.min(200, s + 2))}
+              onClick={() => { const v = Math.min(400, fontSize + 12); setFontSize(v); updateEl({ fontSize: v }); }}
               className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
             ><Plus className="w-3 h-3" /></button>
           </div>
@@ -1248,7 +1259,7 @@ function TexteSection({
           <input
             type="color"
             value={fontColor}
-            onChange={(e) => setFontColor(e.target.value)}
+            onChange={(e) => { setFontColor(e.target.value); updateEl({ fontColor: e.target.value }); }}
             className="w-full h-8 rounded cursor-pointer border border-gray-300"
           />
         </div>
@@ -1262,7 +1273,7 @@ function TexteSection({
         <div className="flex gap-1">
           {/* Gras */}
           <button
-            onClick={() => setFontBold((b) => !b)}
+            onClick={() => { const v = !fontBold; setFontBold(v); updateEl({ fontBold: v }); }}
             title={fr ? "Gras" : "Bold"}
             className={`flex-1 py-1.5 border rounded flex items-center justify-center transition-colors ${
               fontBold ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
@@ -1270,7 +1281,7 @@ function TexteSection({
           ><Bold className="w-4 h-4" /></button>
           {/* Italique */}
           <button
-            onClick={() => setFontItalic((i) => !i)}
+            onClick={() => { const v = !fontItalic; setFontItalic(v); updateEl({ fontItalic: v }); }}
             title={fr ? "Italique" : "Italic"}
             className={`flex-1 py-1.5 border rounded flex items-center justify-center transition-colors ${
               fontItalic ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
@@ -1278,7 +1289,7 @@ function TexteSection({
           ><Italic className="w-4 h-4" /></button>
           {/* Souligné */}
           <button
-            onClick={() => setFontUnderline((u) => !u)}
+            onClick={() => { const v = !fontUnderline; setFontUnderline(v); updateEl({ fontUnderline: v }); }}
             title={fr ? "Souligné" : "Underline"}
             className={`flex-1 py-1.5 border rounded flex items-center justify-center transition-colors ${
               fontUnderline ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
@@ -1289,7 +1300,7 @@ function TexteSection({
           {(["left", "center", "right"] as const).map((a) => (
             <button
               key={a}
-              onClick={() => setTextAlign(a)}
+              onClick={() => { setTextAlign(a); updateEl({ textAlign: a }); }}
               title={a === "left" ? (fr ? "Gauche" : "Left") : a === "center" ? (fr ? "Centre" : "Center") : (fr ? "Droite" : "Right")}
               className={`flex-1 py-1.5 border rounded flex items-center justify-center transition-colors ${
                 textAlign === a ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
@@ -1309,12 +1320,12 @@ function TexteSection({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-xs text-gray-600">{fr ? "Couleur" : "Color"}</Label>
-            <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)}
+            <input type="color" value={strokeColor} onChange={(e) => { setStrokeColor(e.target.value); updateEl({ strokeColor: e.target.value }); }}
               className="w-full h-7 rounded cursor-pointer border border-gray-300 mt-1" />
           </div>
           <div>
             <Label className="text-xs text-gray-600">{fr ? `Épaisseur : ${strokeWidth}px` : `Width: ${strokeWidth}px`}</Label>
-            <Slider value={[strokeWidth]} onValueChange={([v]) => setStrokeWidth(v)} min={0} max={8} step={0.5} className="mt-2" />
+            <Slider value={[strokeWidth]} onValueChange={([v]) => { setStrokeWidth(v); updateEl({ strokeWidth: v }); }} min={0} max={8} step={0.5} className="mt-2" />
           </div>
         </div>
       </div>
@@ -1328,28 +1339,28 @@ function TexteSection({
           <div>
             <Label className="text-xs text-gray-600">{fr ? "Couleur" : "Color"}</Label>
             <input type="color" value={shadowColor.startsWith("rgba") ? "#000000" : shadowColor}
-              onChange={(e) => setShadowColor(e.target.value)}
+              onChange={(e) => { setShadowColor(e.target.value); updateEl({ shadowColor: e.target.value }); }}
               className="w-full h-7 rounded cursor-pointer border border-gray-300 mt-1" />
           </div>
           <div>
             <Label className="text-xs text-gray-600">{fr ? `Flou : ${shadowBlur}px` : `Blur: ${shadowBlur}px`}</Label>
-            <Slider value={[shadowBlur]} onValueChange={([v]) => setShadowBlur(v)} min={0} max={20} step={1} className="mt-2" />
+            <Slider value={[shadowBlur]} onValueChange={([v]) => { setShadowBlur(v); updateEl({ shadowBlur: v }); }} min={0} max={20} step={1} className="mt-2" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-xs text-gray-600">{fr ? `Décalage X : ${shadowOffsetX}px` : `Offset X: ${shadowOffsetX}px`}</Label>
-            <Slider value={[shadowOffsetX]} onValueChange={([v]) => setShadowOffsetX(v)} min={-20} max={20} step={1} className="mt-2" />
+            <Slider value={[shadowOffsetX]} onValueChange={([v]) => { setShadowOffsetX(v); updateEl({ shadowOffsetX: v }); }} min={-20} max={20} step={1} className="mt-2" />
           </div>
           <div>
             <Label className="text-xs text-gray-600">{fr ? `Décalage Y : ${shadowOffsetY}px` : `Offset Y: ${shadowOffsetY}px`}</Label>
-            <Slider value={[shadowOffsetY]} onValueChange={([v]) => setShadowOffsetY(v)} min={-20} max={20} step={1} className="mt-2" />
+            <Slider value={[shadowOffsetY]} onValueChange={([v]) => { setShadowOffsetY(v); updateEl({ shadowOffsetY: v }); }} min={-20} max={20} step={1} className="mt-2" />
           </div>
         </div>
       </div>
 
       {/* Aperçu */}
-      <div className="border rounded-lg p-3 bg-gray-50 min-h-[60px] flex items-center justify-center">
+      <div className="border rounded-lg p-3 bg-gray-50 min-h-[80px] flex items-center justify-center overflow-hidden">
         <span style={previewStyle}>{text || (fr ? "Aperçu..." : "Preview...")}</span>
       </div>
 
@@ -1357,7 +1368,7 @@ function TexteSection({
       {selectedTextElement && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          {fr ? "Mode édition - modifiez les paramètres puis cliquez Mettre à jour" : "Edit mode - change settings then click Update"}
+          {fr ? "Texte sélectionné — les styles s'appliquent en direct" : "Text selected — styles apply in real time"}
         </div>
       )}
       {/* Bouton Ajouter / Mettre à jour */}
@@ -1817,6 +1828,10 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const { language } = useLanguage();
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
   const [showPeleMeleGuide, setShowPeleMeleGuide] = useState(false);
+  const [peleBgColor, setPeleBgColor] = useState('#ffffff');
+  const [pelePatternSrc, setPelePatternSrc] = useState<string | null>(null);
+  const [pelePatternOpacity, setPelePatternOpacity] = useState(80);
+  const peleBgFileRef = useRef<HTMLInputElement>(null);
 
   const toggle = (id: SectionId) => {
     setOpenSection((prev) => (prev === id ? null : id));
@@ -1828,16 +1843,16 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
 
   const peleMeleSteps = language === "fr" ? [
     "Sur la zone de travail vide.",
-    "Placer une image en la glissant du bureau, ou du Collecteur si vous l'avez sélectionnée dans « Album ».",
+    "Placer une image en la glissant du bureau, ou du Collecteur si vous l'avez sélectionnée dans \"Album\".",
     "Placer une forme dessus (choisie dans la colonne Pêle-mêle).",
     "Calibrez l'image et la forme comme vous le souhaitez.",
-    "Image + forme → « Appliquer » → les images vont directement dans le Collecteur.",
+    "Les deux éléments sélectionnés, cliquez sur \"Appliquer\" → les images vont directement dans le Collecteur.",
     "Répéter l'opération pour toutes les images concernées.",
     "Placer un fond ou une image (choix dans la partie Pêle-mêle, liste de gauche).",
     "Glisser sur le fond chaque image préparée du Collecteur, organisez-les comme vous le souhaitez.",
-    "Ajouts éventuels : texte, clipart, bordure, filet…",
+    "Ajouts éventuels : texte, clipart, bordure, filet...",
     "Sauver le projet.",
-    "Sauver l'image finale, accessible dans « Images Projets ».",
+    "Sauver l'image finale, accessible dans \"Images Projets\".",
   ] : [
     "On the empty canvas.",
     "Place an image by dragging it from the desktop, or from the Collector if you selected it in « Album ».",
@@ -1913,7 +1928,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
             {/* Contenu de la section */}
             {isOpen && (
               <div className="p-3 bg-white">
-                {(section.id === "passe-partout" || section.id === "montage-pp") && (
+                {section.id === "montage-pp" && (
                   <>
                     <PassePartoutSection
                       canvasFormat={props.canvasFormat}
@@ -1968,7 +1983,35 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                 )}
                 {section.id === "montage-pelemele" && (
                   <div className="space-y-3 px-1 pt-1">
-                    {/* Grille de formes */}
+                    {/* 3. Lien guide pêle-mêle */}
+                    <button
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline underline-offset-2 text-left"
+                      onClick={() => setShowPeleMeleGuide(true)}
+                    >
+                      {language === "fr"
+                        ? "Pour créer un pêle-mêle → cliquez ici"
+                        : "How to create a photo collage → click here"}
+                    </button>
+                    {/* 3b. Bloc Appliquer — toujours visible */}
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        {language === "fr"
+                          ? "Dimensionnez l'image et la forme selon votre besoin, puis cliquez sur Appliquer. L'image prendra exactement la forme choisie — l'extérieur sera supprimé."
+                          : "Resize the image and shape as needed, then click Apply. The image will be cropped to the selected shape."}
+                      </p>
+                      <button
+                        onClick={() => props.onApplyPeleMele?.()}
+                        disabled={!props.peleMeleCanApply}
+                        className={`w-full py-2 px-3 text-white text-sm font-medium rounded-md transition-colors ${
+                          props.peleMeleCanApply
+                            ? "bg-blue-600 hover:bg-blue-700"
+                            : "bg-gray-300 cursor-not-allowed"
+                        }`}
+                      >
+                        {language === "fr" ? "✂️ Appliquer" : "✂️ Apply"}
+                      </button>
+                    </div>
+                    {/* 4. Grille de formes */}
                     <div>
                       <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
                         {language === "fr" ? "Choisir une forme" : "Choose a shape"}
@@ -1996,15 +2039,93 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         ))}
                       </div>
                     </div>
-                    {/* Lien guide */}
-                    <button
-                      className="text-xs text-indigo-600 hover:text-indigo-800 underline underline-offset-2 text-left"
-                      onClick={() => setShowPeleMeleGuide(true)}
-                    >
-                      {language === "fr"
-                        ? "Pour créer un pêle-mêle → cliquez ici"
-                        : "How to create a photo collage → click here"}
-                    </button>
+                    {/* 5. Fond / Papier peint */}
+                    <div className="border border-pink-200 rounded-lg overflow-hidden">
+                      <p className="px-3 py-2 text-[11px] font-semibold text-pink-700 bg-pink-50 uppercase tracking-wide">
+                        {language === "fr" ? "Fond / Papier peint" : "Background / Wallpaper"}
+                      </p>
+                      <div className="p-3 space-y-2 bg-white">
+                        {props.hasExistingBackground && (
+                          <div className="flex items-center justify-between gap-2 bg-pink-50 border border-pink-200 rounded-lg px-3 py-2">
+                            <span className="text-xs text-pink-700 font-medium">
+                              {language === "fr" ? "✓ Fond appliqué" : "✓ Background applied"}
+                            </span>
+                            <button
+                              type="button"
+                              className="text-xs text-red-600 hover:text-red-800 bg-white border border-red-200 rounded px-2 py-1 hover:bg-red-50 transition-colors flex items-center gap-1"
+                              onClick={() => props.onRemoveBackground?.()}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {language === "fr" ? "Supprimer" : "Remove"}
+                            </button>
+                          </div>
+                        )}
+                        {/* Couleur unie */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={peleBgColor}
+                            onChange={(e) => setPeleBgColor(e.target.value)}
+                            className="w-9 h-9 rounded border border-gray-300 cursor-pointer p-0.5 flex-shrink-0"
+                            title={language === "fr" ? "Couleur de fond" : "Background color"}
+                          />
+                          <Button
+                            className="flex-1 bg-pink-600 hover:bg-pink-700 text-white text-xs h-9"
+                            onClick={() => props.onAddBackground?.(null, 100, peleBgColor)}
+                          >
+                            {language === "fr" ? "Appliquer la couleur" : "Apply color"}
+                          </Button>
+                        </div>
+                        {/* Séparateur */}
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <div className="flex-1 h-px bg-gray-200" />
+                          <span>{language === "fr" ? "ou" : "or"}</span>
+                          <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+                        {/* Image / motif */}
+                        <Button variant="outline" size="sm" className="w-full text-xs gap-2" onClick={() => peleBgFileRef.current?.click()}>
+                          <Upload className="w-3 h-3" />
+                          {language === "fr" ? "Importer une image" : "Import an image"}
+                        </Button>
+                        <input
+                          ref={peleBgFileRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => setPelePatternSrc(ev.target?.result as string);
+                              reader.readAsDataURL(f);
+                            }
+                            e.target.value = "";
+                          }}
+                        />
+                        {pelePatternSrc && (
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <img src={pelePatternSrc} alt="Motif" className="w-full h-16 object-cover rounded border border-gray-200" />
+                              <button onClick={() => setPelePatternSrc(null)} className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow text-red-500 hover:text-red-700">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-gray-600">
+                                {language === "fr" ? `Opacité : ${pelePatternOpacity}%` : `Opacity: ${pelePatternOpacity}%`}
+                              </Label>
+                              <Slider value={[pelePatternOpacity]} onValueChange={([v]) => setPelePatternOpacity(v)} min={10} max={100} step={5} className="mt-1" />
+                            </div>
+                            <Button
+                              className="w-full bg-pink-600 hover:bg-pink-700 text-white text-xs"
+                              onClick={() => props.onAddBackground?.(pelePatternSrc, pelePatternOpacity, peleBgColor)}
+                            >
+                              {language === "fr" ? "Appliquer le fond" : "Apply background"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
                 {section.id === "collage" && (
