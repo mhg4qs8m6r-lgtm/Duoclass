@@ -119,7 +119,7 @@ export interface AssemblagePanelProps {
   onUpdateTextElement?: (id: string, textProps: TextElementProps) => void;
   // --- Nouvelle génération : découpes interactives ---
   /** Ajoute une découpe interactive sur le canvas avec une couleur d'ouverture */
-  onAddOpening?: (shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line', color: string, extraParams?: { starBranches?: number; heartDepth?: number }) => void;
+  onAddOpening?: (shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line', color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number }) => void;
   /** Valide la découpe en cours de positionnement */
   onValidateOpening?: () => void;
   /** Supprime une découpe par son ID */
@@ -1833,6 +1833,8 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
   const [showPeleMeleGuide, setShowPeleMeleGuide] = useState(false);
   const [showTexteGuide, setShowTexteGuide] = useState(false);
+  const [cornerRound, setCornerRound] = useState(false);
+  const [cornerRadiusMm, setCornerRadiusMm] = useState(5);
   const [peleBgColor, setPeleBgColor] = useState('#ffffff');
   const [pelePatternSrc, setPelePatternSrc] = useState<string | null>(null);
   const [pelePatternOpacity, setPelePatternOpacity] = useState(80);
@@ -2074,22 +2076,67 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                           <button
                             key={s.id}
                             className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-purple-200 text-xs font-medium text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all active:scale-95"
-                            onClick={() => props.onAddOpening?.(s.id, 'transparent')}
+                            onClick={() => {
+                              const isRoundable = s.id === 'rect' || s.id === 'square';
+                              const cr = isRoundable && cornerRound ? cornerRadiusMm : undefined;
+                              props.onAddOpening?.(s.id, 'transparent', cr !== undefined ? { cornerRadius: cr } : undefined);
+                            }}
                           >
-                            <span className="text-base leading-none">{
-                              s.id === 'rect' ? '▭' :
-                              s.id === 'square' ? '□' :
-                              s.id === 'round' ? '○' :
-                              s.id === 'oval' ? '⬭' :
-                              s.id === 'arch' ? '⌒' :
-                              s.id === 'heart' ? '♥' :
-                              s.id === 'star' ? '★' :
-                              s.id === 'diamond' ? '◇' :
-                              s.id === 'hexagon' ? '⬡' : '□'
-                            }</span>
+                            {s.id === 'arch' ? (
+                              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <path d="M3 21 L3 12 Q3 3 12 3 Q21 3 21 12 L21 21 Z" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                              </svg>
+                            ) : (
+                              <span className="text-base leading-none">{
+                                s.id === 'rect' ? '▭' :
+                                s.id === 'square' ? '□' :
+                                s.id === 'round' ? '○' :
+                                s.id === 'oval' ? '⬭' :
+                                s.id === 'heart' ? '♥' :
+                                s.id === 'star' ? '★' :
+                                s.id === 'diamond' ? '◇' :
+                                s.id === 'hexagon' ? '⬡' : '□'
+                              }</span>
+                            )}
                             {language === "fr" ? s.labelFr : s.labelEn}
                           </button>
                         ))}
+                      </div>
+                      {/* Arrondi des angles (rect / carré) */}
+                      <div className="mt-2 space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={cornerRound}
+                            onChange={(e) => setCornerRound(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-purple-600"
+                          />
+                          <span className="text-xs text-gray-700">
+                            {language === "fr" ? "Arrondir les angles (Rectangle / Carré)" : "Round corners (Rectangle / Square)"}
+                          </span>
+                        </label>
+                        {cornerRound && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 whitespace-nowrap">
+                              {language === "fr" ? `Rayon : ${cornerRadiusMm}mm` : `Radius: ${cornerRadiusMm}mm`}
+                            </span>
+                            <button
+                              onClick={() => setCornerRadiusMm(v => Math.max(1, v - 1))}
+                              className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
+                            ><Minus className="w-3 h-3" /></button>
+                            <input
+                              type="number"
+                              min={1} max={100} step={1}
+                              value={cornerRadiusMm}
+                              onChange={(e) => setCornerRadiusMm(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                              className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center"
+                            />
+                            <button
+                              onClick={() => setCornerRadiusMm(v => Math.min(100, v + 1))}
+                              className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
+                            ><Plus className="w-3 h-3" /></button>
+                          </div>
+                        )}
                       </div>
                     </div>
                     {/* 5. Fond / Papier peint */}
