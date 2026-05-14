@@ -1143,6 +1143,10 @@ function TexteSection({
     }
   }, [selectedTextElement]);
 
+  const ptToMm = (pt: number) => +(pt * 0.352778).toFixed(1);
+  const mmToPt = (mm: number) => Math.max(1, Math.round(mm * 2.83465));
+  const pxToMm = (px: number) => +(px * 0.264583).toFixed(1);
+
   const currentProps = (): TextElementProps => ({
     text, fontFamily, fontSize, fontColor, fontBold, fontItalic, fontUnderline,
     textAlign, strokeColor, strokeWidth, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY,
@@ -1232,22 +1236,22 @@ function TexteSection({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label className="text-xs text-gray-600 block mb-1">
-            {fr ? `Taille : ${fontSize}pt` : `Size: ${fontSize}pt`}
+            {fr ? `Taille : ${ptToMm(fontSize)}mm` : `Size: ${ptToMm(fontSize)}mm`}
           </Label>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { const v = Math.max(8, fontSize - 12); setFontSize(v); updateEl({ fontSize: v }); }}
+              onClick={() => { const v = mmToPt(Math.max(3, ptToMm(fontSize) - 1)); setFontSize(v); updateEl({ fontSize: v }); }}
               className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
             ><Minus className="w-3 h-3" /></button>
             <input
               type="number"
-              min={8} max={400}
-              value={fontSize}
-              onChange={(e) => { const v = Math.max(8, Math.min(400, Number(e.target.value) || 8)); setFontSize(v); updateEl({ fontSize: v }); }}
+              min={3} max={141} step={0.5}
+              value={ptToMm(fontSize)}
+              onChange={(e) => { const mm = Math.max(3, Math.min(141, Number(e.target.value) || 3)); const v = mmToPt(mm); setFontSize(v); updateEl({ fontSize: v }); }}
               className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-center w-0"
             />
             <button
-              onClick={() => { const v = Math.min(400, fontSize + 12); setFontSize(v); updateEl({ fontSize: v }); }}
+              onClick={() => { const v = mmToPt(Math.min(141, ptToMm(fontSize) + 1)); setFontSize(v); updateEl({ fontSize: v }); }}
               className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
             ><Plus className="w-3 h-3" /></button>
           </div>
@@ -1324,7 +1328,7 @@ function TexteSection({
               className="w-full h-7 rounded cursor-pointer border border-gray-300 mt-1" />
           </div>
           <div>
-            <Label className="text-xs text-gray-600">{fr ? `Épaisseur : ${strokeWidth}px` : `Width: ${strokeWidth}px`}</Label>
+            <Label className="text-xs text-gray-600">{fr ? `Épaisseur : ${pxToMm(strokeWidth)}mm` : `Width: ${pxToMm(strokeWidth)}mm`}</Label>
             <Slider value={[strokeWidth]} onValueChange={([v]) => { setStrokeWidth(v); updateEl({ strokeWidth: v }); }} min={0} max={8} step={0.5} className="mt-2" />
           </div>
         </div>
@@ -1343,17 +1347,17 @@ function TexteSection({
               className="w-full h-7 rounded cursor-pointer border border-gray-300 mt-1" />
           </div>
           <div>
-            <Label className="text-xs text-gray-600">{fr ? `Flou : ${shadowBlur}px` : `Blur: ${shadowBlur}px`}</Label>
+            <Label className="text-xs text-gray-600">{fr ? `Flou : ${pxToMm(shadowBlur)}mm` : `Blur: ${pxToMm(shadowBlur)}mm`}</Label>
             <Slider value={[shadowBlur]} onValueChange={([v]) => { setShadowBlur(v); updateEl({ shadowBlur: v }); }} min={0} max={20} step={1} className="mt-2" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <Label className="text-xs text-gray-600">{fr ? `Décalage X : ${shadowOffsetX}px` : `Offset X: ${shadowOffsetX}px`}</Label>
+            <Label className="text-xs text-gray-600">{fr ? `Décalage X : ${pxToMm(shadowOffsetX)}mm` : `Offset X: ${pxToMm(shadowOffsetX)}mm`}</Label>
             <Slider value={[shadowOffsetX]} onValueChange={([v]) => { setShadowOffsetX(v); updateEl({ shadowOffsetX: v }); }} min={-20} max={20} step={1} className="mt-2" />
           </div>
           <div>
-            <Label className="text-xs text-gray-600">{fr ? `Décalage Y : ${shadowOffsetY}px` : `Offset Y: ${shadowOffsetY}px`}</Label>
+            <Label className="text-xs text-gray-600">{fr ? `Décalage Y : ${pxToMm(shadowOffsetY)}mm` : `Offset Y: ${pxToMm(shadowOffsetY)}mm`}</Label>
             <Slider value={[shadowOffsetY]} onValueChange={([v]) => { setShadowOffsetY(v); updateEl({ shadowOffsetY: v }); }} min={-20} max={20} step={1} className="mt-2" />
           </div>
         </div>
@@ -1828,6 +1832,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const { language } = useLanguage();
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
   const [showPeleMeleGuide, setShowPeleMeleGuide] = useState(false);
+  const [showTexteGuide, setShowTexteGuide] = useState(false);
   const [peleBgColor, setPeleBgColor] = useState('#ffffff');
   const [pelePatternSrc, setPelePatternSrc] = useState<string | null>(null);
   const [pelePatternOpacity, setPelePatternOpacity] = useState(80);
@@ -1867,6 +1872,24 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
     "Save the final image, accessible in « Project Images ».",
   ];
 
+  const texteGuideSteps = language === "fr" ? [
+    "Tapez votre texte dans le cadre prévu à cet effet.",
+    "Choisissez la police dans la liste. Si vous voulez voir les résultats en direct sur votre création, cliquez sur « Mettre à jour le texte » puis revenez sur les réglages. Vous pourrez suivre les modifications d'apparence au fur et à mesure.",
+    "Choisissez la hauteur du texte en mm.",
+    "Cliquez sur le rectangle de couleur. Avec le curseur (à gauche) définissez la zone de couleur puis cliquez dans le grand rectangle pour affiner la couleur.",
+    "Donnez une épaisseur et définissez une couleur de la même façon pour le contour du texte. Vous pouvez mettre la valeur à zéro pour ne rien voir.",
+    "Définissez l'ombre portée de la même façon.",
+    "Cliquez sur « Mettre à jour le texte » si vous ne l'avez pas encore fait.",
+  ] : [
+    "Type your text in the provided field.",
+    "Choose the font from the list. If you want to see the results live on your creation, click « Update text » then come back to the settings. You can follow the appearance changes as you go.",
+    "Choose the text height in mm.",
+    "Click the color rectangle. Use the cursor (on the left) to define the color zone, then click in the large rectangle to refine the color.",
+    "Set a thickness and define a color in the same way for the text stroke. You can set the value to zero for no stroke.",
+    "Define the drop shadow in the same way.",
+    "Click « Update text » if you haven't done so yet.",
+  ];
+
   return (
     <>
     {showPeleMeleGuide && (
@@ -1893,6 +1916,36 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
           </ol>
           <div className="mt-5 flex justify-end">
             <Button size="sm" onClick={() => setShowPeleMeleGuide(false)}>
+              {language === "fr" ? "Fermer" : "Close"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    {showTexteGuide && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setShowTexteGuide(false)}
+      >
+        <div
+          className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 className="text-base font-semibold text-gray-800 mb-4">
+            {language === "fr" ? "Pour créer votre texte" : "To create your text"}
+          </h2>
+          <ol className="space-y-2">
+            {texteGuideSteps.map((step, i) => (
+              <li key={i} className="flex gap-3 text-sm text-gray-700">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center mt-0.5">
+                  {i + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-5 flex justify-end">
+            <Button size="sm" onClick={() => setShowTexteGuide(false)}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>
           </div>
@@ -2138,11 +2191,21 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                   </div>
                 )}
                 {section.id === "texte" && (
-                  <TexteSection
-                    onAddTextToCanvas={props.onAddTextToCanvas}
-                    selectedTextElement={props.selectedTextElement}
-                    onUpdateTextElement={props.onUpdateTextElement}
-                  />
+                  <div className="space-y-3">
+                    <button
+                      className="text-xs font-bold text-purple-600 hover:text-purple-800 underline underline-offset-2 text-left"
+                      onClick={() => setShowTexteGuide(true)}
+                    >
+                      {language === "fr"
+                        ? "Pour créer un texte, cliquez ICI"
+                        : "To create a text, click HERE"}
+                    </button>
+                    <TexteSection
+                      onAddTextToCanvas={props.onAddTextToCanvas}
+                      selectedTextElement={props.selectedTextElement}
+                      onUpdateTextElement={props.onUpdateTextElement}
+                    />
+                  </div>
                 )}
                 {section.id === "puzzle" && (
                   <PuzzleSection
