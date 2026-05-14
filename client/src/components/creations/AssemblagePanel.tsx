@@ -119,7 +119,7 @@ export interface AssemblagePanelProps {
   onUpdateTextElement?: (id: string, textProps: TextElementProps) => void;
   // --- Nouvelle génération : découpes interactives ---
   /** Ajoute une découpe interactive sur le canvas avec une couleur d'ouverture */
-  onAddOpening?: (shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line', color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number }) => void;
+  onAddOpening?: (shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line', color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => void;
   /** Valide la découpe en cours de positionnement */
   onValidateOpening?: () => void;
   /** Supprime une découpe par son ID */
@@ -218,9 +218,9 @@ export interface AssemblagePanelProps {
   /** Index du segment sélectionné (null = aucun) */
   selectedSegmentIndex?: number | null;
   /** Arrondir le segment sélectionné vers l'intérieur (concave) */
-  onRoundSegmentConcave?: () => void;
+  onRoundSegmentConcave?: (intensityMm?: number) => void;
   /** Arrondir le segment sélectionné vers l'extérieur (convexe) */
-  onRoundSegmentConvex?: () => void;
+  onRoundSegmentConvex?: (intensityMm?: number) => void;
   /** Supprimer le segment sélectionné (ouvre la forme) */
   onDeleteSegment?: () => void;
   /** Redresser le segment sélectionné (le remettre en ligne droite) */
@@ -1835,6 +1835,9 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const [showTexteGuide, setShowTexteGuide] = useState(false);
   const [cornerRound, setCornerRound] = useState(false);
   const [cornerRadiusMm, setCornerRadiusMm] = useState(5);
+  const [cornerType, setCornerType] = useState<'convex' | 'concave'>('convex');
+  const [curveMm, setCurveMm] = useState(5);
+  const [curveDir, setCurveDir] = useState<'concave' | 'convex' | null>(null);
   const [peleBgColor, setPeleBgColor] = useState('#ffffff');
   const [pelePatternSrc, setPelePatternSrc] = useState<string | null>(null);
   const [pelePatternOpacity, setPelePatternOpacity] = useState(80);
@@ -2072,19 +2075,33 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         {language === "fr" ? "Choisir une forme" : "Choose a shape"}
                       </p>
                       <div className="grid grid-cols-3 gap-1.5">
-                        {SHAPES.filter(s => s.id !== 'line' && s.id !== 'puzzle').map((s) => (
+                        {SHAPES.filter(s => s.id !== 'puzzle').map((s) => (
                           <button
                             key={s.id}
-                            className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-purple-200 text-xs font-medium text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all active:scale-95"
+                            className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
+                              s.id === 'line' && props.isLineDrawMode
+                                ? 'border-orange-400 bg-orange-50 text-orange-700'
+                                : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-400'
+                            }`}
                             onClick={() => {
-                              const isRoundable = s.id === 'rect' || s.id === 'square';
-                              const cr = isRoundable && cornerRound ? cornerRadiusMm : undefined;
-                              props.onAddOpening?.(s.id, 'transparent', cr !== undefined ? { cornerRadius: cr } : undefined);
+                              if (s.id === 'line') {
+                                props.onToggleLineDrawMode?.();
+                              } else {
+                                const isRoundable = s.id === 'rect' || s.id === 'square';
+                                const cr = isRoundable && cornerRound ? cornerRadiusMm : undefined;
+                                props.onAddOpening?.(s.id, 'transparent', cr !== undefined
+                                  ? { cornerRadius: cr, cornerConcave: cornerType === 'concave' }
+                                  : undefined);
+                              }
                             }}
                           >
                             {s.id === 'arch' ? (
                               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
                                 <path d="M3 21 L3 12 Q3 3 12 3 Q21 3 21 12 L21 21 Z" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                              </svg>
+                            ) : s.id === 'line' ? (
+                              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                               </svg>
                             ) : (
                               <span className="text-base leading-none">{
@@ -2116,29 +2133,141 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                           </span>
                         </label>
                         {cornerRound && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 whitespace-nowrap">
-                              {language === "fr" ? `Rayon : ${cornerRadiusMm}mm` : `Radius: ${cornerRadiusMm}mm`}
-                            </span>
-                            <button
-                              onClick={() => setCornerRadiusMm(v => Math.max(1, v - 1))}
-                              className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
-                            ><Minus className="w-3 h-3" /></button>
-                            <input
-                              type="number"
-                              min={1} max={100} step={1}
-                              value={cornerRadiusMm}
-                              onChange={(e) => setCornerRadiusMm(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
-                              className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center"
-                            />
-                            <button
-                              onClick={() => setCornerRadiusMm(v => Math.min(100, v + 1))}
-                              className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
-                            ><Plus className="w-3 h-3" /></button>
+                          <div className="space-y-2 pl-1">
+                            {/* Type extérieur / intérieur */}
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => setCornerType('convex')}
+                                className={`flex-1 py-1 text-xs rounded border transition-colors ${cornerType === 'convex' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                              >⌒ {language === "fr" ? "Extérieur" : "Exterior"}</button>
+                              <button
+                                onClick={() => setCornerType('concave')}
+                                className={`flex-1 py-1 text-xs rounded border transition-colors ${cornerType === 'concave' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                              >⌣ {language === "fr" ? "Intérieur" : "Interior"}</button>
+                            </div>
+                            {/* Valeur rayon */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-600 whitespace-nowrap">
+                                {language === "fr" ? `Rayon : ${cornerRadiusMm}mm` : `Radius: ${cornerRadiusMm}mm`}
+                              </span>
+                              <button
+                                onClick={() => setCornerRadiusMm(v => Math.max(1, v - 1))}
+                                className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
+                              ><Minus className="w-3 h-3" /></button>
+                              <input
+                                type="number"
+                                min={1} max={100} step={1}
+                                value={cornerRadiusMm}
+                                onChange={(e) => setCornerRadiusMm(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                                className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center"
+                              />
+                              <button
+                                onClick={() => setCornerRadiusMm(v => Math.min(100, v + 1))}
+                                className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
+                              ><Plus className="w-3 h-3" /></button>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
+                    {/* 4b. Contrôles outil Ligne */}
+                    {props.isLineDrawMode && (
+                      <div className="space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                        {props.lineChainCount !== undefined && props.lineChainCount > 0 && (
+                          <div className="flex items-center justify-between text-xs text-orange-700 font-medium">
+                            <span>{language === "fr" ? "Chaîne en cours" : "Chain in progress"}</span>
+                            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                              {props.lineChainCount} {language === "fr" ? (props.lineChainCount > 1 ? "segments" : "segment") : (props.lineChainCount > 1 ? "segments" : "segment")}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-orange-700 font-medium">{language === "fr" ? "Couleur" : "Color"}</span>
+                          <input type="color" value={props.lineColor ?? '#000000'} onChange={e => props.onLineColorChange?.(e.target.value)}
+                            className="w-8 h-8 rounded cursor-pointer border border-orange-300 p-0.5 bg-white" />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-orange-700 font-medium">{language === "fr" ? "Épaisseur" : "Width"}</span>
+                          <div className="flex items-center gap-2">
+                            <input type="range" min={0.5} max={5} step={0.5} value={props.lineStrokeWidth ?? 0.5}
+                              onChange={e => props.onLineStrokeWidthChange?.(Number(e.target.value))}
+                              className="w-24 accent-orange-500" />
+                            <span className="text-xs text-orange-600 w-8 text-right">{props.lineStrokeWidth} px</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-orange-500 italic">
+                          {language === "fr" ? "Cliquer-glisser sur le canvas pour tracer. Échap pour annuler." : "Click-drag on canvas to draw. Esc to cancel."}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 4c. Incurver un côté */}
+                    {props.segmentEditorActive && (
+                      <div className="space-y-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                        <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide">
+                          {language === "fr" ? "Incurver un côté" : "Curve a side"}
+                        </p>
+                        {props.selectedSegmentIndex === null || props.selectedSegmentIndex === undefined ? (
+                          <p className="text-xs text-indigo-500 italic">
+                            {language === "fr" ? "Cliquez sur un côté de la forme pour le sélectionner." : "Click on a side of the shape to select it."}
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {/* Valeur intensité */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-indigo-700 whitespace-nowrap">
+                                {language === "fr" ? `Intensité : ${curveMm}mm` : `Intensity: ${curveMm}mm`}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  const v = Math.max(1, curveMm - 1);
+                                  setCurveMm(v);
+                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                                }}
+                                className="w-6 h-6 flex items-center justify-center border rounded text-indigo-600 hover:bg-indigo-100"
+                              ><Minus className="w-3 h-3" /></button>
+                              <input
+                                type="number" min={1} max={100} step={1}
+                                value={curveMm}
+                                onChange={(e) => {
+                                  const v = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                                  setCurveMm(v);
+                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                                }}
+                                className="w-14 border border-indigo-300 rounded px-1 py-0.5 text-xs text-center"
+                              />
+                              <button
+                                onClick={() => {
+                                  const v = Math.min(100, curveMm + 1);
+                                  setCurveMm(v);
+                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                                }}
+                                className="w-6 h-6 flex items-center justify-center border rounded text-indigo-600 hover:bg-indigo-100"
+                              ><Plus className="w-3 h-3" /></button>
+                            </div>
+                            {/* Boutons direction */}
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => { setCurveDir('concave'); props.onRoundSegmentConcave?.(curveMm); }}
+                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 transition-colors"
+                              >⌣ {language === "fr" ? "Creuser" : "Concave"}</button>
+                              <button
+                                onClick={() => { setCurveDir('convex'); props.onRoundSegmentConvex?.(curveMm); }}
+                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-purple-700 border-purple-300 hover:bg-purple-50 transition-colors"
+                              >⌒ {language === "fr" ? "Bomber" : "Convex"}</button>
+                              <button
+                                onClick={() => { setCurveDir(null); props.onStraightenSegment?.(); }}
+                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-colors"
+                              >↔ {language === "fr" ? "Redresser" : "Straighten"}</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* 5. Fond / Papier peint */}
                     <div className="border border-pink-200 rounded-lg overflow-hidden">
                       <p className="px-3 py-2 text-[11px] font-semibold text-pink-700 bg-pink-50 uppercase tracking-wide">

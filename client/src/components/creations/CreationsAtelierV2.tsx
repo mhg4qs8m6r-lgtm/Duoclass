@@ -107,6 +107,10 @@ interface CanvasElement {
   starBranches?: number;
   /** Profondeur de l'encoche du cœur (0=cœur plat, 100=cœur profond, défaut 50) */
   heartDepth?: number;
+  /** Rayon d'arrondi des angles en mm (rect/square uniquement) */
+  cornerRadius?: number;
+  /** true = angles concaves (intérieur), false/absent = convexes (extérieur) */
+  cornerConcave?: boolean;
   /**
    * Path SVG personnalisé en coordonnées cm (relatif à la page blanche).
    * Quand présent, remplace le rendu géométrique standard de la forme.
@@ -709,6 +713,39 @@ function pathFromSegments(segments: Segment[]): string {
   parts.push('Z');
   return parts.join(' ');
 }
+/**
+ * Génère un path SVG en coordonnées cm pour un rectangle aux angles arrondis.
+ * convex (extérieur) : arrondi classique.
+ * concave (intérieur) : arc inversé, aspect « cadre ».
+ */
+function buildRoundedCornerPath(x: number, y: number, w: number, h: number, r: number, concave: boolean): string {
+  r = Math.min(r, Math.min(w, h) / 2);
+  const f = (n: number) => n.toFixed(4);
+  if (concave) {
+    return [
+      `M${f(x+r)},${f(y)}`, `L${f(x+w-r)},${f(y)}`,
+      `Q${f(x+w-r)},${f(y+r)} ${f(x+w)},${f(y+r)}`,
+      `L${f(x+w)},${f(y+h-r)}`,
+      `Q${f(x+w-r)},${f(y+h-r)} ${f(x+w-r)},${f(y+h)}`,
+      `L${f(x+r)},${f(y+h)}`,
+      `Q${f(x+r)},${f(y+h-r)} ${f(x)},${f(y+h-r)}`,
+      `L${f(x)},${f(y+r)}`,
+      `Q${f(x+r)},${f(y+r)} ${f(x+r)},${f(y)}`, 'Z',
+    ].join(' ');
+  } else {
+    return [
+      `M${f(x+r)},${f(y)}`, `L${f(x+w-r)},${f(y)}`,
+      `Q${f(x+w)},${f(y)} ${f(x+w)},${f(y+r)}`,
+      `L${f(x+w)},${f(y+h-r)}`,
+      `Q${f(x+w)},${f(y+h)} ${f(x+w-r)},${f(y+h)}`,
+      `L${f(x+r)},${f(y+h)}`,
+      `Q${f(x)},${f(y+h)} ${f(x)},${f(y+h-r)}`,
+      `L${f(x)},${f(y+r)}`,
+      `Q${f(x)},${f(y)} ${f(x+r)},${f(y)}`, 'Z',
+    ].join(' ');
+  }
+}
+
 // ─── Fin Éditeur de segments ──────────────────────────────────────────────────
 
 export default function CreationsAtelierV2({
@@ -6281,7 +6318,7 @@ export default function CreationsAtelierV2({
                         updateCanvasElement(selectedElementId, { customPath: newPath });
                       }
                     }}
-                    onAddOpening={(shape: CanvasElement['shape'], color: string, extraParams?: { starBranches?: number; heartDepth?: number }) => {
+                    onAddOpening={(shape: CanvasElement['shape'], color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
                       openingCounterRef.current += 1;
@@ -6314,7 +6351,15 @@ export default function CreationsAtelierV2({
                         ...(shape === 'heart' && extraParams?.heartDepth !== undefined
                           ? { heartDepth: extraParams.heartDepth }
                           : {}),
+                        cornerRadius: extraParams?.cornerRadius,
+                        cornerConcave: extraParams?.cornerConcave,
                       };
+                      // Arrondi des angles pour rect/square
+                      if ((shape === 'rect' || shape === 'square') && extraParams?.cornerRadius) {
+                        const r = Math.min(extraParams.cornerRadius / 10, Math.min(defaultW, defaultH) / 2);
+                        const ox = newOpening.x, oy = newOpening.y, ow = newOpening.width, oh = newOpening.height;
+                        newOpening.customPath = buildRoundedCornerPath(ox, oy, ow, oh, r, !!extraParams.cornerConcave);
+                      }
                       // Ajouter la nouvelle découpe (toutes les découpes existantes sont conservées)
                       setCanvasElements(prev => [...prev, newOpening]);
                       setSelectedElementId(newOpening.id);
@@ -6982,45 +7027,38 @@ export default function CreationsAtelierV2({
                       setSelectedSegmentIndex(null);
                     }}
                     selectedSegmentIndex={selectedSegmentIndex}
-                    onRoundSegmentConcave={() => {
+                    onRoundSegmentConcave={(intensityMm?: number) => {
                       if (!segmentEditorElementId || selectedSegmentIndex === null) return;
                       const el = canvasElements.find(e => e.id === segmentEditorElementId);
                       if (!el) return;
                       const segs = buildShapeSegments(el);
                       if (!segs || selectedSegmentIndex >= segs.length) return;
                       const seg = segs[selectedSegmentIndex];
-                      if (seg.type === 'Q') return; // déjà arrondi
-                      // Point milieu du segment
                       const mx = (seg.x1 + seg.x2) / 2;
                       const my = (seg.y1 + seg.y2) / 2;
                       const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
                       const len = Math.sqrt(dx * dx + dy * dy);
-                      // Normale vers l'intérieur de la forme (perpendiculaire, côté intérieur)
-                      // Pour un rectangle : le centre de la forme est le point de référence
                       const cx = el.x + el.width / 2;
                       const cy = el.y + el.height / 2;
-                      // Vecteur perpendiculaire au segment
                       const perpX = len > 0 ? -dy / len : 0;
                       const perpY = len > 0 ? dx / len : 0;
-                      // Choisir la direction vers le centre (concave = vers l'intérieur)
                       const toCenterX = cx - mx;
                       const toCenterY = cy - my;
                       const dot = perpX * toCenterX + perpY * toCenterY;
                       const sign = dot >= 0 ? 1 : -1;
-                      const offset = Math.min(len * 0.35, 2.0);
+                      const offset = intensityMm !== undefined ? Math.min(intensityMm / 10, len * 0.8) : Math.min(len * 0.35, 2.0);
                       const newSeg = { ...seg, type: 'Q' as const, cx: mx + sign * perpX * offset, cy: my + sign * perpY * offset };
                       const newSegs = segs.map((s, i) => i === selectedSegmentIndex ? newSeg : s);
                       updateCanvasElement(segmentEditorElementId, { customPath: pathFromSegments(newSegs) });
                       setSegmentsRounded(newSegs.some(s => s.type === 'Q'));
                     }}
-                    onRoundSegmentConvex={() => {
+                    onRoundSegmentConvex={(intensityMm?: number) => {
                       if (!segmentEditorElementId || selectedSegmentIndex === null) return;
                       const el = canvasElements.find(e => e.id === segmentEditorElementId);
                       if (!el) return;
                       const segs = buildShapeSegments(el);
                       if (!segs || selectedSegmentIndex >= segs.length) return;
                       const seg = segs[selectedSegmentIndex];
-                      if (seg.type === 'Q') return; // déjà arrondi
                       const mx = (seg.x1 + seg.x2) / 2;
                       const my = (seg.y1 + seg.y2) / 2;
                       const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
@@ -7032,9 +7070,8 @@ export default function CreationsAtelierV2({
                       const toCenterX = cx - mx;
                       const toCenterY = cy - my;
                       const dot = perpX * toCenterX + perpY * toCenterY;
-                      // Convexe = direction opposée au centre (vers l'extérieur)
                       const sign = dot >= 0 ? -1 : 1;
-                      const offset = Math.min(len * 0.35, 2.0);
+                      const offset = intensityMm !== undefined ? Math.min(intensityMm / 10, len * 0.8) : Math.min(len * 0.35, 2.0);
                       const newSeg = { ...seg, type: 'Q' as const, cx: mx + sign * perpX * offset, cy: my + sign * perpY * offset };
                       const newSegs = segs.map((s, i) => i === selectedSegmentIndex ? newSeg : s);
                       updateCanvasElement(segmentEditorElementId, { customPath: pathFromSegments(newSegs) });
@@ -8987,30 +9024,55 @@ export default function CreationsAtelierV2({
                                       >↔ Redresser</button>
                                     </div>
                                   ) : (
-                                    /* Bouton Arrondir — visible uniquement quand le segment est droit */
-                                    <button
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const mx2 = (seg.x1 + seg.x2) / 2;
-                                        const my2 = (seg.y1 + seg.y2) / 2;
-                                        const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
-                                        const len = Math.sqrt(dx * dx + dy * dy);
-                                        const cx2 = element.x + element.width / 2;
-                                        const cy2 = element.y + element.height / 2;
-                                        const perpX = len > 0 ? -dy / len : 0;
-                                        const perpY = len > 0 ? dx / len : 0;
-                                        const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
-                                        const sign = dot >= 0 ? 1 : -1;
-                                        const offset = Math.min(len * (roundIntensity / 100), 2.5);
-                                        const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
-                                        const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
-                                        updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                        setSegmentsRounded(true);
-                                      }}
-                                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 transition-colors whitespace-nowrap"
-                                      style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                                    >⌒ Arrondir</button>
+                                    /* Boutons Creuser/Bomber — visible uniquement quand le segment est droit */
+                                    <div className="flex gap-1">
+                                      <button
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const mx2 = (seg.x1 + seg.x2) / 2;
+                                          const my2 = (seg.y1 + seg.y2) / 2;
+                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
+                                          const len = Math.sqrt(dx * dx + dy * dy);
+                                          const cx2 = element.x + element.width / 2;
+                                          const cy2 = element.y + element.height / 2;
+                                          const perpX = len > 0 ? -dy / len : 0;
+                                          const perpY = len > 0 ? dx / len : 0;
+                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
+                                          const sign = dot >= 0 ? 1 : -1;
+                                          const offset = Math.min(len * (roundIntensity / 100), 2.5);
+                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
+                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
+                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
+                                          setSegmentsRounded(true);
+                                        }}
+                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 transition-colors whitespace-nowrap"
+                                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
+                                      >⌣ Creuser</button>
+                                      <button
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const mx2 = (seg.x1 + seg.x2) / 2;
+                                          const my2 = (seg.y1 + seg.y2) / 2;
+                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
+                                          const len = Math.sqrt(dx * dx + dy * dy);
+                                          const cx2 = element.x + element.width / 2;
+                                          const cy2 = element.y + element.height / 2;
+                                          const perpX = len > 0 ? -dy / len : 0;
+                                          const perpY = len > 0 ? dx / len : 0;
+                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
+                                          const sign = dot >= 0 ? -1 : 1;
+                                          const offset = Math.min(len * (roundIntensity / 100), 2.5);
+                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
+                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
+                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
+                                          setSegmentsRounded(true);
+                                        }}
+                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-purple-700 hover:text-purple-900 transition-colors whitespace-nowrap"
+                                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
+                                      >⌒ Bomber</button>
+                                    </div>
                                   )}
                                   <span className="text-gray-400 text-[10px] mx-0.5" style={{ textShadow: 'none' }}>·</span>
                                   <button
