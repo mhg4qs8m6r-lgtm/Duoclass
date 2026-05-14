@@ -748,6 +748,84 @@ function buildRoundedCornerPath(x: number, y: number, w: number, h: number, r: n
 
 // ─── Fin Éditeur de segments ──────────────────────────────────────────────────
 
+// ─── Accrochage de ligne sur le bord le plus proche ───────────────────────────
+/**
+ * Trouve le point le plus proche sur le bord de l'élément le plus proche du curseur.
+ * Utilisé pour ancrer les extrémités d'une ligne dessinée.
+ * Pas de rayon ni de seuil : retourne toujours le point le plus proche.
+ */
+function snapLineToBorder(
+  cursorX: number,
+  cursorY: number,
+  elements: CanvasElement[]
+): { x: number; y: number } {
+  let minDist = Infinity;
+  let result = { x: cursorX, y: cursorY };
+
+  for (const el of elements) {
+    if ((el.type === 'shape' && el.shape === 'line') ||
+        el.type === 'fond-passe-partout' ||
+        el.type === 'pelemele-paper') continue;
+    if (el.width <= 0 || el.height <= 0) continue;
+
+    const cx = el.x + el.width / 2;
+    const cy = el.y + el.height / 2;
+    const rad = el.rotation ? (el.rotation * Math.PI) / 180 : 0;
+
+    // Transformer le curseur dans l'espace local de l'élément (avant rotation)
+    let lx = cursorX, ly = cursorY;
+    if (rad !== 0) {
+      const dx = cursorX - cx, dy = cursorY - cy;
+      lx = cx + dx * Math.cos(-rad) - dy * Math.sin(-rad);
+      ly = cy + dx * Math.sin(-rad) + dy * Math.cos(-rad);
+    }
+
+    let nearX: number, nearY: number, dist: number;
+
+    if (el.shape === 'round' || el.shape === 'oval') {
+      // Ellipse : projection dans la direction curseur → centre
+      const a = el.width / 2, b = el.height / 2;
+      const angle = Math.atan2(ly - cy, lx - cx);
+      nearX = cx + a * Math.cos(angle);
+      nearY = cy + b * Math.sin(angle);
+      dist = Math.sqrt((lx - nearX) ** 2 + (ly - nearY) ** 2);
+    } else {
+      // Périmètre du rectangle englobant
+      const x1 = el.x, y1 = el.y, x2 = el.x + el.width, y2 = el.y + el.height;
+      if (lx > x1 && lx < x2 && ly > y1 && ly < y2) {
+        // Curseur à l'intérieur : projeter sur le bord le plus proche
+        const dL = lx - x1, dR = x2 - lx, dT = ly - y1, dB = y2 - ly;
+        const m = Math.min(dL, dR, dT, dB);
+        if (m === dL)      { nearX = x1; nearY = ly; dist = dL; }
+        else if (m === dR) { nearX = x2; nearY = ly; dist = dR; }
+        else if (m === dT) { nearX = lx; nearY = y1; dist = dT; }
+        else               { nearX = lx; nearY = y2; dist = dB; }
+      } else {
+        // Curseur à l'extérieur : point le plus proche sur le périmètre
+        nearX = Math.max(x1, Math.min(lx, x2));
+        nearY = Math.max(y1, Math.min(ly, y2));
+        dist = Math.sqrt((lx - nearX) ** 2 + (ly - nearY) ** 2);
+      }
+    }
+
+    // Retransformer dans l'espace page (appliquer la rotation)
+    let pageX = nearX, pageY = nearY;
+    if (rad !== 0) {
+      const dx = nearX - cx, dy = nearY - cy;
+      pageX = cx + dx * Math.cos(rad) - dy * Math.sin(rad);
+      pageY = cy + dx * Math.sin(rad) + dy * Math.cos(rad);
+    }
+
+    if (dist < minDist) {
+      minDist = dist;
+      result = { x: pageX, y: pageY };
+    }
+  }
+
+  return result;
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 export default function CreationsAtelierV2({
   isOpen,
   onClose,
@@ -1403,6 +1481,10 @@ export default function CreationsAtelierV2({
 
   // ── Mode découpe par ligne ──────────────────────────────────────────────────────────
   const [isCutMode, setIsCutMode] = useState<boolean>(false);
+  // ── Tracé de ligne (cliquer-glisser) ──────────────────────────────────────
+  const [isLineDrawMode, setIsLineDrawMode] = useState(false);
+  const [lineDraft, setLineDraft] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const lineStartRef = useRef<{ x: number; y: number } | null>(null);
   const [cutStart, setCutStart] = useState<{ x: number; y: number } | null>(null);
   const [cutEnd, setCutEnd] = useState<{ x: number; y: number } | null>(null);
   /** true = l'utilisateur est en train de déplacer le point de contrôle d'une courbe de Bézier */
@@ -6217,6 +6299,12 @@ export default function CreationsAtelierV2({
                       setCutStart(null);
                       setCutEnd(null);
                     }}
+                    isLineDrawMode={isLineDrawMode}
+                    onToggleLineDrawMode={() => {
+                      setIsLineDrawMode(prev => !prev);
+                      lineStartRef.current = null;
+                      setLineDraft(null);
+                    }}
                     onAddOpening={(shape: CanvasElement['shape'], color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
@@ -7593,6 +7681,52 @@ export default function CreationsAtelierV2({
                     height: canvasDimensions.pageHeight,
                     border: '1px solid #cbd5e1',
                     overflow: 'visible',
+                    cursor: isLineDrawMode ? 'crosshair' : undefined,
+                  }}
+                  onMouseDownCapture={(e) => {
+                    if (!isLineDrawMode) return;
+                    e.preventDefault(); e.stopPropagation();
+                    const rect = pageRef.current!.getBoundingClientRect();
+                    const rawX = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
+                    const rawY = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
+                    const { x, y } = snapLineToBorder(rawX, rawY, canvasElements);
+                    lineStartRef.current = { x, y };
+                    setLineDraft({ x1: x, y1: y, x2: x, y2: y });
+                  }}
+                  onMouseMoveCapture={(e) => {
+                    if (!isLineDrawMode || !lineStartRef.current || e.buttons !== 1) return;
+                    e.stopPropagation();
+                    const rect = pageRef.current!.getBoundingClientRect();
+                    const rawX2 = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
+                    const rawY2 = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
+                    const { x: x2, y: y2 } = snapLineToBorder(rawX2, rawY2, canvasElements);
+                    setLineDraft({ x1: lineStartRef.current.x, y1: lineStartRef.current.y, x2, y2 });
+                  }}
+                  onMouseUpCapture={(e) => {
+                    if (!isLineDrawMode || !lineStartRef.current) return;
+                    e.stopPropagation(); e.preventDefault();
+                    const rect = pageRef.current!.getBoundingClientRect();
+                    const rawX2 = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
+                    const rawY2 = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
+                    const { x: x2, y: y2 } = snapLineToBorder(rawX2, rawY2, canvasElements);
+                    const { x: x1, y: y1 } = lineStartRef.current;
+                    if (Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) > 0.1) {
+                      openingCounterRef.current += 1;
+                      const newLine: CanvasElement = {
+                        id: `line-${Date.now()}`,
+                        type: 'shape', shape: 'line',
+                        x: x1, y: y1, width: x2, height: y2,
+                        rotation: 0, zIndex: canvasElements.length + 10, opacity: 1,
+                        openingIndex: openingCounterRef.current,
+                        name: language === 'fr' ? `Ligne ${openingCounterRef.current}` : `Line ${openingCounterRef.current}`,
+                        openingColor: '#000000', strokeWidth: 2,
+                      };
+                      setCanvasElements(prev => [...prev, newLine]);
+                      setSelectedElementId(newLine.id);
+                    }
+                    lineStartRef.current = null;
+                    setLineDraft(null);
+                    setIsLineDrawMode(false);
                   }}
                   onClick={(e) => {
                     // Désélectionner si on clique dans le vide (pas sur un élément canvas)
@@ -7801,128 +7935,9 @@ export default function CreationsAtelierV2({
                         );
                       })()
                     ) : null}
-                    {/* Rendu spécial pour shape='line' : SVG absolu couvrant toute la page */}
+                    {/* Rendu spécial pour shape='line' : rendu hors du conteneur clippé (voir plus bas) */}
                     {/* pelemele-paper et fond-passe-partout : rendus via leur SVG propre — pas de div */}
-                    {element.type === 'shape' && element.shape === 'line' ? (
-                      <svg
-                        key={element.id}
-                        data-canvas-element="true"
-                        className="absolute inset-0"
-                        style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: element.zIndex, opacity: element.opacity, pointerEvents: 'none' }}
-                      >
-                        {/* Calcul des coordonnées pixel pour le rendu */}
-                        {(() => {
-                          const x1px = element.x * pxPerCm;
-                          const y1px = element.y * pxPerCm;
-                          const x2px = element.width * pxPerCm;
-                          const y2px = element.height * pxPerCm;
-                          const lineColor = element.openingColor && element.openingColor !== 'transparent' ? element.openingColor : '#1a1a1a';
-                          const lw = isSelected ? 3 : 2;
-                          // Parser le customPath si présent (format : "M x1 y1 Q cx cy x2 y2" en cm)
-                          let ctrlXpx: number | null = null;
-                          let ctrlYpx: number | null = null;
-                          let svgPath: string | null = null;
-                          if (element.customPath) {
-                            const m = element.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
-                            if (m) {
-                              const qx1 = parseFloat(m[1]) * pxPerCm;
-                              const qy1 = parseFloat(m[2]) * pxPerCm;
-                              ctrlXpx = parseFloat(m[3]) * pxPerCm;
-                              ctrlYpx = parseFloat(m[4]) * pxPerCm;
-                              const qx2 = parseFloat(m[5]) * pxPerCm;
-                              const qy2 = parseFloat(m[6]) * pxPerCm;
-                              svgPath = `M ${qx1} ${qy1} Q ${ctrlXpx} ${ctrlYpx} ${qx2} ${qy2}`;
-                            }
-                          }
-                          const handleDown = (e: React.MouseEvent) => {
-                            handleMouseDown(e, element.id);
-                          };
-                          return (
-                            <>
-                              {/* Halo blanc pour lisibilité */}
-                              {svgPath ? (
-                                <path d={svgPath} stroke="white" strokeWidth={8} strokeLinecap="round" fill="none" opacity={0.5} style={{ pointerEvents: 'none' }} />
-                              ) : (
-                                <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke="white" strokeWidth={8} strokeLinecap="round" opacity={0.5} style={{ pointerEvents: 'none' }} />
-                              )}
-                              {/* Trait principal (visuel, sans événements souris) */}
-                              {svgPath ? (
-                                <path d={svgPath} stroke={lineColor} strokeWidth={lw} strokeLinecap="round" fill="none" style={{ pointerEvents: 'none' }} />
-                              ) : (
-                                <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke={lineColor} strokeWidth={lw} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
-                              )}
-                              {/* Zone de clic élargie (hit area transparente 16px) — facilite la sélection individuelle */}
-                              {svgPath ? (
-                                <path
-                                  d={svgPath}
-                                  stroke="transparent" strokeWidth={20} strokeLinecap="round" fill="none"
-                                  style={{ pointerEvents: 'stroke', cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                                  onMouseDown={handleDown}
-                                  onClick={(e) => { e.stopPropagation(); }}
-                                />
-                              ) : (
-                                <line
-                                  x1={x1px} y1={y1px} x2={x2px} y2={y2px}
-                                  stroke="transparent" strokeWidth={20} strokeLinecap="round"
-                                  style={{ pointerEvents: 'stroke', cursor: element.locked ? 'not-allowed' : 'pointer' }}
-                                  onMouseDown={handleDown}
-                                  onClick={(e) => { e.stopPropagation(); }}
-                                />
-                              )}
-                              {/* Contour de sélection indigo */}
-                              {isSelected && (
-                                svgPath ? (
-                                  <path d={svgPath} stroke="#6366f1" strokeWidth={5} strokeLinecap="round" fill="none" opacity={0.35} />
-                                ) : (
-                                  <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke="#6366f1" strokeWidth={5} strokeLinecap="round" opacity={0.35} />
-                                )
-                              )}
-                              {/* Poignée verte du point de contrôle (courbe uniquement, si sélectionné) */}
-                              {isSelected && svgPath && ctrlXpx !== null && ctrlYpx !== null && (
-                                <>
-                                  {/* Ligne de guidage en pointillés du point de contrôle aux extrémités */}
-                                  <line x1={x1px} y1={y1px} x2={ctrlXpx} y2={ctrlYpx} stroke="#22c55e" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
-                                  <line x1={x2px} y1={y2px} x2={ctrlXpx} y2={ctrlYpx} stroke="#22c55e" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
-                                  {/* Poignée draggable */}
-                                  <circle
-                                    cx={ctrlXpx} cy={ctrlYpx} r={7}
-                                    fill="#22c55e" stroke="white" strokeWidth={2}
-                                    style={{ cursor: 'move', pointerEvents: 'all' }}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                      if (element.locked) return;
-                                      draggingCtrlElementIdRef.current = element.id;
-                                      setIsDraggingCtrl(true);
-                                      setDragStart({ x: e.clientX, y: e.clientY });
-                                    }}
-                                  />
-                                </>
-                              )}
-                            </>
-                          );
-                        })()}
-                        {/* Poignées aux extrémités (seulement si sélectionné et non groupé) */}
-                        {isSelected && (
-                          <>
-                            {/* Extrémité gauche (point de départ) */}
-                            <circle
-                              cx={element.x * pxPerCm} cy={element.y * pxPerCm} r={6}
-                              fill="#a855f7" stroke="white" strokeWidth={2}
-                              style={{ cursor: 'nw-resize', pointerEvents: 'all' }}
-                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'nw'); }}
-                            />
-                            {/* Extrémité droite (point d'arrivée) */}
-                            <circle
-                              cx={element.width * pxPerCm} cy={element.height * pxPerCm} r={6}
-                              fill="#a855f7" stroke="white" strokeWidth={2}
-                              style={{ cursor: 'ne-resize', pointerEvents: 'all' }}
-                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'ne'); }}
-                            />
-
-                          </>
-                        )}
-                      </svg>
-                    ) : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
+                    {(element.type === 'shape' && element.shape === 'line') ? null : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
@@ -8867,6 +8882,129 @@ export default function CreationsAtelierV2({
                 
 
                 </div> {/* fin conteneur clippé overflow:hidden */}
+
+{/* Lignes tracées — rendues hors du conteneur clippé pour ne pas être rognées aux bords */}
+                {canvasElements.filter(el => el.type === 'shape' && el.shape === 'line').map((element) => {
+                  const pxPerCm = canvasDimensions.pxPerCm;
+                  const isSelected = selectedElementId === element.id;
+                  const isInMultiSelection = selectedElementIds.has(element.id);
+                  const x1px = element.x * pxPerCm;
+                  const y1px = element.y * pxPerCm;
+                  const x2px = element.width * pxPerCm;
+                  const y2px = element.height * pxPerCm;
+                  const lineColor = element.openingColor && element.openingColor !== 'transparent' ? element.openingColor : '#1a1a1a';
+                  const lw = isSelected ? 3 : 2;
+                  let ctrlXpx: number | null = null;
+                  let ctrlYpx: number | null = null;
+                  let svgPath: string | null = null;
+                  if (element.customPath) {
+                    const m = element.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
+                    if (m) {
+                      const qx1 = parseFloat(m[1]) * pxPerCm;
+                      const qy1 = parseFloat(m[2]) * pxPerCm;
+                      ctrlXpx = parseFloat(m[3]) * pxPerCm;
+                      ctrlYpx = parseFloat(m[4]) * pxPerCm;
+                      const qx2 = parseFloat(m[5]) * pxPerCm;
+                      const qy2 = parseFloat(m[6]) * pxPerCm;
+                      svgPath = `M ${qx1} ${qy1} Q ${ctrlXpx} ${ctrlYpx} ${qx2} ${qy2}`;
+                    }
+                  }
+                  const handleDown = (e: React.MouseEvent) => { handleMouseDown(e, element.id); };
+                  return (
+                    <svg
+                      key={element.id}
+                      data-canvas-element="true"
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: element.zIndex, opacity: element.opacity }}
+                    >
+                      {/* Halo blanc */}
+                      {svgPath ? (
+                        <path d={svgPath} stroke="white" strokeWidth={8} strokeLinecap="round" fill="none" opacity={0.5} style={{ pointerEvents: 'none' }} />
+                      ) : (
+                        <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke="white" strokeWidth={8} strokeLinecap="round" opacity={0.5} style={{ pointerEvents: 'none' }} />
+                      )}
+                      {/* Trait principal */}
+                      {svgPath ? (
+                        <path d={svgPath} stroke={lineColor} strokeWidth={lw} strokeLinecap="round" fill="none" style={{ pointerEvents: 'none' }} />
+                      ) : (
+                        <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke={lineColor} strokeWidth={lw} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                      )}
+                      {/* Zone de clic élargie */}
+                      {svgPath ? (
+                        <path
+                          d={svgPath}
+                          stroke="transparent" strokeWidth={20} strokeLinecap="round" fill="none"
+                          style={{ pointerEvents: 'stroke', cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                          onMouseDown={handleDown}
+                          onClick={(e) => { e.stopPropagation(); }}
+                        />
+                      ) : (
+                        <line
+                          x1={x1px} y1={y1px} x2={x2px} y2={y2px}
+                          stroke="transparent" strokeWidth={20} strokeLinecap="round"
+                          style={{ pointerEvents: 'stroke', cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                          onMouseDown={handleDown}
+                          onClick={(e) => { e.stopPropagation(); }}
+                        />
+                      )}
+                      {/* Contour de sélection */}
+                      {isSelected && (
+                        svgPath ? (
+                          <path d={svgPath} stroke="#6366f1" strokeWidth={5} strokeLinecap="round" fill="none" opacity={0.35} />
+                        ) : (
+                          <line x1={x1px} y1={y1px} x2={x2px} y2={y2px} stroke="#6366f1" strokeWidth={5} strokeLinecap="round" opacity={0.35} />
+                        )
+                      )}
+                      {/* Point de contrôle (courbe) */}
+                      {isSelected && svgPath && ctrlXpx !== null && ctrlYpx !== null && (
+                        <>
+                          <line x1={x1px} y1={y1px} x2={ctrlXpx} y2={ctrlYpx} stroke="#22c55e" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
+                          <line x1={x2px} y1={y2px} x2={ctrlXpx} y2={ctrlYpx} stroke="#22c55e" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
+                          <circle
+                            cx={ctrlXpx} cy={ctrlYpx} r={7}
+                            fill="#22c55e" stroke="white" strokeWidth={2}
+                            style={{ cursor: 'move', pointerEvents: 'all' }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              if (element.locked) return;
+                              draggingCtrlElementIdRef.current = element.id;
+                              setIsDraggingCtrl(true);
+                              setDragStart({ x: e.clientX, y: e.clientY });
+                            }}
+                          />
+                        </>
+                      )}
+                      {/* Poignées aux extrémités */}
+                      {isSelected && (
+                        <>
+                          <circle
+                            cx={element.x * pxPerCm} cy={element.y * pxPerCm} r={6}
+                            fill="#a855f7" stroke="white" strokeWidth={2}
+                            style={{ cursor: 'nw-resize', pointerEvents: 'all' }}
+                            onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'nw'); }}
+                          />
+                          <circle
+                            cx={element.width * pxPerCm} cy={element.height * pxPerCm} r={6}
+                            fill="#a855f7" stroke="white" strokeWidth={2}
+                            style={{ cursor: 'ne-resize', pointerEvents: 'all' }}
+                            onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'ne'); }}
+                          />
+                        </>
+                      )}
+                    </svg>
+                  );
+                })}
+
+{/* Preview ligne en cours de tracé */}
+                {lineDraft && (
+                  <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: 9999 }}>
+                    <line
+                      x1={lineDraft.x1 * canvasDimensions.pxPerCm} y1={lineDraft.y1 * canvasDimensions.pxPerCm}
+                      x2={lineDraft.x2 * canvasDimensions.pxPerCm} y2={lineDraft.y2 * canvasDimensions.pxPerCm}
+                      stroke="#f97316" strokeWidth="2" strokeDasharray="6 3" strokeLinecap="round"
+                    />
+                  </svg>
+                )}
 
 
                 {/* Croix de repérage d'imprimerie (crop marks) -- positionnées dans la zone grise, hors de la page blanche */}
