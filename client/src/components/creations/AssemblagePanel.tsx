@@ -54,7 +54,7 @@ export interface CanvasFormat {
 }
 
 /** Forme d'ouverture d'un passe-partout */
-export type PassePartoutShape = "rect" | "square" | "round" | "oval" | "arch" | "puzzle" | "heart" | "star" | "diamond" | "hexagon" | "line";
+export type PassePartoutShape = "rect" | "square" | "round" | "oval" | "arch" | "puzzle" | "heart" | "star" | "diamond" | "hexagon";
 
 /** Données d'un passe-partout à ajouter au canvas */
 export interface PassePartoutData {
@@ -120,6 +120,8 @@ export interface AssemblagePanelProps {
   // --- Nouvelle génération : découpes interactives ---
   /** Ajoute une découpe interactive sur le canvas avec une couleur d'ouverture */
   onAddOpening?: (shape: 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'puzzle' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line', color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => void;
+  /** Met à jour le rayon d'arrondi d'une forme rect/carré déjà posée */
+  onUpdateCornerRadius?: (id: string, radiusMm: number, concave: boolean) => void;
   /** Valide la découpe en cours de positionnement */
   onValidateOpening?: () => void;
   /** Supprime une découpe par son ID */
@@ -229,26 +231,6 @@ export interface AssemblagePanelProps {
   isCutMode?: boolean;
   /** Bascule le mode découpe par ligne */
   onToggleCutMode?: () => void;
-  /** true = le mode tracé libre de ligne est actif (cliquer-glisser sur le canvas) */
-  isLineDrawMode?: boolean;
-  /** Active/désactive le mode tracé libre de ligne */
-  onToggleLineDrawMode?: () => void;
-  /** true = une forme 'line' est sélectionnée sur le canvas */
-  lineSelected?: boolean;
-  /** true = la ligne sélectionnée est actuellement arrondie (courbe de Bézier) */
-  lineIsRounded?: boolean;
-  /** Bascule arrondi/droit sur la ligne sélectionnée */
-  onRoundLine?: () => void;
-  /** Nombre de segments tracés dans la chaîne en cours (0 = aucun) */
-  lineChainCount?: number;
-  /** Couleur CSS du prochain segment de ligne à tracer */
-  lineColor?: string;
-  /** Callback quand l'utilisateur change la couleur de ligne */
-  onLineColorChange?: (color: string) => void;
-  /** Épaisseur du trait de ligne en px (1–5) */
-  lineStrokeWidth?: number;
-  /** Callback quand l'utilisateur change l'épaisseur */
-  onLineStrokeWidthChange?: (width: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +268,6 @@ const SHAPES: { id: PassePartoutShape; labelFr: string; labelEn: string }[] = [
   { id: "star",    labelFr: "Étoile",    labelEn: "Star"     },
   { id: "diamond", labelFr: "Losange",   labelEn: "Diamond"  },
   { id: "hexagon", labelFr: "Hexagone",  labelEn: "Hexagon"  },
-  { id: "line",    labelFr: "Ligne",      labelEn: "Line"      },
 ];
 
 // ---------------------------------------------------------------------------
@@ -458,17 +439,7 @@ function PassePartoutSection({
   onStraightenSegment,
   isCutMode,
   onToggleCutMode,
-  isLineDrawMode,
-  onToggleLineDrawMode,
-  lineSelected,
-  lineIsRounded,
-  onRoundLine,
-  lineChainCount = 0,
-  lineColor = '#000000',
-  onLineColorChange,
-  lineStrokeWidth = 0.5,
-  onLineStrokeWidthChange,
-}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGetCurrentShapes" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode" | "lineSelected" | "lineIsRounded" | "onRoundLine" | "lineChainCount" | "lineColor" | "onLineColorChange" | "lineStrokeWidth" | "onLineStrokeWidthChange">) {
+}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGetCurrentShapes" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode">) {
   const { language } = useLanguage();
 
   // --- Section active : accordéon exclusif ---
@@ -480,13 +451,6 @@ function PassePartoutSection({
     // Si on clique sur une autre section → l'ouvrir directement (sans passer par null)
     setActiveSection((prev) => (prev === section ? null : section));
   };
-  // Ouvrir automatiquement la section B quand une ligne est sélectionnée
-  // (pour que les boutons Arrondir et Éditer les segments soient visibles)
-  useEffect(() => {
-    if (lineSelected) {
-      setActiveSection("shape");
-    }
-  }, [lineSelected]);
 
   // --- Forme & dimensions ---
   const [shape, setShape] = useState<PassePartoutShape>("rect");
@@ -891,21 +855,13 @@ function PassePartoutSection({
               {SHAPES.map((s) => (
                 <button
                   key={s.id}
-                  className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                    s.id === 'line' && isLineDrawMode
-                      ? 'border-orange-400 bg-orange-50 text-orange-700'
-                      : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-400'
-                  }`}
+                  className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
                   onClick={() => {
                     setShape(s.id);
-                    if (s.id === 'line') {
-                      // La ligne utilise un mode tracé libre (cliquer-glisser sur le canvas)
-                      onToggleLineDrawMode?.();
-                    } else if (onAddOpening) {
-                      // Garantir une couleur opaque, jamais transparent
+                    if (onAddOpening) {
                       const safeColor = openingColor && openingColor !== 'transparent' ? openingColor : '#ffffff';
                       onAddOpening(
-                        s.id as 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'heart' | 'star' | 'diamond' | 'hexagon' | 'line',
+                        s.id as 'rect' | 'square' | 'round' | 'oval' | 'arch' | 'heart' | 'star' | 'diamond' | 'hexagon',
                         safeColor,
                         { starBranches, heartDepth }
                       );
@@ -938,68 +894,11 @@ function PassePartoutSection({
                       }
                       return <path d={hpts.join(' ') + ' Z'} stroke="currentColor" strokeWidth="2" fill="none" />;
                     })()}
-                    {s.id === 'line' && <line x1="4" y1="16" x2="28" y2="16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />}
                   </svg>
                   <span>{fr ? s.labelFr : s.labelEn}</span>
                 </button>
               ))}
             </div>
-            {/* ── Contrôles outil Ligne : couleur, épaisseur, indicateur segments ────────── */}
-            {isLineDrawMode && (
-              <div className="mt-3 space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                {/* Indicateur du nombre de segments dans la chaîne */}
-                {lineChainCount > 0 && (
-                  <div className="flex items-center justify-between text-xs text-orange-700 font-medium">
-                    <span className="flex items-center gap-1">
-                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5">
-                        <polyline points="2,8 6,4 10,12 14,8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      {fr ? 'Chaîne en cours' : 'Chain in progress'}
-                    </span>
-                    <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {lineChainCount} {fr ? (lineChainCount > 1 ? 'segments' : 'segment') : (lineChainCount > 1 ? 'segments' : 'segment')}
-                    </span>
-                  </div>
-                )}
-                {/* Sélecteur de couleur */}
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs text-orange-700 font-medium">{fr ? 'Couleur' : 'Color'}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={lineColor}
-                      onChange={e => onLineColorChange?.(e.target.value)}
-                      className="w-8 h-8 rounded cursor-pointer border border-orange-300 p-0.5 bg-white"
-                      title={fr ? 'Couleur de la ligne' : 'Line color'}
-                    />
-                    <span className="text-xs text-orange-600 font-mono">{lineColor}</span>
-                  </div>
-                </div>
-                {/* Slider d'épaisseur */}
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs text-orange-700 font-medium">{fr ? 'Épaisseur' : 'Width'}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={5}
-                      step={0.5}
-                      value={lineStrokeWidth}
-                      onChange={e => onLineStrokeWidthChange?.(Number(e.target.value))}
-                      className="w-24 accent-orange-500"
-                      title={fr ? `Épaisseur : ${lineStrokeWidth} px` : `Width: ${lineStrokeWidth} px`}
-                    />
-                    <span className="text-xs text-orange-600 font-mono w-8 text-right">{lineStrokeWidth} px</span>
-                  </div>
-                </div>
-                <p className="text-xs text-orange-500 italic">
-                  {fr
-                    ? 'Cliquer-glisser sur le canvas pour tracer. Échap pour annuler.'
-                    : 'Click-drag on canvas to draw. Esc to cancel.'}
-                </p>
-              </div>
-            )}
-            {/* Bouton "Arrondir la ligne" supprimé — doublon avec le menu flottant sur le canvas */}
 
           </div>
         )}
@@ -2026,16 +1925,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       onStraightenSegment={props.onStraightenSegment}
                       isCutMode={props.isCutMode}
                       onToggleCutMode={props.onToggleCutMode}
-                      isLineDrawMode={props.isLineDrawMode}
-                      onToggleLineDrawMode={props.onToggleLineDrawMode}
-                      lineSelected={props.lineSelected}
-                      lineIsRounded={props.lineIsRounded}
-                      onRoundLine={props.onRoundLine}
-                      lineChainCount={props.lineChainCount}
-                      lineColor={props.lineColor}
-                      onLineColorChange={props.onLineColorChange}
-                      lineStrokeWidth={props.lineStrokeWidth}
-                      onLineStrokeWidthChange={props.onLineStrokeWidthChange}
                     />
                   </>
                 )}
@@ -2078,30 +1967,18 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         {SHAPES.filter(s => s.id !== 'puzzle').map((s) => (
                           <button
                             key={s.id}
-                            className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
-                              s.id === 'line' && props.isLineDrawMode
-                                ? 'border-orange-400 bg-orange-50 text-orange-700'
-                                : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-400'
-                            }`}
+                            className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
                             onClick={() => {
-                              if (s.id === 'line') {
-                                props.onToggleLineDrawMode?.();
-                              } else {
-                                const isRoundable = s.id === 'rect' || s.id === 'square';
-                                const cr = isRoundable && cornerRound ? cornerRadiusMm : undefined;
-                                props.onAddOpening?.(s.id, 'transparent', cr !== undefined
-                                  ? { cornerRadius: cr, cornerConcave: cornerType === 'concave' }
-                                  : undefined);
-                              }
+                              const isRoundable = s.id === 'rect' || s.id === 'square';
+                              const cr = isRoundable && cornerRound ? cornerRadiusMm : undefined;
+                              props.onAddOpening?.(s.id, 'transparent', cr !== undefined
+                                ? { cornerRadius: cr, cornerConcave: cornerType === 'concave' }
+                                : undefined);
                             }}
                           >
                             {s.id === 'arch' ? (
                               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
                                 <path d="M3 21 L3 12 Q3 3 12 3 Q21 3 21 12 L21 21 Z" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                              </svg>
-                            ) : s.id === 'line' ? (
-                              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-                                <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                               </svg>
                             ) : (
                               <span className="text-base leading-none">{
@@ -2151,18 +2028,30 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                                 {language === "fr" ? `Rayon : ${cornerRadiusMm}mm` : `Radius: ${cornerRadiusMm}mm`}
                               </span>
                               <button
-                                onClick={() => setCornerRadiusMm(v => Math.max(1, v - 1))}
+                                onClick={() => {
+                                  const next = Math.max(1, cornerRadiusMm - 1);
+                                  setCornerRadiusMm(next);
+                                  if (props.selectedCanvasElementId) props.onUpdateCornerRadius?.(props.selectedCanvasElementId, next, cornerType === 'concave');
+                                }}
                                 className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
                               ><Minus className="w-3 h-3" /></button>
                               <input
                                 type="number"
                                 min={1} max={100} step={1}
                                 value={cornerRadiusMm}
-                                onChange={(e) => setCornerRadiusMm(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                                onChange={(e) => {
+                                  const next = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                                  setCornerRadiusMm(next);
+                                  if (props.selectedCanvasElementId) props.onUpdateCornerRadius?.(props.selectedCanvasElementId, next, cornerType === 'concave');
+                                }}
                                 className="w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center"
                               />
                               <button
-                                onClick={() => setCornerRadiusMm(v => Math.min(100, v + 1))}
+                                onClick={() => {
+                                  const next = Math.min(100, cornerRadiusMm + 1);
+                                  setCornerRadiusMm(next);
+                                  if (props.selectedCanvasElementId) props.onUpdateCornerRadius?.(props.selectedCanvasElementId, next, cornerType === 'concave');
+                                }}
                                 className="w-6 h-6 flex items-center justify-center border rounded text-gray-600 hover:bg-gray-100"
                               ><Plus className="w-3 h-3" /></button>
                             </div>
@@ -2170,36 +2059,6 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         )}
                       </div>
                     </div>
-                    {/* 4b. Contrôles outil Ligne */}
-                    {props.isLineDrawMode && (
-                      <div className="space-y-2 p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                        {props.lineChainCount !== undefined && props.lineChainCount > 0 && (
-                          <div className="flex items-center justify-between text-xs text-orange-700 font-medium">
-                            <span>{language === "fr" ? "Chaîne en cours" : "Chain in progress"}</span>
-                            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                              {props.lineChainCount} {language === "fr" ? (props.lineChainCount > 1 ? "segments" : "segment") : (props.lineChainCount > 1 ? "segments" : "segment")}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-orange-700 font-medium">{language === "fr" ? "Couleur" : "Color"}</span>
-                          <input type="color" value={props.lineColor ?? '#000000'} onChange={e => props.onLineColorChange?.(e.target.value)}
-                            className="w-8 h-8 rounded cursor-pointer border border-orange-300 p-0.5 bg-white" />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-orange-700 font-medium">{language === "fr" ? "Épaisseur" : "Width"}</span>
-                          <div className="flex items-center gap-2">
-                            <input type="range" min={0.5} max={5} step={0.5} value={props.lineStrokeWidth ?? 0.5}
-                              onChange={e => props.onLineStrokeWidthChange?.(Number(e.target.value))}
-                              className="w-24 accent-orange-500" />
-                            <span className="text-xs text-orange-600 w-8 text-right">{props.lineStrokeWidth} px</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-orange-500 italic">
-                          {language === "fr" ? "Cliquer-glisser sur le canvas pour tracer. Échap pour annuler." : "Click-drag on canvas to draw. Esc to cancel."}
-                        </p>
-                      </div>
-                    )}
 
                     {/* 4c. Incurver un côté */}
                     {props.segmentEditorActive && (

@@ -1405,33 +1405,10 @@ export default function CreationsAtelierV2({
   const [isCutMode, setIsCutMode] = useState<boolean>(false);
   const [cutStart, setCutStart] = useState<{ x: number; y: number } | null>(null);
   const [cutEnd, setCutEnd] = useState<{ x: number; y: number } | null>(null);
-  // ── Mode tracé libre de ligne ─────────────────────────────────────────────────────────────────────────────────────
-  /** true = l'utilisateur est en train de tracer une ligne (cliquer-glisser) */
-  const [isLineDrawMode, setIsLineDrawMode] = useState<boolean>(false);
   /** true = l'utilisateur est en train de déplacer le point de contrôle d'une courbe de Bézier */
   const [isDraggingCtrl, setIsDraggingCtrl] = useState<boolean>(false);
   /** ID de l'élément dont le point de contrôle est en cours de drag */
   const draggingCtrlElementIdRef = useRef<string | null>(null);
-  /** Point de départ du tracé en cours (coordonnées cm) */
-  const [lineDrawStart, setLineDrawStart] = useState<{ x: number; y: number } | null>(null);
-  /** Ref synchrone du point de départ — évite le problème de closure dans onMouseDown
-   * (le state React n'est pas encore mis à jour quand onMouseDown est appelé après onMouseUp) */
-  const lineDrawStartRef = useRef<{ x: number; y: number } | null>(null);
-  /** Point courant de la souris pendant le tracé (pour aperçu) */
-  const [lineDrawEnd, setLineDrawEnd] = useState<{ x: number; y: number } | null>(null);
-  /** Ref synchrone du point courant — évite le problème de closure dans onMouseUp */
-  const lineDrawEndRef = useRef<{ x: number; y: number } | null>(null);
-  /**
-   * Premier point de la chaîne de segments (pour le snap de fermeture).
-   * Conservé entre les segments successifs jusqu'à la fermeture ou l'annulation.
-   */
-  const [lineChainFirstPoint, setLineChainFirstPoint] = useState<{ x: number; y: number } | null>(null);
-  /** IDs des segments déjà tracés dans la chaîne courante (pour groupage éventuel) */
-  const lineChainSegmentIdsRef = useRef<string[]>([]);
-  /** Couleur du prochain segment de ligne à tracer (contrôlé par le panneau Assemblage) */
-  const [lineDrawColor, setLineDrawColor] = useState<string>('#000000');
-  /** Épaisseur du trait de ligne en px (1–5) */
-  const [lineDrawStrokeWidth, setLineDrawStrokeWidth] = useState<number>(0.5);
   /**
    * Active/désactive l'éditeur de segments selon la sélection courante.
    * Formes exclues : round, oval, heart, star, puzzle (courbes non-polygonales).
@@ -1474,14 +1451,6 @@ export default function CreationsAtelierV2({
    * À appeler juste avant de réinitialiser lineChainSegmentIdsRef.
    * Si la chaîne ne contient qu'un seul segment, aucun groupe n'est créé.
    */
-  const finalizeLineChain = useCallback(() => {
-    const ids = lineChainSegmentIdsRef.current;
-    if (ids.length < 2) return; // Pas de groupe pour un segment isolé
-    const chainGroupId = `line-chain-${Date.now()}`;
-    setCanvasElements(prev =>
-      prev.map(el => ids.includes(el.id) ? { ...el, groupId: chainGroupId } : el)
-    );
-  }, []);
 
   // Mémorisation des derniers paramètres du passe-partout appliqué (pour remplacement partiel)
   const lastPassePartoutParamsRef = useRef<PassePartoutData | null>(null);
@@ -1863,18 +1832,6 @@ export default function CreationsAtelierV2({
         if (isNodeEditMode) {
           setIsNodeEditMode(false);
           setSelectedSegmentIndex(null);
-          return;
-        }
-        if (isLineDrawMode) {
-          // Quitter le mode ligne et réinitialiser la chaîne
-          lineDrawStartRef.current = null;
-          lineDrawEndRef.current = null;
-          setIsLineDrawMode(false);
-          setLineDrawStart(null);
-          setLineDrawEnd(null);
-          setLineChainFirstPoint(null);
-          finalizeLineChain();
-          lineChainSegmentIdsRef.current = [];
           return;
         }
         if (selectedElementIds.size > 0) {
@@ -4598,9 +4555,6 @@ export default function CreationsAtelierV2({
   
   // Gestion du drag pour déplacer les éléments sur le canvas
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
-    // En mode tracé de ligne, laisser l'événement remonter jusqu'au canvas
-    // pour que le onMouseDown du canvas gère le clic (début d'un nouveau segment)
-    if (isLineDrawMode) return;
 
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
@@ -4705,8 +4659,7 @@ export default function CreationsAtelierV2({
       const dx = e.clientX - mdPos.x;
       const dy = e.clientY - mdPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      console.log('[MOVE] pending dist=%.1f isDraggingRef=%s dragPendingRef=%s id=%s',
-        dist, isDraggingRef.current, dragPendingRef.current, currentElementId);
+      console.log(`[MOVE] pending dist=${dist.toFixed(1)} isDraggingRef=${isDraggingRef.current} dragPendingRef=${dragPendingRef.current} id=${currentElementId}`);
       if (dist < DRAG_THRESHOLD) return; // seuil non atteint
       // Seuil atteint → activer le drag réel
       isDraggingRef.current = true;
@@ -4980,7 +4933,6 @@ export default function CreationsAtelierV2({
 
   // Démarrer la rotation libre
   const handleRotateStart = (e: React.MouseEvent, elementId: string) => {
-    if (isLineDrawMode) return;
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
     undoBatchStart();
@@ -5050,7 +5002,6 @@ export default function CreationsAtelierV2({
   
   // Gestion du redimensionnement
   const handleResizeStart = (e: React.MouseEvent, elementId: string, handle: string) => {
-    if (isLineDrawMode) return;
     const element = canvasElements.find(el => el.id === elementId);
     if (!element || element.locked) return;
     undoBatchStart();
@@ -6266,58 +6217,6 @@ export default function CreationsAtelierV2({
                       setCutStart(null);
                       setCutEnd(null);
                     }}
-                    isLineDrawMode={isLineDrawMode}
-                    onToggleLineDrawMode={() => {
-                      setIsLineDrawMode(prev => !prev);
-                      // Réinitialiser la ref synchrone EN PREMIER (avant le state)
-                      lineDrawStartRef.current = null;
-                      lineDrawEndRef.current = null;
-                      setLineDrawStart(null);
-                      setLineDrawEnd(null);
-                      // Réinitialiser la chaîne de segments en cours
-                      setLineChainFirstPoint(null);
-                      finalizeLineChain();
-                      lineChainSegmentIdsRef.current = [];
-                    }}
-                    lineSelected={!!selectedElementId && canvasElements.find(e => e.id === selectedElementId)?.shape === 'line'}
-                    lineIsRounded={!!selectedElementId && !!(canvasElements.find(e => e.id === selectedElementId)?.customPath)}
-                    lineChainCount={lineChainSegmentIdsRef.current.length}
-                    lineColor={lineDrawColor}
-                    onLineColorChange={setLineDrawColor}
-                    lineStrokeWidth={lineDrawStrokeWidth}
-                    onLineStrokeWidthChange={setLineDrawStrokeWidth}
-                    onRoundLine={() => {
-                      if (!selectedElementId) return;
-                      const el = canvasElements.find(e => e.id === selectedElementId);
-                      if (!el || el.shape !== 'line') return;
-                      if (el.customPath) {
-                        // Redresser : supprimer le customPath
-                        updateCanvasElement(selectedElementId, { customPath: undefined });
-                      } else {
-                        // Arrondir : transformer la ligne droite en courbe de Bézier quadratique
-                        // Nouveau modèle SVG : x=x1, y=y1, width=x2, height=y2
-                        const x1cm = el.x;     // point de départ X en cm
-                        const y1cm = el.y;     // point de départ Y en cm
-                        const x2cm = el.width; // point d'arrivée X en cm
-                        const y2cm = el.height; // point d'arrivée Y en cm
-                        // Milieu du segment
-                        const mx = (x1cm + x2cm) / 2;
-                        const my = (y1cm + y2cm) / 2;
-                        // Vecteur perpendiculaire (normalé)
-                        const dx = x2cm - x1cm;
-                        const dy = y2cm - y1cm;
-                        const len = Math.sqrt(dx * dx + dy * dy);
-                        const perpX = len > 0 ? -dy / len : 0;
-                        const perpY = len > 0 ?  dx / len : 0;
-                        // Point de contrôle à 30% de la longueur, perpendiculaire au milieu
-                        const offset = len * 0.3;
-                        const ctrlX = mx + perpX * offset;
-                        const ctrlY = my + perpY * offset;
-                        // Path SVG Q (quadratique) en coordonnées cm
-                        const newPath = `M ${x1cm} ${y1cm} Q ${ctrlX} ${ctrlY} ${x2cm} ${y2cm}`;
-                        updateCanvasElement(selectedElementId, { customPath: newPath });
-                      }
-                    }}
                     onAddOpening={(shape: CanvasElement['shape'], color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
                       const formatH = orientation === 'portrait' ? paperFormat.height : paperFormat.width;
@@ -6367,6 +6266,14 @@ export default function CreationsAtelierV2({
                     onDeleteOpening={(id: string) => {
                       setCanvasElements(prev => prev.filter(el => el.id !== id));
                       setSelectedElementId(null);
+                    }}
+                    onUpdateCornerRadius={(id: string, radiusMm: number, concave: boolean) => {
+                      console.log(`[ARRONDI] onUpdateCornerRadius appelé — id=${id} radiusMm=${radiusMm} concave=${concave}`);
+                      setCanvasElements(prev => prev.map(el => {
+                        if (el.id !== id) return el;
+                        const rCm = radiusMm / 10;
+                        return { ...el, customPath: buildRoundedCornerPath(el.x, el.y, el.width, el.height, rCm, concave) };
+                      }));
                     }}
                     onApplyColorToOpenings={(color: string, targetIds: string[]) => {
                       setCanvasElements(prev => prev.map(el =>
@@ -7420,7 +7327,7 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-cell' : isLassoing || isLineDrawMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-cell' : isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète
                   minWidth: canvasDimensions.workspaceWidth,
@@ -7437,33 +7344,6 @@ export default function CreationsAtelierV2({
                   });
                 }}
                 onMouseDown={(e) => {
-                  // Mode tracé libre de ligne : enregistrer le point de départ
-                  if (isLineDrawMode) {
-                    // Utiliser pageRef pour des coordonnées directement relatives à la page blanche
-                    // (plus robuste que canvasRef - pageOffsetX/Y qui peut dériver)
-                    const page = pageRef.current;
-                    if (!page) return;
-                    const rect = page.getBoundingClientRect();
-                    const pxX = e.clientX - rect.left;
-                    const pxY = e.clientY - rect.top;
-                    // Contraindre les coordonnées aux limites de la page blanche
-                    const cmX = Math.max(0, Math.min(pxX / canvasDimensions.pxPerCm, canvasDimensions.formatWidthCm));
-                    const cmY = Math.max(0, Math.min(pxY / canvasDimensions.pxPerCm, canvasDimensions.formatHeightCm));
-                    // En mode chaîné, lineDrawStartRef.current est déjà défini par onMouseUp du segment précédent.
-                    // Utiliser la ref (synchrone) plutôt que le state React (asynchrone) pour éviter le saut.
-                    if (!lineDrawStartRef.current) {
-                      // Premier clic : définir le point de départ
-                      lineDrawStartRef.current = { x: cmX, y: cmY };
-                      setLineDrawStart({ x: cmX, y: cmY });
-                    }
-                    // Initialiser lineDrawEnd au point de départ pour l'aperçu
-                    const startPt = lineDrawStartRef.current;
-                    setLineDrawEnd({ x: startPt.x, y: startPt.y });
-                    lineDrawEndRef.current = { x: startPt.x, y: startPt.y };
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
                   // Mode découpe : enregistrer le point de départ
                   if (isCutMode && selectedElementId) {
                     const canvas = canvasRef.current;
@@ -7493,23 +7373,6 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseMove={(e) => {
-                  // Mode tracé libre de ligne : mettre à jour le point courant
-                  // Utiliser la ref synchrone pour éviter que le batching React
-                  // ne bloque l'aperçu entre deux segments chaînés
-                  if (isLineDrawMode && lineDrawStartRef.current) {
-                    const page = pageRef.current;
-                    if (!page) return;
-                    const rect = page.getBoundingClientRect();
-                    const pxX = e.clientX - rect.left;
-                    const pxY = e.clientY - rect.top;
-                    const endPt = {
-                      x: Math.max(0, Math.min(pxX / canvasDimensions.pxPerCm, canvasDimensions.formatWidthCm)),
-                      y: Math.max(0, Math.min(pxY / canvasDimensions.pxPerCm, canvasDimensions.formatHeightCm)),
-                    };
-                    lineDrawEndRef.current = endPt;
-                    setLineDrawEnd(endPt);
-                    return;
-                  }
                   // Mode découpe : mettre à jour le point d'arrivée
                   if (isCutMode && cutStart && selectedElementId) {
                     const canvas = canvasRef.current;
@@ -7577,113 +7440,6 @@ export default function CreationsAtelierV2({
                     return;
                   }
                   // Mode tracé libre de ligne : créer l'élément ligne et chaîner les segments
-                  if (isLineDrawMode && lineDrawStartRef.current) {
-                    // Utiliser la ref synchrone pour le point de départ (garantit la cohérence
-                    // même si le state React n'a pas encore été mis à jour par le batching)
-                    const startPt = lineDrawStartRef.current;
-                    // Recalculer les coordonnées depuis l'événement (pas depuis la ref)
-                    // pour garantir le clamp même si la souris est sortie de la zone
-                    const page = pageRef.current;
-                    let finalEnd = lineDrawEndRef.current;
-                    if (page) {
-                      const rect = page.getBoundingClientRect();
-                      const pxX = e.clientX - rect.left;
-                      const pxY = e.clientY - rect.top;
-                      finalEnd = {
-                        x: Math.max(0, Math.min(pxX / canvasDimensions.pxPerCm, canvasDimensions.formatWidthCm)),
-                        y: Math.max(0, Math.min(pxY / canvasDimensions.pxPerCm, canvasDimensions.formatHeightCm)),
-                      };
-                    }
-                    if (finalEnd) {
-                      const dx = finalEnd.x - startPt.x;
-                      const dy = finalEnd.y - startPt.y;
-                      const length = Math.sqrt(dx * dx + dy * dy);
-                      if (length > 0.1) {
-                        // Déterminer si on doit snapper au premier point de la chaîne
-                        const SNAP_THRESHOLD_CM = 0.5; // 5 mm de tolérance
-                        const chainFirst = lineChainFirstPoint;
-                        const isClosing = chainFirst !== null && (
-                          Math.sqrt(
-                            Math.pow(finalEnd.x - chainFirst.x, 2) +
-                            Math.pow(finalEnd.y - chainFirst.y, 2)
-                          ) < SNAP_THRESHOLD_CM
-                        );
-                        // Si fermeture : snapper l'extrémité exactement sur le premier point
-                        const actualEnd = isClosing ? chainFirst! : finalEnd;
-                        const dxFinal = actualEnd.x - startPt.x;
-                        const dyFinal = actualEnd.y - startPt.y;
-                        const lengthFinal = Math.sqrt(dxFinal * dxFinal + dyFinal * dyFinal);
-                        if (lengthFinal > 0.05) {
-                          const angle = Math.atan2(dyFinal, dxFinal) * (180 / Math.PI);
-                          openingCounterRef.current += 1;
-                          const idx = openingCounterRef.current;
-                          // Nouveau modèle simplié pour les lignes :
-                          // x = x1 (point de départ en cm)
-                          // y = y1 (point de départ en cm)
-                          // width = x2 (point d'arrivée en cm)
-                          // height = y2 (point d'arrivée en cm)
-                          // rotation = 0 (inutilisé, le rendu SVG utilise x1/y1/x2/y2 directement)
-                          const newLine: CanvasElement = {
-                            id: `opening-${Date.now()}`,
-                            type: 'shape',
-                            shape: 'line',
-                            x: startPt.x,
-                            y: startPt.y,
-                            width: actualEnd.x,
-                            height: actualEnd.y,
-                            rotation: 0,
-                            zIndex: canvasElements.length + 10,
-                            opacity: 1,
-                            openingIndex: idx,
-                            name: language === 'fr' ? `Ligne ${idx}` : `Line ${idx}`,
-                            openingColor: lineDrawColor,
-                            strokeWidth: lineDrawStrokeWidth,
-                          };
-                          setCanvasElements(prev => [...prev, newLine]);
-                          lineChainSegmentIdsRef.current.push(newLine.id);
-                          setSelectedElementId(newLine.id);
-                          if (isClosing) {
-                            // Forme fermée : réinitialiser la chaîne et quitter le mode
-                            setLineChainFirstPoint(null);
-                            finalizeLineChain();
-                            lineChainSegmentIdsRef.current = [];
-                            lineDrawStartRef.current = null;
-                            setLineDrawStart(null);
-                            setLineDrawEnd(null);
-                            lineDrawEndRef.current = null;
-                            setIsLineDrawMode(false);
-                            toast.success(language === 'fr' ? 'Forme fermée !' : 'Shape closed!');
-                            return;
-                          }
-                          // Segment tracé, chaîne continue :
-                          // le prochain segment commence là où celui-ci se termine
-                          if (!chainFirst) {
-                            // Premier segment de la chaîne : mémoriser le point de départ
-                            setLineChainFirstPoint({ x: startPt.x, y: startPt.y });
-                          }
-                          // Préparer le prochain segment : départ = fin du segment actuel
-                          // Mettre à jour la ref EN PREMIER (synchrone) puis le state (asynchrone)
-                          lineDrawStartRef.current = { x: actualEnd.x, y: actualEnd.y };
-                          setLineDrawStart({ x: actualEnd.x, y: actualEnd.y });
-                          setLineDrawEnd(null);
-                          lineDrawEndRef.current = null;
-                          // Désactiver le mode tracé après chaque segment : l'utilisateur reclique sur Ligne pour continuer
-                          setIsLineDrawMode(false);
-                          return;
-                        }
-                      }
-                      // Segment trop court (clic sans glissement) : annuler
-                      lineDrawStartRef.current = null;
-                      setLineDrawStart(null);
-                      setLineDrawEnd(null);
-                      lineDrawEndRef.current = null;
-                      setLineChainFirstPoint(null);
-                      finalizeLineChain();
-                      lineChainSegmentIdsRef.current = [];
-                      setIsLineDrawMode(false);
-                      return;
-                    }
-                  }
                   // Mode découpe : effectuer la découpe
                   if (isCutMode && cutStart && cutEnd && selectedElementId) {
                     const el = canvasElements.find(e => e.id === selectedElementId);
@@ -7726,10 +7482,6 @@ export default function CreationsAtelierV2({
                   handleLassoEnd();
                 }}
                 onMouseLeave={() => {
-                  if (isLineDrawMode && lineDrawStartRef.current) {
-                    setLineDrawEnd(null);
-                    lineDrawEndRef.current = null;
-                  }
                   if (isCutMode) {
                     setCutStart(null);
                     setCutEnd(null);
@@ -7839,9 +7591,7 @@ export default function CreationsAtelierV2({
                     top: canvasDimensions.pageOffsetY,
                     width: canvasDimensions.pageWidth,
                     height: canvasDimensions.pageHeight,
-                    // Bordure légère pour délimiter la page
                     border: '1px solid #cbd5e1',
-                    // overflow:visible pour que les croix de repérage sortent de la page blanche
                     overflow: 'visible',
                   }}
                   onClick={(e) => {
@@ -8085,7 +7835,6 @@ export default function CreationsAtelierV2({
                             }
                           }
                           const handleDown = (e: React.MouseEvent) => {
-                            if (isLineDrawMode) return;
                             handleMouseDown(e, element.id);
                           };
                           return (
@@ -8129,7 +7878,7 @@ export default function CreationsAtelierV2({
                                 )
                               )}
                               {/* Poignée verte du point de contrôle (courbe uniquement, si sélectionné) */}
-                              {isSelected && !isLineDrawMode && svgPath && ctrlXpx !== null && ctrlYpx !== null && (
+                              {isSelected && svgPath && ctrlXpx !== null && ctrlYpx !== null && (
                                 <>
                                   {/* Ligne de guidage en pointillés du point de contrôle aux extrémités */}
                                   <line x1={x1px} y1={y1px} x2={ctrlXpx} y2={ctrlYpx} stroke="#22c55e" strokeWidth={1} strokeDasharray="4 3" opacity={0.6} />
@@ -8153,7 +7902,7 @@ export default function CreationsAtelierV2({
                           );
                         })()}
                         {/* Poignées aux extrémités (seulement si sélectionné et non groupé) */}
-                        {isSelected && !isLineDrawMode && (
+                        {isSelected && (
                           <>
                             {/* Extrémité gauche (point de départ) */}
                             <circle
@@ -9097,8 +8846,7 @@ export default function CreationsAtelierV2({
                                 </div>
                                 {/* Bouton OK — désélectionner le segment */}
                                 <button
-                                  className="flex items-center justify-center gap-1 px-1.5 py-0 text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 transition-colors"
-                                  style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
+                                  className="flex items-center justify-center gap-1 px-3 py-1.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors shadow"
                                   onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => { e.stopPropagation(); setSelectedSegmentIndex(null); }}
                                 >
@@ -9117,153 +8865,9 @@ export default function CreationsAtelierV2({
                   );
                 })}
                 
-                {/* Menu flottant HTML Arrondir/Supprimer pour les lignes sélectionnées */}
-                {canvasElements.filter(el => el.type === 'shape' && el.shape === 'line' && el.id === selectedElementId).map(el => {
-                  const { pxPerCm, pageOffsetX, pageOffsetY } = canvasDimensions;
-                  // Milieu du segment en coordonnées relatives à la page blanche
-                  const mx = (el.x + el.width) / 2 * pxPerCm;
-                  const my = (el.y + el.height) / 2 * pxPerCm;
-                  const isRounded = !!el.customPath;
-                  return (
-                    <div
-                      key={`line-menu-${el.id}`}
-                      data-canvas-element="true"
-                      className="absolute z-50 flex flex-col items-center gap-0.5"
-                      style={{
-                        left: mx - 70,
-                        top: my - 48,
-                        pointerEvents: 'all',
-                        whiteSpace: 'nowrap',
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Ligne du haut : Arrondir + Supprimer */}
-                      <div className="flex gap-1 items-center">
-                        {/* Bouton Arrondir / Redresser */}
-                        <button
-                          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
-                          style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isRounded) {
-                              updateCanvasElement(el.id, { customPath: undefined });
-                            } else {
-                              const x1cm = el.x;
-                              const y1cm = el.y;
-                              const x2cm = el.width;
-                              const y2cm = el.height;
-                              const mxCm = (x1cm + x2cm) / 2;
-                              const myCm = (y1cm + y2cm) / 2;
-                              const dx = x2cm - x1cm;
-                              const dy = y2cm - y1cm;
-                              const len = Math.sqrt(dx * dx + dy * dy);
-                              const perpX = len > 0 ? -dy / len : 0;
-                              const perpY = len > 0 ?  dx / len : 0;
-                              const offset = len * 0.3;
-                              const ctrlX = mxCm + perpX * offset;
-                              const ctrlY = myCm + perpY * offset;
-                              updateCanvasElement(el.id, { customPath: `M ${x1cm} ${y1cm} Q ${ctrlX} ${ctrlY} ${x2cm} ${y2cm}` });
-                            }
-                          }}
-                        >
-                          {isRounded ? '↔ Redresser' : '⌒ Arrondir'}
-                        </button>
-                        <span className="text-gray-400 text-[10px] mx-0.5">·</span>
-                        {/* Bouton Supprimer — rouge visible dès le départ */}
-                        <button
-                          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-red-500 hover:text-red-700 transition-colors"
-                          style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const idToDelete = el.id;
-                            setSelectedElementId(null);
-                            setCanvasElements(prev => prev.filter(cel => cel.id !== idToDelete));
-                          }}
-                        >
-                          ✕ Supprimer
-                        </button>
-                      </div>
-                      {/* Bouton OK centré — clore l'opération (désélectionner) */}
-                      <button
-                        className="flex items-center justify-center gap-1 px-1.5 py-0 text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 transition-colors"
-                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedElementId(null);
-                        }}
-                      >
-                        ✓ OK
-                      </button>
-                    </div>
-                  );
-                })}
 
                 </div> {/* fin conteneur clippé overflow:hidden */}
 
-                {/* Aperçu SVG de la ligne en cours de tracé (mode tracé libre) */}
-                {isLineDrawMode && lineDrawStartRef.current && lineDrawEnd && (() => {
-                  const { pxPerCm } = canvasDimensions;
-                  // Ce SVG est DANS la page blanche (pageRef), donc son (0,0) = coin supérieur
-                  // gauche de la page. Les coordonnées en cm sont déjà relatives à la page.
-                  // NE PAS ajouter pageOffsetX/Y ici.
-                  const startPt = lineDrawStartRef.current!;
-                  const x1 = startPt.x * pxPerCm;
-                  const y1 = startPt.y * pxPerCm;
-                  const x2 = lineDrawEnd.x * pxPerCm;
-                  const y2 = lineDrawEnd.y * pxPerCm;
-                  // Premier point de la chaîne (pour le snap de fermeture)
-                  const firstPx = lineChainFirstPoint ? lineChainFirstPoint.x * pxPerCm : null;
-                  const firstPy = lineChainFirstPoint ? lineChainFirstPoint.y * pxPerCm : null;
-                  // Détecter si le curseur est près du premier point (snap actif)
-                  const SNAP_PX = 0.5 * pxPerCm;
-                  const isSnapActive = lineChainFirstPoint !== null && (
-                    Math.sqrt(
-                      Math.pow(lineDrawEnd.x - lineChainFirstPoint.x, 2) +
-                      Math.pow(lineDrawEnd.y - lineChainFirstPoint.y, 2)
-                    ) < 0.5
-                  );
-                  return (
-                    <svg
-                      key="line-draw-preview"
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: 70 }}
-                    >
-                      {/* Segment en cours de tracé */}
-                      <line
-                        x1={x1} y1={y1}
-                        x2={isSnapActive && firstPx !== null ? firstPx : x2}
-                        y2={isSnapActive && firstPy !== null ? firstPy : y2}
-                        stroke={isSnapActive ? '#22c55e' : '#f97316'}
-                        strokeWidth="2"
-                        strokeDasharray="6 3"
-                        strokeLinecap="round"
-                      />
-                      {/* Point de départ du segment courant */}
-                      <circle cx={x1} cy={y1} r="4" fill="#f97316" opacity="0.8" />
-                      {/* Point d'arrivée courant */}
-                      <circle
-                        cx={isSnapActive && firstPx !== null ? firstPx : x2}
-                        cy={isSnapActive && firstPy !== null ? firstPy : y2}
-                        r="4" fill={isSnapActive ? '#22c55e' : '#f97316'} opacity="0.8"
-                      />
-                      {/* Cercle vert du premier point de la chaîne (cible de fermeture) */}
-                      {firstPx !== null && firstPy !== null && (
-                        <circle
-                          cx={firstPx} cy={firstPy}
-                          r={isSnapActive ? 10 : 7}
-                          fill="none"
-                          stroke="#22c55e"
-                          strokeWidth={isSnapActive ? 3 : 2}
-                          opacity="0.9"
-                        />
-                      )}
-                    </svg>
-                  );
-                })()}
 
                 {/* Croix de repérage d'imprimerie (crop marks) -- positionnées dans la zone grise, hors de la page blanche */}
                 {/* stickerCropMarks est un state séparé du parent, zéro couplage avec stickerOverlay. */}
@@ -9477,8 +9081,7 @@ export default function CreationsAtelierV2({
                   );
                 })()}
                 
-                {/* Message si canvas vide */}
-                
+
                 {/* SVG pour le détourage manuel point par point - positionné sur la PAGE */}
                 {isDetourageActive && manualTool === "polygon" && selectedElementId && (
                   <svg
