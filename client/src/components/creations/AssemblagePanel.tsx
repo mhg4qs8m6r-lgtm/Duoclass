@@ -231,10 +231,10 @@ export interface AssemblagePanelProps {
   isCutMode?: boolean;
   /** Bascule le mode découpe par ligne */
   onToggleCutMode?: () => void;
-  /** true = mode tracé de ligne actif */
-  isLineDrawMode?: boolean;
-  /** Bascule le mode tracé de ligne */
-  onToggleLineDrawMode?: () => void;
+  /** true = mode tracé de polygone libre actif */
+  isPolyDrawMode?: boolean;
+  /** Bascule le mode tracé de polygone libre */
+  onTogglePolyDrawMode?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ function PassePartoutSection({
   onStraightenSegment,
   isCutMode,
   onToggleCutMode,
-}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGetCurrentShapes" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isLineDrawMode" | "onToggleLineDrawMode">) {
+}: Pick<AssemblagePanelProps, "canvasFormat" | "onAddPassePartout" | "onReplacePassePartout" | "onReplaceColorOnly" | "onReplacePatternOnly" | "hasExistingPassePartout" | "onAddOpening" | "onValidateOpening" | "onDeleteOpening" | "onApplyColorToOpenings" | "onGenerateFromOpenings" | "canvasOpenings" | "activeOpeningId" | "selectedCanvasElementId" | "onApplyTemplate" | "onGetCurrentShapes" | "onGenerateFullPagePuzzle" | "onExportLaserSVG" | "onAddBackground" | "hasExistingBackground" | "onRemoveBackground" | "showFormatBorder" | "onShowFormatBorderChange" | "filets" | "onFiletsChange" | "segmentEditorActive" | "segmentsRounded" | "onRoundAllSegments" | "isNodeEditMode" | "onToggleNodeEditMode" | "selectedSegmentIndex" | "onRoundSegmentConcave" | "onRoundSegmentConvex" | "onDeleteSegment" | "onStraightenSegment" | "isCutMode" | "onToggleCutMode" | "isPolyDrawMode" | "onTogglePolyDrawMode">) {
   const { language } = useLanguage();
 
   // --- Section active : accordéon exclusif ---
@@ -1929,8 +1929,8 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       onStraightenSegment={props.onStraightenSegment}
                       isCutMode={props.isCutMode}
                       onToggleCutMode={props.onToggleCutMode}
-                      isLineDrawMode={props.isLineDrawMode}
-                      onToggleLineDrawMode={props.onToggleLineDrawMode}
+                      isPolyDrawMode={props.isPolyDrawMode}
+                      onTogglePolyDrawMode={props.onTogglePolyDrawMode}
                     />
                   </>
                 )}
@@ -2066,23 +2066,30 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                       </div>
                     </div>
 
-                    {/* 4b. Tracer une ligne */}
+                    {/* 4b. Tracer un polygone libre */}
                     <div className="space-y-1">
                       <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                        {language === "fr" ? "Ligne" : "Line"}
+                        {language === "fr" ? "Polygone libre" : "Free polygon"}
                       </p>
                       <button
                         className={`w-full py-2 rounded-lg border text-sm font-medium transition-all ${
-                          props.isLineDrawMode
+                          props.isPolyDrawMode
                             ? 'bg-orange-100 border-orange-400 text-orange-700'
                             : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                         }`}
-                        onClick={() => props.onToggleLineDrawMode?.()}
+                        onClick={() => props.onTogglePolyDrawMode?.()}
                       >
-                        {props.isLineDrawMode
+                        {props.isPolyDrawMode
                           ? (language === "fr" ? "✕ Annuler" : "✕ Cancel")
-                          : (language === "fr" ? "— Tracer une ligne" : "— Draw a line")}
+                          : (language === "fr" ? "⬟ Tracer un polygone" : "⬟ Draw a polygon")}
                       </button>
+                      {props.isPolyDrawMode && (
+                        <p className="text-[10px] text-orange-600 italic">
+                          {language === "fr"
+                            ? "Clic+glisser pour chaque segment. Cliquez près du 1er point pour fermer."
+                            : "Click+drag for each segment. Click near the 1st point to close."}
+                        </p>
+                      )}
                     </div>
 
                     {/* 4c. Incurver un côté */}

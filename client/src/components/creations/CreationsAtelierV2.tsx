@@ -85,7 +85,7 @@ interface CanvasElement {
   shadowOffsetX?: number;
   shadowOffsetY?: number;
   // Champs découpe interactive (type === "shape")
-  shape?: "rect" | "square" | "round" | "oval" | "arch" | "puzzle" | "heart" | "star" | "diamond" | "hexagon" | "line"; // Forme de l'ouverture
+  shape?: "rect" | "square" | "round" | "oval" | "arch" | "puzzle" | "heart" | "star" | "diamond" | "hexagon" | "line" | "polygon"; // Forme de l'ouverture
   openingColor?: string;     // Couleur de fond de cette découpe (ex. "#ffffff")
   validated?: boolean;       // true = découpe figée, false = en cours de positionnement
   openingIndex?: number;     // Numéro d'ordre de la découpe (1, 2, 3...)
@@ -117,6 +117,10 @@ interface CanvasElement {
    * Généré par l'éditeur de segments (incurvation / suppression de bords).
    */
   customPath?: string;
+  /** Points du polygone libre (coords cm absolues sur la page) */
+  points?: { x: number; y: number }[];
+  /** true = polygone fermé (dernier point rejoint le premier) */
+  polygonClosed?: boolean;
 
   // ── Pêle-mêle (type === "pelemele-paper") ─────────────────────────────────
   /** Trous découpés dans le papier */
@@ -591,6 +595,8 @@ function cutShapeByLine(
 function buildShapeSegments(el: {
   x: number; y: number; width: number; height: number;
   shape?: string; customPath?: string;
+  points?: { x: number; y: number }[];
+  polygonClosed?: boolean;
 }): Segment[] | null {
   const { x, y, width: w, height: h } = el;
   if (el.customPath) {
@@ -646,6 +652,18 @@ function buildShapeSegments(el: {
         { type: 'Q', x1: x + w, y1: y + h/2, x2: x,     y2: y + h/2, cx: x + w/2, cy: y },
         { type: 'L', x1: x,     y1: y + h/2, x2: x,     y2: y + h },
       ];
+    }
+    case 'polygon': {
+      if (!el.points || el.points.length < 2) return null;
+      const segs: Segment[] = [];
+      for (let i = 0; i < el.points.length - 1; i++) {
+        segs.push({ type: 'L', x1: el.points[i].x, y1: el.points[i].y, x2: el.points[i+1].x, y2: el.points[i+1].y });
+      }
+      if (el.polygonClosed && el.points.length >= 3) {
+        const last = el.points[el.points.length - 1];
+        segs.push({ type: 'L', x1: last.x, y1: last.y, x2: el.points[0].x, y2: el.points[0].y });
+      }
+      return segs;
     }
     default:
       return null;
@@ -1156,6 +1174,10 @@ export default function CreationsAtelierV2({
   const draggingElementIdRef = useRef<string | null>(null);
   // Ref synchrone pour savoir si l'élément draggé est une ligne SVG
   const draggingIsLineRef = useRef(false);
+  // Ref synchrone pour savoir si l'élément draggé est un polygone libre
+  const draggingIsPolyRef = useRef(false);
+  // Points initiaux du polygone au début du drag
+  const polyDragStartPointsRef = useRef<{ x: number; y: number }[]>([]);
   // Ref synchrone pour le customPath initial (lignes avec courbes)
   const draggingCustomPathRef = useRef<string | null>(null);
   // Ref synchrone pour elementStartSize (lignes SVG)
@@ -1481,10 +1503,20 @@ export default function CreationsAtelierV2({
 
   // ── Mode découpe par ligne ──────────────────────────────────────────────────────────
   const [isCutMode, setIsCutMode] = useState<boolean>(false);
-  // ── Tracé de ligne (cliquer-glisser) ──────────────────────────────────────
-  const [isLineDrawMode, setIsLineDrawMode] = useState(false);
-  const [lineDraft, setLineDraft] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const lineStartRef = useRef<{ x: number; y: number } | null>(null);
+  // ── Tracé de polygone libre ────────────────────────────────────────────────
+  const [isPolyDrawMode, setIsPolyDrawMode] = useState(false);
+  /** Points déjà posés (en cm sur la page) */
+  const [polyPoints, setPolyPoints] = useState<{ x: number; y: number }[]>([]);
+  /** Extrémité du segment en cours de drag (null = pas en train de draguer) */
+  const [polyDraftEnd, setPolyDraftEnd] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingPolyRef = useRef(false);
+  // ── Édition d'un polygone posé ─────────────────────────────────────────────
+  /** true = on est en train de déplacer un sommet du polygone */
+  const isDraggingVertexRef = useRef(false);
+  /** ID du polygone dont on déplace un sommet */
+  const draggingVertexElementIdRef = useRef<string | null>(null);
+  /** Index du sommet en cours de drag */
+  const draggingVertexIdxRef = useRef<number | null>(null);
   const [cutStart, setCutStart] = useState<{ x: number; y: number } | null>(null);
   const [cutEnd, setCutEnd] = useState<{ x: number; y: number } | null>(null);
   /** true = l'utilisateur est en train de déplacer le point de contrôle d'une courbe de Bézier */
@@ -4685,6 +4717,8 @@ export default function CreationsAtelierV2({
     elementStartPosRef.current = { x: element.x, y: element.y };
     elementStartSizeRef.current = { width: element.width, height: element.height };
     draggingIsLineRef.current = element.type === 'shape' && element.shape === 'line';
+    draggingIsPolyRef.current = element.type === 'shape' && element.shape === 'polygon';
+    polyDragStartPointsRef.current = (element.type === 'shape' && element.shape === 'polygon') ? (element.points || []) : [];
     draggingCustomPathRef.current = element.customPath || null;
 
     console.log('[CLICK] mouseDown elementId=%s isDraggingRef=%s dragPendingRef=%s selectedElementId=%s',
@@ -4706,6 +4740,24 @@ export default function CreationsAtelierV2({
   };
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // === Drag d'un sommet de polygone libre ===
+    if (isDraggingVertexRef.current && draggingVertexElementIdRef.current !== null && draggingVertexIdxRef.current !== null) {
+      const pageEl = pageRef.current;
+      if (!pageEl) return;
+      const rect = pageEl.getBoundingClientRect();
+      const pxPerCm = canvasDimensions.pxPerCm;
+      const nx = (e.clientX - rect.left) / pxPerCm;
+      const ny = (e.clientY - rect.top)  / pxPerCm;
+      const elId = draggingVertexElementIdRef.current;
+      const vIdx = draggingVertexIdxRef.current;
+      setCanvasElements(prev => prev.map(el => {
+        if (el.id !== elId || !el.points) return el;
+        const pts = [...el.points];
+        pts[vIdx] = { x: nx, y: ny };
+        return { ...el, points: pts };
+      }));
+      return;
+    }
     // === Drag du point de contrôle de la courbe de Bézier ===
     if (isDraggingCtrl && draggingCtrlElementIdRef.current && dragStartRef.current) {
       const pxPerCm = canvasDimensions.pxPerCm;
@@ -4789,7 +4841,13 @@ export default function CreationsAtelierV2({
     } else {
       // Déplacement simple (un seul élément) — tout via refs, pas de closure stale
       const startSize = elementStartSizeRef.current;
-      if (draggingIsLineRef.current && startSize) {
+      if (draggingIsPolyRef.current && polyDragStartPointsRef.current.length > 0) {
+        // Polygone libre : déplacer tous les points
+        setCanvasElements(prev => prev.map(el => el.id === currentElementId ? {
+          ...el,
+          points: polyDragStartPointsRef.current.map(p => ({ x: p.x + deltaXCm, y: p.y + deltaYCm })),
+        } : el));
+      } else if (draggingIsLineRef.current && startSize) {
         // Ligne SVG : x=x1, y=y1, width=x2, height=y2
         const updates: Partial<CanvasElement> = {
           x: currentElementStartPos.x + deltaXCm,
@@ -4883,12 +4941,19 @@ export default function CreationsAtelierV2({
     const intersecting = new Set<string>();
     canvasElements.forEach(el => {
       if (el.locked) return;
-      // Position de l'élément en pixels dans le workspace
-      const elLeft = pageOffX + el.x * pxPerCm;
-      const elTop = pageOffY + el.y * pxPerCm;
-      const elRight = elLeft + el.width * pxPerCm;
-      const elBottom = elTop + el.height * pxPerCm;
-      
+      let elLeft: number, elTop: number, elRight: number, elBottom: number;
+      if (el.type === 'shape' && el.shape === 'polygon' && el.points && el.points.length > 0) {
+        const pts = el.points;
+        elLeft  = pageOffX + Math.min(...pts.map(p => p.x)) * pxPerCm;
+        elTop   = pageOffY + Math.min(...pts.map(p => p.y)) * pxPerCm;
+        elRight = pageOffX + Math.max(...pts.map(p => p.x)) * pxPerCm;
+        elBottom= pageOffY + Math.max(...pts.map(p => p.y)) * pxPerCm;
+      } else {
+        elLeft   = pageOffX + el.x * pxPerCm;
+        elTop    = pageOffY + el.y * pxPerCm;
+        elRight  = elLeft + el.width * pxPerCm;
+        elBottom = elTop + el.height * pxPerCm;
+      }
       // Vérifier le chevauchement (intersection de rectangles)
       if (elLeft < lassoRight && elRight > lassoLeft && elTop < lassoBottom && elBottom > lassoTop) {
         intersecting.add(el.id);
@@ -4939,6 +5004,13 @@ export default function CreationsAtelierV2({
   const handleMouseUp = useCallback(() => {
     console.log('[UP] isDraggingRef=%s dragPendingRef=%s draggingElementId=%s',
       isDraggingRef.current, dragPendingRef.current, draggingElementIdRef.current);
+    // Fin du drag d'un sommet de polygone
+    if (isDraggingVertexRef.current) {
+      isDraggingVertexRef.current = false;
+      draggingVertexElementIdRef.current = null;
+      draggingVertexIdxRef.current = null;
+      return;
+    }
     // Fin du drag du point de contrôle de la courbe
     if (isDraggingCtrl) {
       undoBatchEnd();
@@ -4956,6 +5028,8 @@ export default function CreationsAtelierV2({
       mouseDownPosRef.current = null;
       draggingElementIdRef.current = null;
       draggingIsLineRef.current = false;
+      draggingIsPolyRef.current = false;
+      polyDragStartPointsRef.current = [];
       draggingCustomPathRef.current = null;
       elementStartSizeRef.current = null;
       dragStartRef.current = null;
@@ -5094,8 +5168,20 @@ export default function CreationsAtelierV2({
     setIsResizing(true);
     setResizeHandle(handle);
     setDragStart({ x: e.clientX, y: e.clientY });
-    setElementStartPos({ x: element.x, y: element.y });
-    setElementStartSize({ width: element.width, height: element.height });
+
+    if (element.shape === 'polygon' && element.points && element.points.length > 0) {
+      const pts = element.points;
+      const minX = Math.min(...pts.map(p => p.x));
+      const minY = Math.min(...pts.map(p => p.y));
+      const maxX = Math.max(...pts.map(p => p.x));
+      const maxY = Math.max(...pts.map(p => p.y));
+      setElementStartPos({ x: minX, y: minY });
+      setElementStartSize({ width: maxX - minX, height: maxY - minY });
+      polyDragStartPointsRef.current = pts;
+    } else {
+      setElementStartPos({ x: element.x, y: element.y });
+      setElementStartSize({ width: element.width, height: element.height });
+    }
 
     // Sauvegarder les dimensions de départ de tous les membres du groupe pour le resize groupé
     const grs = new Map<string, { x: number; y: number; width: number; height: number }>();
@@ -5224,8 +5310,26 @@ export default function CreationsAtelierV2({
       }
     }
 
-    // Si la ligne a un customPath (courbe), mettre à jour les coordonnées dans le path
+    // Polygone libre : rescaler tous les points proportionnellement
     const resizingEl = canvasElements.find(el => el.id === selectedElementId);
+    if (resizingEl?.shape === 'polygon' && polyDragStartPointsRef.current.length > 0) {
+      const oldW = elementStartSize.width;
+      const oldH = elementStartSize.height;
+      if (oldW > 0 && oldH > 0) {
+        const scaleX = Math.max(0.01, newWidth) / oldW;
+        const scaleY = Math.max(0.01, newHeight) / oldH;
+        updateCanvasElement(selectedElementId, {
+          points: polyDragStartPointsRef.current.map(p => ({
+            x: newX + (p.x - elementStartPos.x) * scaleX,
+            y: newY + (p.y - elementStartPos.y) * scaleY,
+          })),
+          customPath: undefined,
+        });
+      }
+      return;
+    }
+
+    // Si la ligne a un customPath (courbe), mettre à jour les coordonnées dans le path
     let customPathUpdate: string | undefined = undefined;
     if (resizingEl?.shape === 'line' && resizingEl.customPath && (resizeHandle === 'nw' || resizeHandle === 'ne')) {
       const m = resizingEl.customPath.match(/M\s*([\d.\-]+)\s+([\d.\-]+)\s+Q\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/);
@@ -6299,11 +6403,12 @@ export default function CreationsAtelierV2({
                       setCutStart(null);
                       setCutEnd(null);
                     }}
-                    isLineDrawMode={isLineDrawMode}
-                    onToggleLineDrawMode={() => {
-                      setIsLineDrawMode(prev => !prev);
-                      lineStartRef.current = null;
-                      setLineDraft(null);
+                    isPolyDrawMode={isPolyDrawMode}
+                    onTogglePolyDrawMode={() => {
+                      setIsPolyDrawMode(prev => !prev);
+                      setPolyPoints([]);
+                      setPolyDraftEnd(null);
+                      isDraggingPolyRef.current = false;
                     }}
                     onAddOpening={(shape: CanvasElement['shape'], color: string, extraParams?: { starBranches?: number; heartDepth?: number; cornerRadius?: number; cornerConcave?: boolean }) => {
                       const formatW = orientation === 'portrait' ? paperFormat.width : paperFormat.height;
@@ -7033,8 +7138,12 @@ export default function CreationsAtelierV2({
                       const my = (seg.y1 + seg.y2) / 2;
                       const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
                       const len = Math.sqrt(dx * dx + dy * dy);
-                      const cx = el.x + el.width / 2;
-                      const cy = el.y + el.height / 2;
+                      const cx = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                        ? el.points.reduce((s, p) => s + p.x, 0) / el.points.length
+                        : el.x + el.width / 2;
+                      const cy = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                        ? el.points.reduce((s, p) => s + p.y, 0) / el.points.length
+                        : el.y + el.height / 2;
                       const perpX = len > 0 ? -dy / len : 0;
                       const perpY = len > 0 ? dx / len : 0;
                       const toCenterX = cx - mx;
@@ -7058,8 +7167,12 @@ export default function CreationsAtelierV2({
                       const my = (seg.y1 + seg.y2) / 2;
                       const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
                       const len = Math.sqrt(dx * dx + dy * dy);
-                      const cx = el.x + el.width / 2;
-                      const cy = el.y + el.height / 2;
+                      const cx = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                        ? el.points.reduce((s, p) => s + p.x, 0) / el.points.length
+                        : el.x + el.width / 2;
+                      const cy = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                        ? el.points.reduce((s, p) => s + p.y, 0) / el.points.length
+                        : el.y + el.height / 2;
                       const perpX = len > 0 ? -dy / len : 0;
                       const perpY = len > 0 ? dx / len : 0;
                       const toCenterX = cx - mx;
@@ -7681,52 +7794,103 @@ export default function CreationsAtelierV2({
                     height: canvasDimensions.pageHeight,
                     border: '1px solid #cbd5e1',
                     overflow: 'visible',
-                    cursor: isLineDrawMode ? 'crosshair' : undefined,
+                    cursor: isPolyDrawMode ? 'crosshair' : undefined,
                   }}
                   onMouseDownCapture={(e) => {
-                    if (!isLineDrawMode) return;
+                    if (!isPolyDrawMode) return;
                     e.preventDefault(); e.stopPropagation();
                     const rect = pageRef.current!.getBoundingClientRect();
-                    const rawX = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
-                    const rawY = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
-                    const { x, y } = snapLineToBorder(rawX, rawY, canvasElements);
-                    lineStartRef.current = { x, y };
-                    setLineDraft({ x1: x, y1: y, x2: x, y2: y });
+                    const pxPerCm = canvasDimensions.pxPerCm;
+                    const px = (e.clientX - rect.left) / pxPerCm;
+                    const py = (e.clientY - rect.top)  / pxPerCm;
+
+                    if (polyPoints.length === 0) {
+                      // Premier clic : pose le premier point
+                      setPolyPoints([{ x: px, y: py }]);
+                      setPolyDraftEnd({ x: px, y: py });
+                      isDraggingPolyRef.current = true;
+                    } else {
+                      // Vérifier fermeture : proche du premier point ?
+                      const fp = polyPoints[0];
+                      const distPx = Math.sqrt((px - fp.x) ** 2 + (py - fp.y) ** 2) * pxPerCm;
+                      if (polyPoints.length >= 2 && distPx < 15) {
+                        // Fermer et sauvegarder le polygone
+                        openingCounterRef.current += 1;
+                        const newPoly: CanvasElement = {
+                          id: `polygon-${Date.now()}`,
+                          type: 'shape', shape: 'polygon',
+                          x: 0, y: 0, width: 0, height: 0,
+                          rotation: 0, zIndex: canvasElements.length + 10, opacity: 1,
+                          openingIndex: openingCounterRef.current,
+                          name: language === 'fr' ? `Polygone ${openingCounterRef.current}` : `Polygon ${openingCounterRef.current}`,
+                          openingColor: '#000000', strokeWidth: 2,
+                          points: polyPoints,
+                          polygonClosed: true,
+                        };
+                        setCanvasElements(prev => [...prev, newPoly]);
+                        setSelectedElementId(newPoly.id);
+                        setPolyPoints([]);
+                        setPolyDraftEnd(null);
+                        isDraggingPolyRef.current = false;
+                        setIsPolyDrawMode(false);
+                        return;
+                      }
+                      // Continuer depuis le dernier point (ignorer position du clic)
+                      isDraggingPolyRef.current = true;
+                      setPolyDraftEnd(polyPoints[polyPoints.length - 1]);
+                    }
                   }}
                   onMouseMoveCapture={(e) => {
-                    if (!isLineDrawMode || !lineStartRef.current || e.buttons !== 1) return;
+                    if (!isPolyDrawMode) return;
+                    if (!isDraggingPolyRef.current && e.buttons !== 1) return;
                     e.stopPropagation();
                     const rect = pageRef.current!.getBoundingClientRect();
-                    const rawX2 = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
-                    const rawY2 = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
-                    const { x: x2, y: y2 } = snapLineToBorder(rawX2, rawY2, canvasElements);
-                    setLineDraft({ x1: lineStartRef.current.x, y1: lineStartRef.current.y, x2, y2 });
+                    const pxPerCm = canvasDimensions.pxPerCm;
+                    setPolyDraftEnd({
+                      x: (e.clientX - rect.left) / pxPerCm,
+                      y: (e.clientY - rect.top)  / pxPerCm,
+                    });
                   }}
                   onMouseUpCapture={(e) => {
-                    if (!isLineDrawMode || !lineStartRef.current) return;
+                    if (!isPolyDrawMode || !isDraggingPolyRef.current) return;
                     e.stopPropagation(); e.preventDefault();
                     const rect = pageRef.current!.getBoundingClientRect();
-                    const rawX2 = (e.clientX - rect.left) / canvasDimensions.pxPerCm;
-                    const rawY2 = (e.clientY - rect.top)  / canvasDimensions.pxPerCm;
-                    const { x: x2, y: y2 } = snapLineToBorder(rawX2, rawY2, canvasElements);
-                    const { x: x1, y: y1 } = lineStartRef.current;
-                    if (Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) > 0.1) {
-                      openingCounterRef.current += 1;
-                      const newLine: CanvasElement = {
-                        id: `line-${Date.now()}`,
-                        type: 'shape', shape: 'line',
-                        x: x1, y: y1, width: x2, height: y2,
-                        rotation: 0, zIndex: canvasElements.length + 10, opacity: 1,
-                        openingIndex: openingCounterRef.current,
-                        name: language === 'fr' ? `Ligne ${openingCounterRef.current}` : `Line ${openingCounterRef.current}`,
-                        openingColor: '#000000', strokeWidth: 2,
-                      };
-                      setCanvasElements(prev => [...prev, newLine]);
-                      setSelectedElementId(newLine.id);
+                    const pxPerCm = canvasDimensions.pxPerCm;
+                    const ex = (e.clientX - rect.left) / pxPerCm;
+                    const ey = (e.clientY - rect.top)  / pxPerCm;
+                    const lastPt = polyPoints[polyPoints.length - 1];
+                    const dist = Math.sqrt((ex - lastPt.x) ** 2 + (ey - lastPt.y) ** 2);
+                    if (dist > 0.1) {
+                      // Vérifier fermeture au relâchement
+                      if (polyPoints.length >= 2) {
+                        const fp = polyPoints[0];
+                        const distToFirst = Math.sqrt((ex - fp.x) ** 2 + (ey - fp.y) ** 2) * pxPerCm;
+                        if (distToFirst < 15) {
+                          openingCounterRef.current += 1;
+                          const newPoly: CanvasElement = {
+                            id: `polygon-${Date.now()}`,
+                            type: 'shape', shape: 'polygon',
+                            x: 0, y: 0, width: 0, height: 0,
+                            rotation: 0, zIndex: canvasElements.length + 10, opacity: 1,
+                            openingIndex: openingCounterRef.current,
+                            name: language === 'fr' ? `Polygone ${openingCounterRef.current}` : `Polygon ${openingCounterRef.current}`,
+                            openingColor: '#000000', strokeWidth: 2,
+                            points: polyPoints,
+                            polygonClosed: true,
+                          };
+                          setCanvasElements(prev => [...prev, newPoly]);
+                          setSelectedElementId(newPoly.id);
+                          setPolyPoints([]);
+                          setPolyDraftEnd(null);
+                          isDraggingPolyRef.current = false;
+                          setIsPolyDrawMode(false);
+                          return;
+                        }
+                      }
+                      setPolyPoints(prev => [...prev, { x: ex, y: ey }]);
                     }
-                    lineStartRef.current = null;
-                    setLineDraft(null);
-                    setIsLineDrawMode(false);
+                    isDraggingPolyRef.current = false;
+                    setPolyDraftEnd(null);
                   }}
                   onClick={(e) => {
                     // Désélectionner si on clique dans le vide (pas sur un élément canvas)
@@ -7937,7 +8101,7 @@ export default function CreationsAtelierV2({
                     ) : null}
                     {/* Rendu spécial pour shape='line' : rendu hors du conteneur clippé (voir plus bas) */}
                     {/* pelemele-paper et fond-passe-partout : rendus via leur SVG propre — pas de div */}
-                    {(element.type === 'shape' && element.shape === 'line') ? null : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
+                    {(element.type === 'shape' && (element.shape === 'line' || element.shape === 'polygon')) ? null : (element.type === 'pelemele-paper' || element.type === 'fond-passe-partout') ? null : (
                     <div
                       key={element.id}
                       data-canvas-element="true"
@@ -8995,14 +9159,199 @@ export default function CreationsAtelierV2({
                   );
                 })}
 
-{/* Preview ligne en cours de tracé */}
-                {lineDraft && (
+{/* Polygones libres tracés */}
+                {canvasElements.filter(el => el.type === 'shape' && el.shape === 'polygon').map((element) => {
+                  const pxPerCm = canvasDimensions.pxPerCm;
+                  const pts = element.points || [];
+                  if (pts.length < 2) return null;
+                  const isSelected = selectedElementId === element.id;
+                  const isInMultiSel = selectedElementIds.has(element.id);
+                  const lineColor = element.openingColor && element.openingColor !== 'transparent' ? element.openingColor : '#1a1a1a';
+
+                  // Bounding box pour les poignées
+                  const minX = Math.min(...pts.map(p => p.x)) * pxPerCm;
+                  const minY = Math.min(...pts.map(p => p.y)) * pxPerCm;
+                  const maxX = Math.max(...pts.map(p => p.x)) * pxPerCm;
+                  const maxY = Math.max(...pts.map(p => p.y)) * pxPerCm;
+                  const midX = (minX + maxX) / 2;
+                  const midY = (minY + maxY) / 2;
+
+                  // Segments pour le rendu — depuis customPath si présent, sinon depuis points
+                  type RenderSeg = { x1: number; y1: number; x2: number; y2: number; cx?: number; cy?: number; type: 'L' | 'Q' };
+                  let renderSegs: RenderSeg[] = [];
+                  if (element.customPath) {
+                    const parsed = parseCustomPathToSegments(element.customPath);
+                    if (parsed) {
+                      renderSegs = parsed.map(s => ({
+                        type: s.type as 'L' | 'Q',
+                        x1: s.x1 * pxPerCm, y1: s.y1 * pxPerCm,
+                        x2: s.x2 * pxPerCm, y2: s.y2 * pxPerCm,
+                        ...(s.type === 'Q' && s.cx !== undefined ? { cx: s.cx! * pxPerCm, cy: s.cy! * pxPerCm } : {}),
+                      }));
+                    }
+                  } else {
+                    for (let i = 0; i < pts.length - 1; i++) {
+                      renderSegs.push({ type: 'L', x1: pts[i].x * pxPerCm, y1: pts[i].y * pxPerCm, x2: pts[i+1].x * pxPerCm, y2: pts[i+1].y * pxPerCm });
+                    }
+                    if (element.polygonClosed && pts.length >= 3) {
+                      const last = pts[pts.length - 1];
+                      renderSegs.push({ type: 'L', x1: last.x * pxPerCm, y1: last.y * pxPerCm, x2: pts[0].x * pxPerCm, y2: pts[0].y * pxPerCm });
+                    }
+                  }
+
+                  return (
+                    <svg
+                      key={element.id}
+                      data-canvas-element="true"
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: element.zIndex, opacity: element.opacity }}
+                    >
+                      {/* ── Rendu des segments ── */}
+                      {renderSegs.map((seg, i) => {
+                        const isSel = isSelected && selectedSegmentIndex === i;
+                        const lw = isSel ? 4 : 2;
+                        const color = isSel ? '#f97316' : lineColor;
+                        const pathD = seg.type === 'Q' && seg.cx !== undefined
+                          ? `M ${seg.x1} ${seg.y1} Q ${seg.cx} ${seg.cy} ${seg.x2} ${seg.y2}`
+                          : `M ${seg.x1} ${seg.y1} L ${seg.x2} ${seg.y2}`;
+                        return (
+                          <g key={i}>
+                            <path d={pathD} stroke="white" strokeWidth={8} strokeLinecap="round" fill="none" opacity={0.5} style={{ pointerEvents: 'none' }} />
+                            <path d={pathD} stroke={color} strokeWidth={lw} strokeLinecap="round" fill="none" style={{ pointerEvents: 'none' }} />
+                            <path d={pathD} stroke="transparent" strokeWidth={20} strokeLinecap="round" fill="none"
+                              style={{ pointerEvents: 'stroke', cursor: element.locked ? 'not-allowed' : 'pointer' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                if (element.locked) return;
+                                handleMouseDown(e, element.id);
+                                setSelectedSegmentIndex(i);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </g>
+                        );
+                      })}
+
+                      {/* ── Contour de sélection globale + bounding box ── */}
+                      {(isSelected || isInMultiSel) && (
+                        <rect x={minX} y={minY} width={maxX - minX} height={maxY - minY}
+                          fill="none" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 3" opacity={0.4}
+                          style={{ pointerEvents: 'none' }} />
+                      )}
+
+                      {/* ── Poignées de redimensionnement globales ── */}
+                      {isSelected && !element.locked && (
+                        <>
+                          {([
+                            { cx: minX, cy: minY, handle: 'nw', cursor: 'nw-resize' },
+                            { cx: maxX, cy: minY, handle: 'ne', cursor: 'ne-resize' },
+                            { cx: minX, cy: maxY, handle: 'sw', cursor: 'sw-resize' },
+                            { cx: maxX, cy: maxY, handle: 'se', cursor: 'se-resize' },
+                          ] as const).map(({ cx, cy, handle, cursor }) => (
+                            <rect key={handle} x={cx - 5} y={cy - 5} width={10} height={10} rx={2}
+                              fill="#a855f7" stroke="white" strokeWidth={2}
+                              style={{ pointerEvents: 'all', cursor }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, handle); }}
+                            />
+                          ))}
+                          {([
+                            { x: midX - 9, y: minY - 3.5, w: 18, h: 7, handle: 'n', cursor: 'n-resize' },
+                            { x: midX - 9, y: maxY - 3.5, w: 18, h: 7, handle: 's', cursor: 's-resize' },
+                            { x: minX - 3.5, y: midY - 9, w: 7, h: 18, handle: 'w', cursor: 'w-resize' },
+                            { x: maxX - 3.5, y: midY - 9, w: 7, h: 18, handle: 'e', cursor: 'e-resize' },
+                          ] as const).map(({ x, y, w, h, handle, cursor }) => (
+                            <rect key={handle} x={x} y={y} width={w} height={h} rx={2}
+                              fill="#60a5fa" stroke="white" strokeWidth={2}
+                              style={{ pointerEvents: 'all', cursor }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, handle); }}
+                            />
+                          ))}
+                        </>
+                      )}
+
+                      {/* ── Sommets déplaçables ── */}
+                      {isSelected && !element.locked && pts.map((pt, vi) => (
+                        <circle key={`v-${vi}`}
+                          cx={pt.x * pxPerCm} cy={pt.y * pxPerCm} r={7}
+                          fill="white" stroke="#6366f1" strokeWidth={2.5}
+                          style={{ pointerEvents: 'all', cursor: 'move' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            isDraggingVertexRef.current = true;
+                            draggingVertexElementIdRef.current = element.id;
+                            draggingVertexIdxRef.current = vi;
+                            setSelectedSegmentIndex(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ))}
+
+                      {/* ── Bouton Supprimer ── */}
+                      {isSelected && !element.locked && (
+                        <g
+                          transform={`translate(${maxX + 8}, ${minY - 8})`}
+                          style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromCanvas(element.id);
+                            setSelectedElementId(null);
+                            setSelectedSegmentIndex(null);
+                          }}
+                        >
+                          <rect x={0} y={-14} width={82} height={26} rx={7} fill="#dc2626" />
+                          <text x={41} y={0} textAnchor="middle" dominantBaseline="central"
+                            fill="white" fontSize={13} fontWeight="bold" fontFamily="system-ui, sans-serif"
+                            style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                            ✕ {language === 'fr' ? 'Supprimer' : 'Delete'}
+                          </text>
+                        </g>
+                      )}
+                    </svg>
+                  );
+                })}
+
+{/* Preview polygone en cours de tracé */}
+                {(polyPoints.length > 0 || polyDraftEnd) && (
                   <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: 9999 }}>
-                    <line
-                      x1={lineDraft.x1 * canvasDimensions.pxPerCm} y1={lineDraft.y1 * canvasDimensions.pxPerCm}
-                      x2={lineDraft.x2 * canvasDimensions.pxPerCm} y2={lineDraft.y2 * canvasDimensions.pxPerCm}
-                      stroke="#f97316" strokeWidth="2" strokeDasharray="6 3" strokeLinecap="round"
-                    />
+                    {(() => {
+                      const pxPerCm = canvasDimensions.pxPerCm;
+                      // Segments déjà posés
+                      const allPts = polyDraftEnd
+                        ? [...polyPoints, polyDraftEnd]
+                        : polyPoints;
+                      return (
+                        <>
+                          {/* Segments posés */}
+                          {polyPoints.length >= 2 && (
+                            <polyline
+                              points={polyPoints.map(p => `${p.x * pxPerCm},${p.y * pxPerCm}`).join(' ')}
+                              stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                            />
+                          )}
+                          {/* Segment en cours (draft) */}
+                          {polyDraftEnd && polyPoints.length >= 1 && (
+                            <line
+                              x1={polyPoints[polyPoints.length - 1].x * pxPerCm}
+                              y1={polyPoints[polyPoints.length - 1].y * pxPerCm}
+                              x2={polyDraftEnd.x * pxPerCm}
+                              y2={polyDraftEnd.y * pxPerCm}
+                              stroke="#f97316" strokeWidth="2" strokeDasharray="6 3" strokeLinecap="round"
+                            />
+                          )}
+                          {/* Point de départ (indicateur de fermeture) */}
+                          {polyPoints.length >= 2 && (
+                            <circle
+                              cx={polyPoints[0].x * pxPerCm}
+                              cy={polyPoints[0].y * pxPerCm}
+                              r={7}
+                              fill="#f97316" stroke="white" strokeWidth={2} opacity={0.8}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </svg>
                 )}
 
