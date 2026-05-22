@@ -31,7 +31,6 @@ import {
   Puzzle,
   CheckCircle,
   RotateCcw,
-  X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2098,62 +2097,60 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide">
                           {language === "fr" ? "Incurver un côté" : "Curve a side"}
                         </p>
-                        {props.selectedSegmentIndex === null || props.selectedSegmentIndex === undefined ? (
+                        {/* Valeur intensité — toujours visible */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-indigo-700 whitespace-nowrap">
+                            {language === "fr" ? `Intensité : ${curveMm}mm` : `Intensity: ${curveMm}mm`}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const v = Math.max(1, curveMm - 1);
+                              setCurveMm(v);
+                              if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                              else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                            }}
+                            className="w-6 h-6 flex items-center justify-center border border-indigo-300 rounded text-indigo-600 hover:bg-indigo-100"
+                          ><Minus className="w-3 h-3" /></button>
+                          <input
+                            type="number" min={1} max={100} step={1}
+                            value={curveMm}
+                            onChange={(e) => {
+                              const v = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                              setCurveMm(v);
+                              if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                              else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                            }}
+                            className="w-14 border border-indigo-300 rounded px-1 py-0.5 text-xs text-center"
+                          />
+                          <button
+                            onClick={() => {
+                              const v = Math.min(100, curveMm + 1);
+                              setCurveMm(v);
+                              if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
+                              else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
+                            }}
+                            className="w-6 h-6 flex items-center justify-center border border-indigo-300 rounded text-indigo-600 hover:bg-indigo-100"
+                          ><Plus className="w-3 h-3" /></button>
+                        </div>
+                        {/* Boutons direction — visibles seulement si un côté est sélectionné */}
+                        {(props.selectedSegmentIndex === null || props.selectedSegmentIndex === undefined) ? (
                           <p className="text-xs text-indigo-500 italic">
                             {language === "fr" ? "Cliquez sur un côté de la forme pour le sélectionner." : "Click on a side of the shape to select it."}
                           </p>
                         ) : (
-                          <div className="space-y-2">
-                            {/* Valeur intensité */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-indigo-700 whitespace-nowrap">
-                                {language === "fr" ? `Intensité : ${curveMm}mm` : `Intensity: ${curveMm}mm`}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  const v = Math.max(1, curveMm - 1);
-                                  setCurveMm(v);
-                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
-                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
-                                }}
-                                className="w-6 h-6 flex items-center justify-center border rounded text-indigo-600 hover:bg-indigo-100"
-                              ><Minus className="w-3 h-3" /></button>
-                              <input
-                                type="number" min={1} max={100} step={1}
-                                value={curveMm}
-                                onChange={(e) => {
-                                  const v = Math.max(1, Math.min(100, Number(e.target.value) || 1));
-                                  setCurveMm(v);
-                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
-                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
-                                }}
-                                className="w-14 border border-indigo-300 rounded px-1 py-0.5 text-xs text-center"
-                              />
-                              <button
-                                onClick={() => {
-                                  const v = Math.min(100, curveMm + 1);
-                                  setCurveMm(v);
-                                  if (curveDir === 'concave') props.onRoundSegmentConcave?.(v);
-                                  else if (curveDir === 'convex') props.onRoundSegmentConvex?.(v);
-                                }}
-                                className="w-6 h-6 flex items-center justify-center border rounded text-indigo-600 hover:bg-indigo-100"
-                              ><Plus className="w-3 h-3" /></button>
-                            </div>
-                            {/* Boutons direction */}
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => { setCurveDir('concave'); props.onRoundSegmentConcave?.(curveMm); }}
-                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 transition-colors"
-                              >⌣ {language === "fr" ? "Creuser" : "Concave"}</button>
-                              <button
-                                onClick={() => { setCurveDir('convex'); props.onRoundSegmentConvex?.(curveMm); }}
-                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-purple-700 border-purple-300 hover:bg-purple-50 transition-colors"
-                              >⌒ {language === "fr" ? "Bomber" : "Convex"}</button>
-                              <button
-                                onClick={() => { setCurveDir(null); props.onStraightenSegment?.(); }}
-                                className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-colors"
-                              >↔ {language === "fr" ? "Redresser" : "Straighten"}</button>
-                            </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => { setCurveDir('concave'); props.onRoundSegmentConcave?.(curveMm); }}
+                              className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 transition-colors"
+                            >⌣ {language === "fr" ? "Creuser" : "Concave"}</button>
+                            <button
+                              onClick={() => { setCurveDir('convex'); props.onRoundSegmentConvex?.(curveMm); }}
+                              className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-purple-700 border-purple-300 hover:bg-purple-50 transition-colors"
+                            >⌒ {language === "fr" ? "Bomber" : "Convex"}</button>
+                            <button
+                              onClick={() => { setCurveDir(null); props.onStraightenSegment?.(); }}
+                              className="flex-1 py-1.5 text-xs rounded border font-medium bg-white text-gray-600 border-gray-300 hover:bg-gray-50 transition-colors"
+                            >↔ {language === "fr" ? "Redresser" : "Straighten"}</button>
                           </div>
                         )}
                       </div>

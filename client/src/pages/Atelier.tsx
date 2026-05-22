@@ -95,6 +95,7 @@ export default function Atelier() {
 
   // Ouvrir un album
   const handleOpenAlbum = (album: AlbumMeta) => {
+    sessionStorage.setItem('from_atelier_projets', '1');
     setLocation(`/photoclass/${album.id}`);
   };
 

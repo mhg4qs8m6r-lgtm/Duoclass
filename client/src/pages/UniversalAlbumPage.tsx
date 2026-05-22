@@ -2783,16 +2783,6 @@ export default function UniversalAlbumPage({
   return (
     <div className="h-full flex flex-col relative" onContextMenu={handleGlobalContextMenu}>
 
-      {/* BOUTON FERMER fixe — retour Atelier (visible uniquement pour albums "Images projets") */}
-      {currentAlbumCategory?.id === 'cat_mes_projets' && (
-        <button
-          onClick={() => setLocation('/atelier')}
-          className="fixed top-3 right-16 z-[60] bg-red-500 hover:bg-red-600 text-white w-9 h-9 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
-          title={language === 'fr' ? 'Fermer — retour Atelier' : 'Close — back to Workshop'}
-        >
-          <X className="w-5 h-5" />
-        </button>
-      )}
 
       {/* BOUTONS DE NAVIGATION RAPIDE + ASCENSEUR PERSONNALISÉ (permanents à droite) */}
       <div className="fixed right-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-50" style={{ height: '60vh' }}>

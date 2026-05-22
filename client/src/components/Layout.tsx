@@ -15,7 +15,8 @@ import {
   Smartphone,
   Lock,
   Palette,
-  BookMarked
+  BookMarked,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -94,7 +95,7 @@ export default function Layout(props: LayoutProps) {
     className,
     currentAlbumId
   } = props;
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
   // État local du zoom si non contrôlé par le parent
@@ -364,6 +365,17 @@ export default function Layout(props: LayoutProps) {
             {/* Language Selector - à l'extrême droite */}
             <LanguageSelector />
           </div>
+
+          {/* Bouton retour Atelier — visible uniquement depuis "Images projets" */}
+          {location.startsWith('/photoclass') && !!sessionStorage.getItem('from_atelier_projets') && (
+            <button
+              onClick={() => { sessionStorage.removeItem('from_atelier_projets'); setLocation('/atelier'); }}
+              className="absolute bottom-[-11px] right-4 z-20 bg-gray-400/70 hover:bg-gray-500/90 text-white w-6 h-6 rounded-full shadow flex items-center justify-center transition-all"
+              title={language === 'fr' ? 'Retour Atelier' : 'Back to Workshop'}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </header>
 
         {/* Trial Banner - Affichée uniquement pendant la période d'essai */}

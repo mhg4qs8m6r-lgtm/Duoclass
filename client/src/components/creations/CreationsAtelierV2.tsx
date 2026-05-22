@@ -4324,17 +4324,35 @@ export default function CreationsAtelierV2({
   const duplicateCanvasElement = (id: string) => {
     const element = canvasElements.find(el => el.id === id);
     if (!element) return;
-    
+    const OFFSET = 1; // 1cm
+    // Décaler un path SVG en coordonnées cm absolues
+    const shiftPath = (path: string) => path.replace(
+      /([MLQZ])([^MLQZ]*)/g,
+      (_: string, cmd: string, args: string) => {
+        if (cmd === 'Z') return 'Z';
+        const nums = args.trim().split(/[\s,]+/).map(Number);
+        const out: number[] = [];
+        for (let k = 0; k < nums.length; k += 2) {
+          out.push(nums[k] + OFFSET);
+          out.push(nums[k + 1] + OFFSET);
+        }
+        return cmd + out.join(',');
+      }
+    );
     const newElement: CanvasElement = {
       ...element,
       id: `${element.type}-${Date.now()}`,
-      x: element.x + 0.5, // Décaler légèrement
-      y: element.y + 0.5,
+      x: element.x + OFFSET,
+      y: element.y + OFFSET,
       locked: false,
-      zIndex: Math.max(...canvasElements.map(el => el.zIndex)) + 1
+      zIndex: Math.max(...canvasElements.map(el => el.zIndex)) + 1,
+      // Polygone : décaler aussi les points absolus
+      ...(element.points ? { points: element.points.map(p => ({ x: p.x + OFFSET, y: p.y + OFFSET })) } : {}),
+      // customPath en coordonnées absolues : décaler aussi
+      ...(element.customPath ? { customPath: shiftPath(element.customPath) } : {}),
     };
-    
     setCanvasElements(prev => [...prev, newElement]);
+    setSelectedElementIds(new Set([newElement.id]));
     setSelectedElementId(newElement.id);
     toast.success(language === "fr" ? "Élément dupliqué" : "Element duplicated");
   };
@@ -5310,18 +5328,44 @@ export default function CreationsAtelierV2({
       }
     }
 
-    // Polygone libre : rescaler tous les points proportionnellement
+    // Polygone libre : rescaler tous les points proportionnellement (sans forcer le ratio)
     const resizingEl = canvasElements.find(el => el.id === selectedElementId);
     if (resizingEl?.shape === 'polygon' && polyDragStartPointsRef.current.length > 0) {
       const oldW = elementStartSize.width;
       const oldH = elementStartSize.height;
       if (oldW > 0 && oldH > 0) {
-        const scaleX = Math.max(0.01, newWidth) / oldW;
-        const scaleY = Math.max(0.01, newHeight) / oldH;
+        // Pour les coins, recalculer newWidth/newHeight sans forcer le ratio
+        let polyW = newWidth;
+        let polyH = newHeight;
+        let polyX = newX;
+        let polyY = newY;
+        if (resizeHandle === 'se') {
+          polyW = Math.max(MIN_SIZE_CM, elementStartSize.width + deltaXCm);
+          polyH = Math.max(MIN_SIZE_CM, elementStartSize.height + deltaYCm);
+          polyX = elementStartPos.x;
+          polyY = elementStartPos.y;
+        } else if (resizeHandle === 'sw') {
+          polyW = Math.max(MIN_SIZE_CM, elementStartSize.width - deltaXCm);
+          polyH = Math.max(MIN_SIZE_CM, elementStartSize.height + deltaYCm);
+          polyX = elementStartPos.x + (elementStartSize.width - polyW);
+          polyY = elementStartPos.y;
+        } else if (resizeHandle === 'ne') {
+          polyW = Math.max(MIN_SIZE_CM, elementStartSize.width + deltaXCm);
+          polyH = Math.max(MIN_SIZE_CM, elementStartSize.height - deltaYCm);
+          polyX = elementStartPos.x;
+          polyY = elementStartPos.y + (elementStartSize.height - polyH);
+        } else if (resizeHandle === 'nw') {
+          polyW = Math.max(MIN_SIZE_CM, elementStartSize.width - deltaXCm);
+          polyH = Math.max(MIN_SIZE_CM, elementStartSize.height - deltaYCm);
+          polyX = elementStartPos.x + (elementStartSize.width - polyW);
+          polyY = elementStartPos.y + (elementStartSize.height - polyH);
+        }
+        const scaleX = polyW / oldW;
+        const scaleY = polyH / oldH;
         updateCanvasElement(selectedElementId, {
           points: polyDragStartPointsRef.current.map(p => ({
-            x: newX + (p.x - elementStartPos.x) * scaleX,
-            y: newY + (p.y - elementStartPos.y) * scaleY,
+            x: polyX + (p.x - elementStartPos.x) * scaleX,
+            y: polyY + (p.y - elementStartPos.y) * scaleY,
           })),
           customPath: undefined,
         });
@@ -5815,8 +5859,11 @@ export default function CreationsAtelierV2({
             </Button>
           </div>
           
-          <Button variant="ghost" size="icon" onClick={handleRequestClose}>
-            <X className="w-5 h-5" />
+          <Button variant="ghost" size="icon" onClick={handleRequestClose}
+            className="h-6 w-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            title={language === "fr" ? "Fermer l'atelier" : "Close workshop"}
+          >
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
         
@@ -8125,7 +8172,8 @@ export default function CreationsAtelierV2({
                         // le SVG pêle-mêle (fill-rule=evenodd) couvre tout sauf les trous.
                         // La photo derrière n'est visible qu'à travers les trous transparents.
                         // Bordure de sélection : pointillée violette pour les groupes, solide pour la sélection simple
-                        outline: (
+                        // Images pêle-mêle : l'outline est géré par un overlay positionné sur le trou
+                        outline: element.assignedHoleId ? 'none' : (
                           element.groupId && isInMultiSelection
                             ? '2px dashed #a855f7'
                             : isMultiMode && isInMultiSelection && isSelected
@@ -8136,7 +8184,7 @@ export default function CreationsAtelierV2({
                                   ? '2px solid #a855f7'
                                   : 'none'
                         ),
-                        outlineOffset: isInMultiSelection || isSelected ? '2px' : undefined,
+                        outlineOffset: (!element.assignedHoleId && (isInMultiSelection || isSelected)) ? '2px' : undefined,
                         paddingTop: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         paddingBottom: element.type === 'shape' && element.shape === 'line' ? '8px' : undefined,
                         marginTop: element.type === 'shape' && element.shape === 'line' ? '-8px' : undefined,
@@ -8234,7 +8282,23 @@ export default function CreationsAtelierV2({
                       const w = elementWidthPx;
                       const h = elementHeightPx;
                       let pathD = '';
-                      switch (element.shape) {
+                      if (element.customPath) {
+                        // customPath en cm coordonnées absolues → convertir en px relatifs à l'élément
+                        const ox = element.x, oy = element.y, pp = pxPerCm;
+                        pathD = element.customPath.replace(
+                          /([MLQZ])([^MLQZ]*)/g,
+                          (_m: string, cmd: string, args: string) => {
+                            if (cmd === 'Z') return 'Z';
+                            const nums = args.trim().split(/[\s,]+/).map(Number);
+                            const converted: number[] = [];
+                            for (let i2 = 0; i2 < nums.length; i2 += 2) {
+                              converted.push((nums[i2] - ox) * pp);
+                              converted.push((nums[i2 + 1] - oy) * pp);
+                            }
+                            return cmd + converted.join(',');
+                          }
+                        );
+                      } else switch (element.shape) {
                         case 'square': {
                           const side = Math.min(w, h);
                           const ox = (w - side) / 2; const oy = (h - side) / 2;
@@ -8627,8 +8691,9 @@ export default function CreationsAtelierV2({
                     )}
 
                     {/* Contrôles de l'élément sélectionné - Poignées de redimensionnement */}
+                    {/* Images pêle-mêle : les poignées sont dans l'overlay positionné sur le trou */}
                     {(selectedElementId === element.id || isInMultiSelection) && !element.locked &&
-                     element.name !== (language === 'fr' ? 'Fond' : 'Background') && (
+                     element.name !== (language === 'fr' ? 'Fond' : 'Background') && !element.assignedHoleId && (
                       <>
                         {/* Pour la forme 'line' : uniquement 2 poignées aux extrémités */}
                         {element.type === 'shape' && element.shape === 'line' ? (
@@ -8799,21 +8864,22 @@ export default function CreationsAtelierV2({
                               return (
                                 <g key={i}>
                                   {/* Zone de clic élargie transparente */}
-                                  <path d={pathD} fill="none" stroke="transparent" strokeWidth={18}
+                                  <path d={pathD} fill="none" stroke="transparent" strokeWidth={24}
                                     style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                                    onClick={(e) => {
-                                      e.stopPropagation(); e.preventDefault();
-                                      if (!isSelected) setRoundIntensity(35);
-                                      setSelectedSegmentIndex(isSelected ? null : i);
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      if (selectedSegmentIndex !== i) setRoundIntensity(35);
+                                      setSelectedSegmentIndex(i);
                                     }}
+                                    onClick={(e) => { e.stopPropagation(); }}
                                   />
                                   {/* Trait de surbrillance */}
                                   {isSelected && (
                                     <path d={pathD} fill="none" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                                   )}
-                                  {/* Poignée Bézier : ligne + cercle draggable */}
-                                  {hasCp && (
+                                  {/* Poignée Bézier : ligne + cercle draggable — uniquement sur le segment sélectionné */}
+                                  {isSelected && hasCp && (
                                     <>
                                       {/* Ligne du milieu du segment vers le point de contrôle */}
                                       <line
@@ -8863,183 +8929,59 @@ export default function CreationsAtelierV2({
                               );
                             })}
                           </svg>
-                          {selectedSegmentIndex !== null && selectedSegmentIndex !== undefined && (() => {
-                            const segs2 = buildShapeSegments(element);
-                            if (!segs2 || selectedSegmentIndex >= segs2.length) return null;
-                            const seg = segs2[selectedSegmentIndex];
-                            const mx = ((seg.x1 + seg.x2) / 2 - element.x) * pxPerCm;
-                            const my = ((seg.y1 + seg.y2) / 2 - element.y) * pxPerCm;
-                            const isRounded = seg.type === 'Q';
-                            return (
-                              <div
-                                key="seg-menu"
-                                data-canvas-element="true"
-                                className="absolute flex flex-col items-center gap-0.5 z-[60]"
-                                style={{ left: mx, top: my - 48, transform: 'translateX(-50%)', pointerEvents: 'all' }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex gap-1 items-center">
-                                  {isRounded ? (
-                                    /* Slider d'intensité d'arrondi — visible uniquement quand le segment est arrondi */
-                                    <div className="flex items-center gap-1" style={{ pointerEvents: 'all' }}>
-                                      {/* Bouton - */}
-                                      <button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const newIntensity = Math.max(5, roundIntensity - 5);
-                                          setRoundIntensity(newIntensity);
-                                          const mx2 = (seg.x1 + seg.x2) / 2;
-                                          const my2 = (seg.y1 + seg.y2) / 2;
-                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
-                                          const len = Math.sqrt(dx * dx + dy * dy);
-                                          const cx2 = element.x + element.width / 2;
-                                          const cy2 = element.y + element.height / 2;
-                                          const perpX = len > 0 ? -dy / len : 0;
-                                          const perpY = len > 0 ? dx / len : 0;
-                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
-                                          const sign = dot >= 0 ? 1 : -1;
-                                          const offset = Math.min(len * (newIntensity / 100), 2.5);
-                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
-                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
-                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                        }}
-                                        className="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-white/60 transition-colors"
-                                        style={{ textShadow: '0 0 4px white' }}
-                                      >−</button>
-                                      {/* Valeur % */}
-                                      <span className="text-[10px] font-semibold text-indigo-700 min-w-[28px] text-center" style={{ textShadow: '0 0 4px white, 0 0 4px white' }}>{roundIntensity}%</span>
-                                      {/* Bouton + */}
-                                      <button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const newIntensity = Math.min(80, roundIntensity + 5);
-                                          setRoundIntensity(newIntensity);
-                                          const mx2 = (seg.x1 + seg.x2) / 2;
-                                          const my2 = (seg.y1 + seg.y2) / 2;
-                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
-                                          const len = Math.sqrt(dx * dx + dy * dy);
-                                          const cx2 = element.x + element.width / 2;
-                                          const cy2 = element.y + element.height / 2;
-                                          const perpX = len > 0 ? -dy / len : 0;
-                                          const perpY = len > 0 ? dx / len : 0;
-                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
-                                          const sign = dot >= 0 ? 1 : -1;
-                                          const offset = Math.min(len * (newIntensity / 100), 2.5);
-                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
-                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
-                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                        }}
-                                        className="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-white/60 transition-colors"
-                                        style={{ textShadow: '0 0 4px white' }}
-                                      >+</button>
-                                      {/* Bouton Redresser */}
-                                      <button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const newSegs = segs2.map((s, i2) =>
-                                            i2 === selectedSegmentIndex ? { ...s, type: 'L' as const, cx: undefined, cy: undefined } : s
-                                          );
-                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                          setSegmentsRounded(newSegs.some(s => s.type === 'Q'));
-                                          setRoundIntensity(35);
-                                        }}
-                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap"
-                                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                                      >↔ Redresser</button>
-                                    </div>
-                                  ) : (
-                                    /* Boutons Creuser/Bomber — visible uniquement quand le segment est droit */
-                                    <div className="flex gap-1">
-                                      <button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const mx2 = (seg.x1 + seg.x2) / 2;
-                                          const my2 = (seg.y1 + seg.y2) / 2;
-                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
-                                          const len = Math.sqrt(dx * dx + dy * dy);
-                                          const cx2 = element.x + element.width / 2;
-                                          const cy2 = element.y + element.height / 2;
-                                          const perpX = len > 0 ? -dy / len : 0;
-                                          const perpY = len > 0 ? dx / len : 0;
-                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
-                                          const sign = dot >= 0 ? 1 : -1;
-                                          const offset = Math.min(len * (roundIntensity / 100), 2.5);
-                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
-                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
-                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                          setSegmentsRounded(true);
-                                        }}
-                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 transition-colors whitespace-nowrap"
-                                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                                      >⌣ Creuser</button>
-                                      <button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const mx2 = (seg.x1 + seg.x2) / 2;
-                                          const my2 = (seg.y1 + seg.y2) / 2;
-                                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
-                                          const len = Math.sqrt(dx * dx + dy * dy);
-                                          const cx2 = element.x + element.width / 2;
-                                          const cy2 = element.y + element.height / 2;
-                                          const perpX = len > 0 ? -dy / len : 0;
-                                          const perpY = len > 0 ? dx / len : 0;
-                                          const dot = perpX * (cx2 - mx2) + perpY * (cy2 - my2);
-                                          const sign = dot >= 0 ? -1 : 1;
-                                          const offset = Math.min(len * (roundIntensity / 100), 2.5);
-                                          const newSeg = { ...seg, type: 'Q' as const, cx: mx2 + sign * perpX * offset, cy: my2 + sign * perpY * offset };
-                                          const newSegs = segs2.map((s, i2) => i2 === selectedSegmentIndex ? newSeg : s);
-                                          updateCanvasElement(element.id, { customPath: pathFromSegments(newSegs) });
-                                          setSegmentsRounded(true);
-                                        }}
-                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-purple-700 hover:text-purple-900 transition-colors whitespace-nowrap"
-                                        style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                                      >⌒ Bomber</button>
-                                    </div>
-                                  )}
-                                  <span className="text-gray-400 text-[10px] mx-0.5" style={{ textShadow: 'none' }}>·</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!segs2 || segs2.length <= 2) return;
-                                      const newSegs = segs2.filter((_, i2) => i2 !== selectedSegmentIndex);
-                                      const reconnected = newSegs.map((s, i2) => {
-                                        if (i2 === 0) return s;
-                                        const prev = newSegs[i2 - 1];
-                                        return { ...s, x1: prev.x2, y1: prev.y2 };
-                                      });
-                                      updateCanvasElement(element.id, { customPath: pathFromSegments(reconnected) });
-                                      setSelectedSegmentIndex(null);
-                                      setSegmentsRounded(reconnected.some(s => s.type === 'Q'));
-                                    }}
-                                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-red-500 hover:text-red-700 transition-colors whitespace-nowrap"
-                                    style={{ textShadow: '0 0 4px white, 0 0 4px white' }}
-                                  >
-                                    ✕ Supprimer
-                                  </button>
-                                </div>
-                                {/* Bouton OK — désélectionner le segment */}
-                                <button
-                                  className="flex items-center justify-center gap-1 px-3 py-1.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors shadow"
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => { e.stopPropagation(); setSelectedSegmentIndex(null); }}
-                                >
-                                  ✓ OK
-                                </button>
-                              </div>
-                            );
-                          })()}
                         </>
                       );
                     })()}
                     {/* Élément verrouillé : pas d'indicateur visuel, utiliser le clic droit pour déverrouiller */}
                   </div>
                   )}
+                  {/* ── Overlay de sélection pêle-mêle : cadre + poignées positionnés sur le trou ── */}
+                  {(isSelected || isInMultiSelection) && element.assignedHoleId && !element.locked && (() => {
+                    const paper = canvasElements.find(el => el.type === 'pelemele-paper');
+                    const hole = paper?.holes?.find(h => h.id === element.assignedHoleId);
+                    if (!hole) return null;
+                    const hx = hole.x * pxPerCm;
+                    const hy = hole.y * pxPerCm;
+                    const hw = hole.w * pxPerCm;
+                    const hh = hole.h * pxPerCm;
+                    const outlineStyle = element.groupId && isInMultiSelection
+                      ? '2px dashed #a855f7'
+                      : isMultiMode && isInMultiSelection && isSelected
+                        ? '2px solid #a855f7'
+                        : isMultiMode && isInMultiSelection
+                          ? '2px solid #60a5fa'
+                          : '2px solid #a855f7';
+                    return (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: hx, top: hy, width: hw, height: hh,
+                          transform: hole.rotation ? `rotate(${hole.rotation}deg)` : undefined,
+                          outline: outlineStyle,
+                          outlineOffset: '2px',
+                          pointerEvents: 'none',
+                          zIndex: element.zIndex + 1,
+                        }}
+                      >
+                        {/* Coins (carrés violets) */}
+                        <div className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-nw-resize shadow-md z-[100]" style={{ pointerEvents: 'all' }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'nw'); }} />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-ne-resize shadow-md z-[100]" style={{ pointerEvents: 'all' }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'ne'); }} />
+                        <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-sw-resize shadow-md z-[100]" style={{ pointerEvents: 'all' }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'sw'); }} />
+                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 border-2 border-white rounded-sm cursor-se-resize shadow-md z-[100]" style={{ pointerEvents: 'all' }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'se'); }} />
+                        {/* Milieux des côtés (bleus) */}
+                        <div className="absolute left-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-n-resize shadow-md" style={{ top: -5, transform: 'translateX(-50%)', width: 20, height: 8, pointerEvents: 'all', zIndex: 100 }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'n'); }} />
+                        <div className="absolute left-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-s-resize shadow-md" style={{ bottom: -5, transform: 'translateX(-50%)', width: 20, height: 8, pointerEvents: 'all', zIndex: 100 }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 's'); }} />
+                        <div className="absolute top-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-w-resize shadow-md" style={{ left: -5, transform: 'translateY(-50%)', width: 8, height: 20, pointerEvents: 'all', zIndex: 100 }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'w'); }} />
+                        <div className="absolute top-1/2 bg-blue-400 border-2 border-white rounded-sm cursor-e-resize shadow-md" style={{ right: -5, transform: 'translateY(-50%)', width: 8, height: 20, pointerEvents: 'all', zIndex: 100 }} draggable={false} onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, element.id, 'e'); }} />
+                        {/* Rotation (vert, au-dessus centre) — uniquement pour l'élément principal sélectionné */}
+                        {isSelected && (
+                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center" style={{ pointerEvents: 'all' }} draggable={false} title={language === 'fr' ? 'Faire pivoter' : 'Rotate'} onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}>
+                            <RotateCcw className="w-2.5 h-2.5 text-white pointer-events-none" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   </>
                   );
                 })}
@@ -9168,14 +9110,6 @@ export default function CreationsAtelierV2({
                   const isInMultiSel = selectedElementIds.has(element.id);
                   const lineColor = element.openingColor && element.openingColor !== 'transparent' ? element.openingColor : '#1a1a1a';
 
-                  // Bounding box pour les poignées
-                  const minX = Math.min(...pts.map(p => p.x)) * pxPerCm;
-                  const minY = Math.min(...pts.map(p => p.y)) * pxPerCm;
-                  const maxX = Math.max(...pts.map(p => p.x)) * pxPerCm;
-                  const maxY = Math.max(...pts.map(p => p.y)) * pxPerCm;
-                  const midX = (minX + maxX) / 2;
-                  const midY = (minY + maxY) / 2;
-
                   // Segments pour le rendu — depuis customPath si présent, sinon depuis points
                   type RenderSeg = { x1: number; y1: number; x2: number; y2: number; cx?: number; cy?: number; type: 'L' | 'Q' };
                   let renderSegs: RenderSeg[] = [];
@@ -9199,6 +9133,28 @@ export default function CreationsAtelierV2({
                     }
                   }
 
+                  // Bounding box calculé depuis les segments réellement rendus
+                  // (garantit l'alignement même si customPath diverge de pts)
+                  const allBboxX = renderSegs.flatMap(s => [s.x1, s.x2]);
+                  const allBboxY = renderSegs.flatMap(s => [s.y1, s.y2]);
+                  const minX = allBboxX.length > 0 ? Math.min(...allBboxX) : 0;
+                  const minY = allBboxY.length > 0 ? Math.min(...allBboxY) : 0;
+                  const maxX = allBboxX.length > 0 ? Math.max(...allBboxX) : 0;
+                  const maxY = allBboxY.length > 0 ? Math.max(...allBboxY) : 0;
+                  const midX = (minX + maxX) / 2;
+                  const midY = (minY + maxY) / 2;
+
+                  // Path de fond pour le drag par cliquer-glisser sur l'intérieur du polygone
+                  const fillPathD = renderSegs.length > 0
+                    ? renderSegs.reduce((acc, seg, i) => {
+                        const move = i === 0 ? `M ${seg.x1} ${seg.y1} ` : '';
+                        const cmd = seg.type === 'Q' && seg.cx !== undefined
+                          ? `Q ${seg.cx} ${seg.cy} ${seg.x2} ${seg.y2} `
+                          : `L ${seg.x2} ${seg.y2} `;
+                        return acc + move + cmd;
+                      }, '') + (element.polygonClosed ? 'Z' : '')
+                    : '';
+
                   return (
                     <svg
                       key={element.id}
@@ -9206,6 +9162,19 @@ export default function CreationsAtelierV2({
                       className="absolute inset-0 pointer-events-none"
                       style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: element.zIndex, opacity: element.opacity }}
                     >
+                      {/* ── Zone de drag : fond transparent cliquable sur toute la surface ── */}
+                      {fillPathD && !element.locked && (
+                        <path d={fillPathD} fill="transparent"
+                          style={{ pointerEvents: 'fill', cursor: 'move' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            handleMouseDown(e, element.id);
+                            setSelectedSegmentIndex(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onContextMenu={(e) => { e.preventDefault(); handleContextMenu(e, element.id); }}
+                        />
+                      )}
                       {/* ── Rendu des segments ── */}
                       {renderSegs.map((seg, i) => {
                         const isSel = isSelected && selectedSegmentIndex === i;
@@ -9227,6 +9196,7 @@ export default function CreationsAtelierV2({
                                 setSelectedSegmentIndex(i);
                               }}
                               onClick={(e) => e.stopPropagation()}
+                              onContextMenu={(e) => { e.preventDefault(); handleContextMenu(e, element.id); }}
                             />
                           </g>
                         );
@@ -9239,7 +9209,25 @@ export default function CreationsAtelierV2({
                           style={{ pointerEvents: 'none' }} />
                       )}
 
-                      {/* ── Poignées de redimensionnement globales ── */}
+                      {/* ── Sommets déplaçables (rendus avant les poignées pour que les poignées soient au-dessus aux coins) ── */}
+                      {isSelected && !element.locked && pts.map((pt, vi) => (
+                        <circle key={`v-${vi}`}
+                          cx={pt.x * pxPerCm} cy={pt.y * pxPerCm} r={7}
+                          fill="white" stroke="#6366f1" strokeWidth={2.5}
+                          style={{ pointerEvents: 'all', cursor: 'move' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            isDraggingVertexRef.current = true;
+                            draggingVertexElementIdRef.current = element.id;
+                            draggingVertexIdxRef.current = vi;
+                            setSelectedSegmentIndex(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ))}
+
+                      {/* ── Poignées de redimensionnement globales (rendues après les sommets pour être au-dessus) ── */}
                       {isSelected && !element.locked && (
                         <>
                           {([
@@ -9268,24 +9256,6 @@ export default function CreationsAtelierV2({
                           ))}
                         </>
                       )}
-
-                      {/* ── Sommets déplaçables ── */}
-                      {isSelected && !element.locked && pts.map((pt, vi) => (
-                        <circle key={`v-${vi}`}
-                          cx={pt.x * pxPerCm} cy={pt.y * pxPerCm} r={7}
-                          fill="white" stroke="#6366f1" strokeWidth={2.5}
-                          style={{ pointerEvents: 'all', cursor: 'move' }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            isDraggingVertexRef.current = true;
-                            draggingVertexElementIdRef.current = element.id;
-                            draggingVertexIdxRef.current = vi;
-                            setSelectedSegmentIndex(null);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ))}
 
                       {/* ── Bouton Supprimer ── */}
                       {isSelected && !element.locked && (
