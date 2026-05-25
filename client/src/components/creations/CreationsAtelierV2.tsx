@@ -9098,8 +9098,8 @@ export default function CreationsAtelierV2({
 
                   // Bounding box calculé depuis les segments réellement rendus
                   // (garantit l'alignement même si customPath diverge de pts)
-                  const allBboxX = renderSegs.flatMap(s => [s.x1, s.x2]);
-                  const allBboxY = renderSegs.flatMap(s => [s.y1, s.y2]);
+                  const allBboxX = renderSegs.flatMap(s => s.type === 'Q' && s.cx !== undefined ? [s.x1, s.x2, s.cx] : [s.x1, s.x2]);
+                  const allBboxY = renderSegs.flatMap(s => s.type === 'Q' && s.cy !== undefined ? [s.y1, s.y2, s.cy] : [s.y1, s.y2]);
                   const minX = allBboxX.length > 0 ? Math.min(...allBboxX) : 0;
                   const minY = allBboxY.length > 0 ? Math.min(...allBboxY) : 0;
                   const maxX = allBboxX.length > 0 ? Math.max(...allBboxX) : 0;
