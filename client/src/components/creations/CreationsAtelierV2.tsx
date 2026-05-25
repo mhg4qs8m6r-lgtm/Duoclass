@@ -9557,7 +9557,7 @@ export default function CreationsAtelierV2({
                         top: 10,
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        zIndex: 300,
+                        zIndex: 10000,
                         background: 'white',
                         borderRadius: 10,
                         boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
@@ -9566,15 +9566,22 @@ export default function CreationsAtelierV2({
                         pointerEvents: 'all',
                       }}
                       onMouseDown={e => e.stopPropagation()}
+                      onMouseUp={e => e.stopPropagation()}
+                      onClick={e => e.stopPropagation()}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, letterSpacing: 0.2 }}>
                           Bomber ← · → Creuser
                         </span>
+                        {/* PROTECTION — Ne jamais supprimer ces 3 handlers */}
+                        {/* onMouseDown, onMouseUp, onClick avec stopPropagation */}
+                        {/* sans accord de Papy — ils empêchent le canvas */}
+                        {/* d'intercepter le clic avant la croix */}
                         <button
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#9ca3af', padding: '0 0 0 8px', lineHeight: 1 }}
-                          onMouseDown={e => e.stopPropagation()}
-                          onClick={() => { setShowSegmentSlider(false); setSegmentSliderValue(0); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => { e.stopPropagation(); setShowSegmentSlider(false); setSegmentSliderValue(0); }}
+                          onClick={(e) => { e.stopPropagation(); setShowSegmentSlider(false); setSegmentSliderValue(0); }}
                         >✕</button>
                       </div>
                       <input
