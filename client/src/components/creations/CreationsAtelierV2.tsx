@@ -8876,7 +8876,7 @@ export default function CreationsAtelierV2({
                                   />
                                   {/* Trait de surbrillance */}
                                   {isSelected && (
-                                    <path d={pathD} fill="none" stroke="white" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                                    <path d={pathD} fill="none" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                                   )}
                                   {/* Poignée Bézier : ligne + cercle draggable — uniquement sur le segment sélectionné */}
                                   {isSelected && hasCp && (
@@ -8925,61 +8925,6 @@ export default function CreationsAtelierV2({
                                       />
                                     </>
                                   )}
-                                  {/* Point bleu au milieu du segment droit sélectionné — glisser pour courber */}
-                                  {isSelected && !hasCp && (() => {
-                                    const mx = (x1 + x2) / 2;
-                                    const my = (y1 + y2) / 2;
-                                    const dx = x2 - x1; const dy = y2 - y1;
-                                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                                    // Perpendiculaire orientée vers le centre de l'élément
-                                    const cx0 = (element.w / 2) * pxPerCm;
-                                    const cy0 = (element.h / 2) * pxPerCm;
-                                    const perpX = -dy / len; const perpY = dx / len;
-                                    const dot = perpX * (cy0 - my) + perpY * (cx0 - mx);
-                                    const finalSign = dot >= 0 ? 1 : -1;
-                                    const offset = 14;
-                                    const dotX = mx + finalSign * perpX * offset;
-                                    const isTopSegment = my < (element.h * pxPerCm) * 0.15;
-                                    const dotY = my + finalSign * perpY * offset + (isTopSegment ? 20 : 0);
-                                    return (
-                                    <circle
-                                      cx={dotX} cy={dotY} r={6}
-                                      fill={draggingCPIndex === i ? "#f97316" : "#3b82f6"}
-                                      stroke="#fff" strokeWidth={2}
-                                      style={{ pointerEvents: 'all', cursor: draggingCPIndex === i ? 'grabbing' : 'grab' }}
-                                      onMouseDown={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        setDraggingCPIndex(i);
-                                        setSelectedSegmentIndex(i);
-
-                                        const svgEl = (e.target as SVGCircleElement).closest('svg')!;
-                                        const elRef = element;
-                                        const segsSnapshot = [...segs];
-
-                                        const onMove = (ev: globalThis.MouseEvent) => {
-                                          const svgRect = svgEl.getBoundingClientRect();
-                                          const localX = ev.clientX - svgRect.left;
-                                          const localY = ev.clientY - svgRect.top;
-                                          const newCx = localX / pxPerCm + elRef.x;
-                                          const newCy = localY / pxPerCm + elRef.y;
-                                          const updated = segsSnapshot.map((s, idx) =>
-                                            idx === i ? { ...s, type: 'Q' as const, cx: newCx, cy: newCy } : s
-                                          );
-                                          updateCanvasElement(elRef.id, { customPath: pathFromSegments(updated) });
-                                          setSegmentsRounded(true);
-                                        };
-                                        const onUp = () => {
-                                          setDraggingCPIndex(null);
-                                          window.removeEventListener('mousemove', onMove);
-                                          window.removeEventListener('mouseup', onUp);
-                                        };
-                                        window.addEventListener('mousemove', onMove);
-                                        window.addEventListener('mouseup', onUp);
-                                      }}
-                                    />
-                                    );
-                                  })()}
                                 </g>
                               );
                             })}
