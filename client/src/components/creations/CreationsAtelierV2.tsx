@@ -1499,6 +1499,10 @@ export default function CreationsAtelierV2({
   const [roundIntensity, setRoundIntensity] = useState<number>(35);
   /** Index du segment dont on drag le point de contrôle Bézier (null = aucun) */
   const [draggingCPIndex, setDraggingCPIndex] = useState<number | null>(null);
+  /** Modale slider de courbure : visible quand un segment est sélectionné */
+  const [showSegmentSlider, setShowSegmentSlider] = useState<boolean>(false);
+  /** Valeur du slider de courbure : -100 (bomber) → 0 (droit) → +100 (creuser) */
+  const [segmentSliderValue, setSegmentSliderValue] = useState<number>(0);
   // ─── Fin Éditeur de segments ──────────────────────────────────────────────────────
 
   // ── Mode découpe par ligne ──────────────────────────────────────────────────────────
@@ -8713,7 +8717,8 @@ export default function CreationsAtelierV2({
                             {/* Poignée de rotation */}
                             {selectedElementId === element.id && (
                               <div
-                                className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                                className="absolute w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                                style={{ top: '40%', left: '50%', transform: 'translate(-50%, -50%)' }}
                                 draggable={false}
                                 title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
                                 onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
@@ -8788,7 +8793,8 @@ export default function CreationsAtelierV2({
                         {/* Poignée de rotation (cercle vert, au-dessus au centre) */}
                         {selectedElementId === element.id && (
                           <div
-                            className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                            className="absolute w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
+                            style={{ top: '40%', left: '50%', transform: 'translate(-50%, -50%)' }}
                             draggable={false}
                             title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
                             onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
@@ -8869,8 +8875,9 @@ export default function CreationsAtelierV2({
                                     onMouseDown={(e) => {
                                       e.stopPropagation();
                                       e.preventDefault();
-                                      if (selectedSegmentIndex !== i) setRoundIntensity(35);
+                                      if (selectedSegmentIndex !== i) { setRoundIntensity(35); setSegmentSliderValue(0); }
                                       setSelectedSegmentIndex(i);
+                                      setShowSegmentSlider(true);
                                     }}
                                     onClick={(e) => { e.stopPropagation(); }}
                                   />
@@ -9538,6 +9545,88 @@ export default function CreationsAtelierV2({
                   );
                 })()}
                 
+
+                {/* Modale curseur de courbure — rendue ici (hors boucle éléments) pour éviter les transform CSS */}
+                {selectedSegmentIndex !== null && showSegmentSlider && (() => {
+                  const el = canvasElements.find(e => e.id === segmentEditorElementId);
+                  if (!el) return null;
+                  return (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 300,
+                        background: 'white',
+                        borderRadius: 10,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+                        padding: '8px 14px 10px',
+                        minWidth: 230,
+                        pointerEvents: 'all',
+                      }}
+                      onMouseDown={e => e.stopPropagation()}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, letterSpacing: 0.2 }}>
+                          Bomber ← · → Creuser
+                        </span>
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#9ca3af', padding: '0 0 0 8px', lineHeight: 1 }}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={() => { setShowSegmentSlider(false); setSegmentSliderValue(0); }}
+                        >✕</button>
+                      </div>
+                      <input
+                        type="range"
+                        min={-300} max={300} step={1}
+                        value={segmentSliderValue}
+                        style={{ width: '100%', accentColor: '#3b82f6' }}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setSegmentSliderValue(val);
+                          const baseSegs = buildShapeSegments({ ...el, customPath: undefined });
+                          const currentSegs = buildShapeSegments(el);
+                          if (!baseSegs || !currentSegs || selectedSegmentIndex === null || selectedSegmentIndex >= baseSegs.length) return;
+                          const seg = baseSegs[selectedSegmentIndex];
+                          if (val === 0) {
+                            const newSegs = currentSegs.map((s, idx) =>
+                              idx === selectedSegmentIndex ? { ...s, type: 'L' as const, cx: undefined, cy: undefined } : s
+                            );
+                            updateCanvasElement(el.id, { customPath: pathFromSegments(newSegs) });
+                            setSegmentsRounded(newSegs.some(s => s.type === 'Q'));
+                            return;
+                          }
+                          const mx = (seg.x1 + seg.x2) / 2;
+                          const my = (seg.y1 + seg.y2) / 2;
+                          const dx = seg.x2 - seg.x1; const dy = seg.y2 - seg.y1;
+                          const len = Math.sqrt(dx * dx + dy * dy);
+                          const perpX = len > 0 ? -dy / len : 0;
+                          const perpY = len > 0 ? dx / len : 0;
+                          const cx0 = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                            ? el.points.reduce((s, p) => s + p.x, 0) / el.points.length
+                            : el.x + el.width / 2;
+                          const cy0 = (el.shape === 'polygon' && el.points && el.points.length > 0)
+                            ? el.points.reduce((s, p) => s + p.y, 0) / el.points.length
+                            : el.y + el.height / 2;
+                          const dot = perpX * (cx0 - mx) + perpY * (cy0 - my);
+                          const inwardSign = dot >= 0 ? 1 : -1;
+                          const maxOffset = Math.min(len * 0.8, 3.0);
+                          const offsetCm = (val / 100) * maxOffset * inwardSign;
+                          const newSeg = { ...seg, type: 'Q' as const, cx: mx + perpX * offsetCm, cy: my + perpY * offsetCm };
+                          const newSegs = currentSegs.map((s, idx) => idx === selectedSegmentIndex ? newSeg : s);
+                          updateCanvasElement(el.id, { customPath: pathFromSegments(newSegs) });
+                          setSegmentsRounded(true);
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
+                        <span>−</span>
+                        <span style={{ color: '#3b82f6', fontWeight: 700 }}>|</span>
+                        <span>+</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* SVG pour le détourage manuel point par point - positionné sur la PAGE */}
                 {isDetourageActive && manualTool === "polygon" && selectedElementId && (
