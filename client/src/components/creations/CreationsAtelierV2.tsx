@@ -8885,53 +8885,9 @@ export default function CreationsAtelierV2({
                                   {isSelected && (
                                     <path d={pathD} fill="none" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                                   )}
-                                  {/* Poignée Bézier : ligne + cercle draggable — uniquement sur le segment sélectionné */}
-                                  {isSelected && hasCp && (
-                                    <>
-                                      {/* Ligne du milieu du segment vers le point de contrôle */}
-                                      <line
-                                        x1={(x1 + x2) / 2} y1={(y1 + y2) / 2} x2={cpx} y2={cpy}
-                                        stroke="#818cf8" strokeWidth={1} strokeDasharray="3 2"
-                                        style={{ pointerEvents: 'none' }}
-                                      />
-                                      {/* Cercle du point de contrôle */}
-                                      <circle
-                                        cx={cpx} cy={cpy} r={6}
-                                        fill={draggingCPIndex === i ? "#f97316" : "#6366f1"}
-                                        stroke="#fff" strokeWidth={2}
-                                        style={{ pointerEvents: 'all', cursor: draggingCPIndex === i ? 'grabbing' : 'grab' }}
-                                        onMouseDown={(e) => {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          setDraggingCPIndex(i);
-                                          setSelectedSegmentIndex(i);
-
-                                          const svgEl = (e.target as SVGCircleElement).closest('svg')!;
-                                          const elRef = element; // capture
-                                          const segsSnapshot = [...segs];
-
-                                          const onMove = (ev: globalThis.MouseEvent) => {
-                                            const svgRect = svgEl.getBoundingClientRect();
-                                            const localX = ev.clientX - svgRect.left;
-                                            const localY = ev.clientY - svgRect.top;
-                                            const newCx = localX / pxPerCm + elRef.x;
-                                            const newCy = localY / pxPerCm + elRef.y;
-                                            const updated = segsSnapshot.map((s, idx) =>
-                                              idx === i ? { ...s, cx: newCx, cy: newCy } : s
-                                            );
-                                            updateCanvasElement(elRef.id, { customPath: pathFromSegments(updated) });
-                                          };
-                                          const onUp = () => {
-                                            setDraggingCPIndex(null);
-                                            window.removeEventListener('mousemove', onMove);
-                                            window.removeEventListener('mouseup', onUp);
-                                          };
-                                          window.addEventListener('mousemove', onMove);
-                                          window.addEventListener('mouseup', onUp);
-                                        }}
-                                      />
-                                    </>
-                                  )}
+                                  {/* PROTECTION — Ne pas remettre de point bleu/indigo */}
+                                  {/* sur les segments. Le slider remplace cette fonction. */}
+                                  {/* Ne pas modifier sans accord de Papy. */}
                                 </g>
                               );
                             })}
