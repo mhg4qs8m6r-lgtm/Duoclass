@@ -1621,6 +1621,7 @@ export default function UniversalAlbumPage({
   const [pendingDropFrameId, setPendingDropFrameId] = useState<number | null>(null);
 
   const handleExternalDropOnFrame = async (frameId: number, files: File[]) => {
+    setIsDraggingExternal(false); // Le drop sur cadre bypasse handleExternalDrop — réinitialiser ici
     if (files.length === 0) return;
 
     // Prendre seulement le premier fichier pour ce cadre
