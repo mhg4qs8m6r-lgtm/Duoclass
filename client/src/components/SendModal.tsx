@@ -120,7 +120,7 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{language === 'fr' ? 'Annuler' : 'Cancel'}</Button>
-          <Button onClick={handleSend} disabled={sending} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSend} disabled={sendMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
             <Send className="w-4 h-4 mr-2" />
             {language === 'fr' ? 'Envoyer' : 'Send'}
           </Button>
