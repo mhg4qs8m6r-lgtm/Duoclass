@@ -44,7 +44,11 @@ function Router() {
   // quand l'utilisateur dépose un fichier hors d'une zone de drop explicite.
   // Les zones de drop existantes appellent e.stopPropagation() — elles ne sont pas affectées.
   useEffect(() => {
-    const prevent = (e: DragEvent) => e.preventDefault();
+    console.log('[DROP-PREVENT] listeners enregistrés sur document');
+    const prevent = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.type === 'drop') console.log('[DROP-PREVENT] drop intercepté hors zone');
+    };
     document.addEventListener('dragover', prevent);
     document.addEventListener('drop', prevent);
     return () => {
