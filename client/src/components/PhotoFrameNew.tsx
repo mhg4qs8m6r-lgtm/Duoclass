@@ -69,6 +69,7 @@ export default function PhotoFrameNew({
           <div className="flex flex-col items-center justify-center text-red-500 p-2 text-center w-full h-full">
             <FileText className="w-10 h-10 mb-1" />
             <span className="text-xs font-medium truncate max-w-full px-1">{frame.title || 'PDF'}</span>
+            <span className="text-[10px] text-gray-400 mt-1">Double-cliquez pour ouvrir le PDF</span>
           </div>
         ) : frame.photoUrl && !imgError ? (
           <>
