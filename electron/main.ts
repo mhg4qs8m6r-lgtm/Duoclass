@@ -1,6 +1,8 @@
-import { app, BrowserWindow, globalShortcut, session } from "electron";
+import { app, BrowserWindow, globalShortcut, session, ipcMain, shell } from "electron";
 import path from "path";
 import crypto from "crypto";
+import os from "os";
+import fs from "fs";
 
 // ─── Paths Electron (set BEFORE server modules are imported) ──────────────────
 // server/db.ts and server/local-storage.ts read these env vars lazily (on first
@@ -71,6 +73,26 @@ async function createWindow(port: number): Promise<void> {
     mainWindow = null;
   });
 }
+
+// ─── IPC handlers ─────────────────────────────────────────────────────────────
+ipcMain.handle("open-pdf", async (_event, urlOrData: string) => {
+  try {
+    const tempPath = path.join(os.tmpdir(), "duoclass_preview.pdf");
+    if (urlOrData.startsWith("data:application/pdf;base64,")) {
+      const base64 = urlOrData.replace("data:application/pdf;base64,", "");
+      fs.writeFileSync(tempPath, Buffer.from(base64, "base64"));
+    } else {
+      const response = await fetch(urlOrData);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      fs.writeFileSync(tempPath, buffer);
+    }
+    await shell.openPath(tempPath);
+    return { ok: true };
+  } catch (err) {
+    console.error("[open-pdf]", err);
+    return { ok: false, error: String(err) };
+  }
+});
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {

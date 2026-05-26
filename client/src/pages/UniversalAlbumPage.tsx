@@ -1904,8 +1904,11 @@ export default function UniversalAlbumPage({
       if (frame.mediaType === 'video' && frame.videoUrl) {
         // Ouvrir le lecteur vidéo
         setVideoToPlay({ url: frame.videoUrl, title: frame.title, rotation: frame.rotation || 0, frameId: frame.id });
+      } else if (frame.format === 'PDF' && frame.photoUrl && (window as any).electronAPI) {
+        // Ouvrir le PDF dans le visualiseur système (Electron)
+        (window as any).electronAPI.invoke('open-pdf', frame.photoUrl);
       } else if (frame.photoUrl) {
-        // Ouvrir la visionneuse d'image/PDF
+        // Ouvrir la visionneuse d'image/PDF (fallback web)
         setViewedDoc({ url: frame.photoUrl, title: frame.title, rotation: frame.rotation || 0 });
       }
     }
