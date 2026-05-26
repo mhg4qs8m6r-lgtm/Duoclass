@@ -8867,7 +8867,8 @@ export default function CreationsAtelierV2({
                         {/* Bouton corbeille (supprimer la forme) */}
                         {selectedElementId === element.id && (element.type === 'shape' || element.type === 'opening') && (
                           <div
-                            className="absolute -top-4 -right-4 w-6 h-6 bg-red-500 border-2 border-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-red-600 z-[110]"
+                            className="absolute w-6 h-6 bg-red-500 border-2 border-white rounded-full shadow-md flex items-center justify-center cursor-pointer hover:bg-red-600 z-[110]"
+                            style={{ top: -26, right: -26 }}
                             draggable={false}
                             title={language === 'fr' ? 'Supprimer cette forme' : 'Delete this shape'}
                             onMouseDown={(e) => e.stopPropagation()}
