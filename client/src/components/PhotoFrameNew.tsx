@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Pencil, Trash2, ImageOff, Play, RotateCw } from 'lucide-react';
+import { Pencil, Trash2, ImageOff, Play, RotateCw, FileText } from 'lucide-react';
 import { formatDuration } from '@/lib/videoUtils';
 import { cn } from '@/lib/utils';
 import { calculateFrameSize, FRAME_TITLE_HEIGHT, DisplayMode } from '@/lib/frameUtils';
@@ -65,10 +65,15 @@ export default function PhotoFrameNew({
         className="flex-1 flex items-center justify-center overflow-hidden relative"
       >
 
-        {frame.photoUrl && !imgError ? (
+        {frame.format === 'PDF' && frame.photoUrl ? (
+          <div className="flex flex-col items-center justify-center text-red-500 p-2 text-center w-full h-full">
+            <FileText className="w-10 h-10 mb-1" />
+            <span className="text-xs font-medium truncate max-w-full px-1">{frame.title || 'PDF'}</span>
+          </div>
+        ) : frame.photoUrl && !imgError ? (
           <>
             {/* Image avec rotation appliquée */}
-            <img 
+            <img
               src={frame.photoUrl} 
               alt={frame.title} 
               className="max-w-full max-h-full object-contain transition-transform duration-200"

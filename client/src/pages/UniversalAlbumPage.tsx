@@ -2478,7 +2478,7 @@ export default function UniversalAlbumPage({
     const selectedDocs = frames.filter(f => f.isSelected && f.photoUrl);
     
     if (convertMode === 'pdf') {
-      generatePDF(selectedDocs);
+      await generatePDF(selectedDocs);
     } else {
       // Placer les images converties dans l'album (pas de téléchargement)
       await addConvertedImagesToAlbum(selectedDocs);
@@ -2661,32 +2661,49 @@ export default function UniversalAlbumPage({
     }
   };
 
-  const generatePDF = (docs: PhotoFrame[]) => {
+  const generatePDF = async (docs: PhotoFrame[]) => {
+    const toastId = toast.loading(language === 'fr' ? 'Génération du PDF...' : 'Generating PDF...');
     const doc = new jsPDF();
-    
-    docs.forEach((frame, i) => {
+
+    for (let i = 0; i < docs.length; i++) {
+      const frame = docs[i];
       if (frame.photoUrl) {
         if (i > 0) doc.addPage();
-        
+
         // Titre
         doc.setFontSize(16);
         doc.text(frame.title || `${itemLabel} ${i+1}`, 10, 15);
-        
+
         // Date et Lieu
         doc.setFontSize(10);
         doc.text(`${frame.date || ''} ${frame.location ? '- ' + frame.location : ''}`, 10, 22);
-        
+
+        // Image : résoudre les URL S3 en base64 si nécessaire
+        let imageData = frame.photoUrl;
+        if (!imageData.startsWith('data:image')) {
+          try {
+            const response = await fetch(imageData);
+            const blob = await response.blob();
+            imageData = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            imageData = '';
+          }
+        }
+
         // Image
         try {
-          if (frame.photoUrl.startsWith('data:image')) {
-            const imgProps = doc.getImageProperties(frame.photoUrl);
+          if (imageData.startsWith('data:image')) {
+            const imgProps = doc.getImageProperties(imageData);
             const pdfWidth = doc.internal.pageSize.getWidth() - 20;
             const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            // Limiter la hauteur pour ne pas dépasser la page
             const maxPageHeight = 250;
             const finalHeight = Math.min(pdfHeight, maxPageHeight);
-            
-            doc.addImage(frame.photoUrl, 'JPEG', 10, 30, pdfWidth, finalHeight);
+
+            doc.addImage(imageData, 'JPEG', 10, 30, pdfWidth, finalHeight);
           } else {
              doc.text(language === "fr" ? "(Format non supporté pour la conversion directe)" : "(Format not supported for direct conversion)", 10, 50);
           }
@@ -2703,8 +2720,10 @@ export default function UniversalAlbumPage({
           doc.text("(Erreur lors du chargement de l'image)", 10, 50);
         }
       }
-    });
-    
+    }
+
+    toast.dismiss(toastId);
+
     // Générer le PDF en base64 pour l'ajouter à l'album
     const pdfBase64 = doc.output('datauristring');
     
