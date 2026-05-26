@@ -2350,7 +2350,7 @@ export default function UniversalAlbumPage({
   // --- RETOUCHE PHOTO ---
   const handleRetouchesClick = () => {
     // Récupérer les photos sélectionnées (uniquement les images, pas les PDF)
-    const selectedPhotos = frames.filter(f => f.isSelected && f.photoUrl && f.photoUrl.startsWith('data:image'));
+    const selectedPhotos = frames.filter(f => f.isSelected && f.photoUrl && !f.isVideo && f.format !== 'PDF');
     
     if (selectedPhotos.length === 0) {
       toast.info(language === "fr" ? "Sélectionnez une photo à retoucher" : "Select a photo to edit");
