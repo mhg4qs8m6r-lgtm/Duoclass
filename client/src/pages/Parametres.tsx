@@ -125,6 +125,7 @@ export default function Parametres() {
   // 4. Sauvegardes
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => localStorage.getItem('user_avatar'));
   
   // Remise à zéro
   const [showFactoryResetDialog, setShowFactoryResetDialog] = useState(false);
@@ -667,16 +668,14 @@ export default function Parametres() {
                   <div className="flex items-start gap-6">
                     {/* Aperçu Avatar */}
                     <div className="shrink-0">
-                      <div 
-                        data-avatar-preview
-                        className="w-20 h-20 rounded-full border-4 border-blue-200 shadow-lg overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center"
-                        style={{
-                          backgroundImage: localStorage.getItem('user_avatar') ? `url(${localStorage.getItem('user_avatar')})` : undefined,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center'
-                        }}
+                      <div
+                        className={`w-20 h-20 rounded-full shadow-lg overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center ${avatarUrl ? 'border-0' : 'border-4 border-blue-200'}`}
                       >
-                        {!localStorage.getItem('user_avatar') && <User className="w-10 h-10 text-blue-400" />}
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-10 h-10 text-blue-400" />
+                        )}
                       </div>
                     </div>
 
@@ -700,12 +699,8 @@ export default function Parametres() {
                             reader.onload = (event) => {
                               const dataUrl = event.target?.result as string;
                               localStorage.setItem('user_avatar', dataUrl);
+                              setAvatarUrl(dataUrl);
                               toast.success(t('toast.avatarUpdated'));
-                              // Forcer la mise à jour de l'affichage sans recharger la page
-                              const avatarPreview = document.querySelector('[data-avatar-preview]') as HTMLDivElement;
-                              if (avatarPreview) {
-                                avatarPreview.style.backgroundImage = `url(${dataUrl})`;
-                              }
                             };
                             reader.readAsDataURL(file);
                           }
