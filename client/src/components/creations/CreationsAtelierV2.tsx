@@ -732,6 +732,19 @@ function pathFromSegments(segments: Segment[]): string {
   return parts.join(' ');
 }
 /**
+ * Décale toutes les coordonnées d'un customPath de (dx, dy) en cm.
+ */
+function shiftCustomPath(path: string, dx: number, dy: number): string {
+  const segs = parseCustomPathToSegments(path);
+  const shifted = segs.map(s => ({
+    ...s,
+    x1: s.x1 + dx, y1: s.y1 + dy,
+    x2: s.x2 + dx, y2: s.y2 + dy,
+    ...(s.cx !== undefined ? { cx: s.cx + dx, cy: (s.cy ?? 0) + dy } : {}),
+  }));
+  return pathFromSegments(shifted);
+}
+/**
  * Génère un path SVG en coordonnées cm pour un rectangle aux angles arrondis.
  * convex (extérieur) : arrondi classique.
  * concave (intérieur) : arc inversé, aspect « cadre ».
@@ -1191,6 +1204,7 @@ export default function CreationsAtelierV2({
 
   // Refs pour le déplacement groupé (multi-sélection)
   const multiDragStartPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const multiDragStartCustomPaths = useRef<Map<string, string>>(new Map());
   // Ref pour le redimensionnement groupé : stocke { x, y, width, height } de chaque membre au début du resize
   const groupResizeStart = useRef<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
   
@@ -4748,17 +4762,21 @@ export default function CreationsAtelierV2({
 
     // Sauvegarder les positions de départ de TOUS les éléments sélectionnés
     const startPositions = new Map<string, { x: number; y: number }>();
+    const startCustomPaths = new Map<string, string>();
     effectiveSelection.forEach(id => {
       const el = canvasElements.find(e => e.id === id);
       if (el && !el.locked) {
         startPositions.set(id, { x: el.x, y: el.y });
+        if (el.customPath) startCustomPaths.set(id, el.customPath);
       }
     });
     // Toujours inclure l'élément en cours de drag
     if (!startPositions.has(elementId)) {
       startPositions.set(elementId, { x: element.x, y: element.y });
+      if (element.customPath) startCustomPaths.set(elementId, element.customPath);
     }
     multiDragStartPositions.current = startPositions;
+    multiDragStartCustomPaths.current = startCustomPaths;
   };
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -4852,10 +4870,16 @@ export default function CreationsAtelierV2({
               height: origHeight + deltaYCm,
             };
           }
+          // PROTECTION — customPath DOIT être mis à jour
+          // en même temps que points lors du drag.
+          // Ne jamais déplacer une forme sans mettre à jour
+          // customPath — sans accord de Papy.
+          const origPath = multiDragStartCustomPaths.current.get(el.id);
           return {
             ...el,
             x: startPos.x + deltaXCm,
-            y: startPos.y + deltaYCm
+            y: startPos.y + deltaYCm,
+            ...(origPath ? { customPath: shiftCustomPath(origPath, deltaXCm, deltaYCm) } : {}),
           };
         }
         return el;
@@ -4864,10 +4888,15 @@ export default function CreationsAtelierV2({
       // Déplacement simple (un seul élément) — tout via refs, pas de closure stale
       const startSize = elementStartSizeRef.current;
       if (draggingIsPolyRef.current && polyDragStartPointsRef.current.length > 0) {
-        // Polygone libre : déplacer tous les points
+        // PROTECTION — customPath DOIT être mis à jour
+        // en même temps que points lors du drag.
+        // Ne jamais déplacer une forme sans mettre à jour
+        // customPath — sans accord de Papy.
+        const origPath = draggingCustomPathRef.current;
         setCanvasElements(prev => prev.map(el => el.id === currentElementId ? {
           ...el,
           points: polyDragStartPointsRef.current.map(p => ({ x: p.x + deltaXCm, y: p.y + deltaYCm })),
+          ...(origPath ? { customPath: shiftCustomPath(origPath, deltaXCm, deltaYCm) } : {}),
         } : el));
       } else if (draggingIsLineRef.current && startSize) {
         // Ligne SVG : x=x1, y=y1, width=x2, height=y2
@@ -4893,8 +4922,18 @@ export default function CreationsAtelierV2({
         }
         setCanvasElements(prev => prev.map(el => el.id === currentElementId ? { ...el, ...updates } : el));
       } else {
+        // PROTECTION — customPath DOIT être mis à jour
+        // en même temps que points lors du drag.
+        // Ne jamais déplacer une forme sans mettre à jour
+        // customPath — sans accord de Papy.
+        const origPath = draggingCustomPathRef.current;
         setCanvasElements(prev => prev.map(el => el.id === currentElementId
-          ? { ...el, x: currentElementStartPos.x + deltaXCm, y: currentElementStartPos.y + deltaYCm }
+          ? {
+              ...el,
+              x: currentElementStartPos.x + deltaXCm,
+              y: currentElementStartPos.y + deltaYCm,
+              ...(origPath ? { customPath: shiftCustomPath(origPath, deltaXCm, deltaYCm) } : {}),
+            }
           : el
         ));
       }
