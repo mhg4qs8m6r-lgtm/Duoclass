@@ -5243,6 +5243,8 @@ export default function CreationsAtelierV2({
       setElementStartPos({ x: element.x, y: element.y });
       setElementStartSize({ width: element.width, height: element.height });
     }
+    // Sauvegarder le customPath initial pour le rescaling dans handleResizeMove
+    draggingCustomPathRef.current = element.customPath || null;
 
     // Sauvegarder les dimensions de départ de tous les membres du groupe pour le resize groupé
     const grs = new Map<string, { x: number; y: number; width: number; height: number }>();
@@ -5432,8 +5434,11 @@ export default function CreationsAtelierV2({
         }
       }
     } else if (resizingEl?.customPath && resizingEl.shape !== 'line') {
-      // Forme avec segments personnalisés : rescaler les coordonnées proportionnellement
-      const segs = buildShapeSegments(resizingEl);
+      // PROTECTION — toujours rescaler depuis customPath d'ORIGINE
+      // (draggingCustomPathRef) jamais depuis l'état intermédiaire.
+      // Ne pas modifier sans accord de Papy.
+      const origPath = draggingCustomPathRef.current;
+      const segs = origPath ? parseCustomPathToSegments(origPath) : buildShapeSegments(resizingEl);
       if (segs && segs.length > 0) {
         const oldX = elementStartPos.x;
         const oldY = elementStartPos.y;
