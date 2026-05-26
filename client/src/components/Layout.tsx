@@ -522,7 +522,7 @@ export default function Layout(props: LayoutProps) {
               if (item.path === '/') {
                 isActive = location === '/';
               } else {
-                isActive = location.startsWith(item.path);
+                isActive = location === item.path || location.startsWith(item.path + '/');
               }
               
               // Surcharge pour la page d'accueil si une série est sélectionnée
