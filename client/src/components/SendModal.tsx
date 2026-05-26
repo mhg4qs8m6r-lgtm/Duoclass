@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Mail } from 'lucide-react';
 import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { trpc } from '@/lib/trpc';
 
 interface PhotoToSend {
   filename: string;
@@ -24,7 +25,7 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('Photos partagées depuis DuoClass');
   const [message, setMessage] = useState('Voici les photos que je souhaite partager avec vous.');
-  const [sending, setSending] = useState(false);
+  const sendMutation = trpc.email.sendPhotos.useMutation();
 
   const itemCount = photos.length;
 
@@ -37,13 +38,22 @@ export default function SendModal({ isOpen, onClose, photos }: SendModalProps) {
       toast.error(language === "fr" ? "Adresse email invalide" : "Invalid email address");
       return;
     }
-    setSending(true);
-    // Envoi SMTP non disponible en mode Electron local.
-    toast.info(language === 'fr'
-      ? "L'envoi par email n'est pas disponible en mode local."
-      : "Email sending is not available in local mode.");
-    setSending(false);
-    onClose();
+
+    try {
+      await sendMutation.mutateAsync({
+        to: email,
+        subject,
+        message,
+        photos,
+      });
+      toast.success(language === 'fr' ? `Photos envoyées avec succès à ${email}` : `Photos sent successfully to ${email}`);
+      onClose();
+      setEmail('');
+      setMessage('Voici les photos que je souhaite partager avec vous.');
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast.error(language === 'fr' ? `Erreur d'envoi : ${errorMsg}` : `Send error: ${errorMsg}`);
+    }
   };
 
   return (
