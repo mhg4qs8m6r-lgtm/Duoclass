@@ -940,7 +940,7 @@ export default function UniversalAlbumPage({
     const hasVideos = videoFiles.length > 0;
 
     // Si contrôle parental actif ET vidéos présentes, afficher l'avertissement
-    if (parentalLevel >= 2 && hasVideos && isPhoto) {
+    if (parentalLevel >= 1 && hasVideos && isPhoto) {
       console.log('Vidéos détectées avec contrôle parental actif - affichage avertissement');
       setPendingVideoFiles(validFiles);
       setParentalControlLevel(parentalLevel);
@@ -950,7 +950,7 @@ export default function UniversalAlbumPage({
       return;
     }
 
-    if (parentalLevel >= 2) {
+    if (parentalLevel >= 1) {
       // Pour le contrôle parental (sans vidéos), on analyse les images
       const mediaFiles = validFiles.filter(f => f.type.startsWith('image/'));
       console.log('Images à analyser:', mediaFiles.length);
@@ -1010,8 +1010,8 @@ export default function UniversalAlbumPage({
     console.log('Niveau contrôle parental:', parentalLevel);
     
     // Si le contrôle parental est actif (niveau >= 2 = Modéré ou plus), demander le consentement
-    // Niveau 0 = Désactivé, Niveau 1 = Très permissif (pas d'analyse)
-    if (parentalLevel >= 2) {
+    // Niveau 0 = Désactivé, Niveau 1+ = Contrôle actif (seuils progressifs)
+    if (parentalLevel >= 1) {
       // Filtrer seulement les images (pas les PDF)
       const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/'));
       console.log('Images trouvées:', imageFiles.length);
@@ -1436,7 +1436,7 @@ export default function UniversalAlbumPage({
     const hasVideos = videoFiles.length > 0;
     
     // Si contrôle parental actif ET vidéos présentes, afficher l'avertissement
-    if (parentalLevel >= 2 && hasVideos && isPhoto) {
+    if (parentalLevel >= 1 && hasVideos && isPhoto) {
       console.log('Vidéos détectées avec contrôle parental actif - affichage avertissement');
       setPendingVideoFiles(validFiles);
       setParentalControlLevel(parentalLevel);
@@ -1446,7 +1446,7 @@ export default function UniversalAlbumPage({
       return;
     }
     
-    if (parentalLevel >= 2) {
+    if (parentalLevel >= 1) {
       // Analyser les images uniquement (sans vidéos)
       const mediaFiles = validFiles.filter(f => f.type.startsWith('image/'));
       console.log('Images à analyser:', mediaFiles.length);
@@ -1653,7 +1653,7 @@ export default function UniversalAlbumPage({
     console.log('Frame ID:', frameId);
     
     // Si c'est une vidéo avec contrôle parental actif, afficher l'avertissement
-    if (parentalLevel >= 2 && file.type.startsWith('video/') && isPhoto) {
+    if (parentalLevel >= 1 && file.type.startsWith('video/') && isPhoto) {
       console.log('Vidéo détectée avec contrôle parental actif - affichage avertissement');
       setPendingDropFrameId(frameId);
       setPendingVideoFiles([file]);
@@ -1664,7 +1664,7 @@ export default function UniversalAlbumPage({
     }
     
     // Analyser les images uniquement (pas les vidéos)
-    if (parentalLevel >= 2 && file.type.startsWith('image/')) {
+    if (parentalLevel >= 1 && file.type.startsWith('image/')) {
       console.log('Ouverture modale contrôle parental pour drop sur cadre');
       setPendingDropFrameId(frameId);
       setPendingFilesForParentalControl([file]);
