@@ -13,7 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Shield, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, Loader2, Info } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, Loader2, Info, AlertCircle } from 'lucide-react';
 import { analyzeImageFromSource, loadNSFWModel, ParentalControlLevel } from '@/lib/nsfwService';
 import { extractVideoThumbnail } from '@/lib/videoUtils';
 
@@ -33,6 +33,11 @@ interface BlockedFile {
   reason: string;
 }
 
+interface WarnedFile {
+  file: File;
+  reason: string;
+}
+
 export function ParentalControlModal({
   isOpen,
   onClose,
@@ -46,6 +51,7 @@ export function ParentalControlModal({
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [currentFileName, setCurrentFileName] = useState('');
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
+  const [warnedFiles, setWarnedFiles] = useState<WarnedFile[]>([]);
   const [blockedFiles, setBlockedFiles] = useState<BlockedFile[]>([]);
   const [isModelLoading, setIsModelLoading] = useState(false);
 
@@ -62,6 +68,7 @@ export function ParentalControlModal({
       setCurrentFileIndex(0);
       setCurrentFileName('');
       setAcceptedFiles([]);
+      setWarnedFiles([]);
       setBlockedFiles([]);
     }
   }, [isOpen]);
@@ -104,6 +111,7 @@ export function ParentalControlModal({
     }
 
     const accepted: File[] = [...nonMediaFiles]; // Les PDF sont toujours acceptés
+    const warned: WarnedFile[] = [];
     const blocked: BlockedFile[] = [];
 
     // Analyser chaque image et vidéo
@@ -129,10 +137,15 @@ export function ParentalControlModal({
         
         const result = await analyzeImageFromSource(sourceToAnalyze, controlLevel as ParentalControlLevel);
         
-        if (result.isInappropriate) {
+        if (result.isBlocked) {
           blocked.push({
             name: file.name,
             reason: result.blockedReason || 'Contenu inapproprié détecté'
+          });
+        } else if (result.isWarning) {
+          warned.push({
+            file,
+            reason: result.warningReason || 'Contenu potentiellement sensible'
           });
         } else {
           accepted.push(file);
@@ -145,6 +158,7 @@ export function ParentalControlModal({
     }
 
     setAcceptedFiles(accepted);
+    setWarnedFiles(warned);
     setBlockedFiles(blocked);
     setStep('result');
   };
@@ -154,9 +168,9 @@ export function ParentalControlModal({
     onClose();
   };
 
-  // Terminer et importer les fichiers acceptés
+  // Terminer et importer les fichiers acceptés + avertis
   const handleFinish = () => {
-    onComplete(acceptedFiles);
+    onComplete([...acceptedFiles, ...warnedFiles.map(w => w.file)]);
   };
 
   // Annuler l'import
@@ -313,15 +327,20 @@ export function ParentalControlModal({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
-                {blockedFiles.length === 0 ? (
+                {blockedFiles.length === 0 && warnedFiles.length === 0 ? (
                   <>
                     <CheckCircle className="h-6 w-6 text-green-600" />
                     {language === 'fr' ? 'Analyse terminée' : 'Analysis complete'}
                   </>
+                ) : blockedFiles.length > 0 ? (
+                  <>
+                    <ShieldAlert className="h-6 w-6 text-red-600" />
+                    {language === 'fr' ? 'Analyse terminée - Contenu bloqué' : 'Analysis complete - Content blocked'}
+                  </>
                 ) : (
                   <>
-                    <ShieldAlert className="h-6 w-6 text-amber-600" />
-                    {language === 'fr' ? 'Analyse terminée - Contenu bloqué' : 'Analysis complete - Content blocked'}
+                    <AlertCircle className="h-6 w-6 text-orange-500" />
+                    {language === 'fr' ? 'Analyse terminée - Avertissements' : 'Analysis complete - Warnings'}
                   </>
                 )}
               </DialogTitle>
@@ -331,28 +350,60 @@ export function ParentalControlModal({
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              {/* Résumé */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Résumé 3 colonnes */}
+              <div className="grid grid-cols-3 gap-3">
                 {/* Fichiers acceptés */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <CheckCircle className="h-7 w-7 text-green-600 mx-auto mb-1" />
                   <p className="text-2xl font-bold text-green-700">{acceptedFiles.length}</p>
-                  <p className="text-sm text-green-600">{language === 'fr' ? 'Fichier(s) accepté(s)' : 'File(s) accepted'}</p>
+                  <p className="text-xs text-green-600">{language === 'fr' ? 'Accepté(s)' : 'Accepted'}</p>
+                </div>
+
+                {/* Fichiers avec avertissement */}
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                  <AlertCircle className="h-7 w-7 text-orange-500 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-orange-600">{warnedFiles.length}</p>
+                  <p className="text-xs text-orange-500">{language === 'fr' ? 'Avertissement(s)' : 'Warning(s)'}</p>
                 </div>
 
                 {/* Fichiers bloqués */}
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                  <XCircle className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                  <XCircle className="h-7 w-7 text-red-600 mx-auto mb-1" />
                   <p className="text-2xl font-bold text-red-700">{blockedFiles.length}</p>
-                  <p className="text-sm text-red-600">{language === 'fr' ? 'Fichier(s) bloqué(s)' : 'File(s) blocked'}</p>
+                  <p className="text-xs text-red-600">{language === 'fr' ? 'Bloqué(s)' : 'Blocked'}</p>
                 </div>
               </div>
+
+              {/* Bannière avertissement */}
+              {warnedFiles.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2 mb-3">
+                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-orange-800 text-sm font-medium">
+                      {language === 'fr'
+                        ? 'Ces fichiers ont déclenché un avertissement mais peuvent être importés.'
+                        : 'These files triggered a warning but can still be imported.'}
+                    </p>
+                  </div>
+                  <ul className="space-y-2 max-h-32 overflow-y-auto">
+                    {warnedFiles.map((wf, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm">
+                        <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <span className="font-medium text-orange-700">{wf.file.name}</span>
+                          <span className="text-orange-600 block text-xs">{wf.reason}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Liste des fichiers bloqués */}
               {blockedFiles.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="font-medium text-red-800 mb-3">{language === 'fr' ? 'Fichiers bloqués :' : 'Blocked files:'}</p>
-                  <ul className="space-y-2 max-h-40 overflow-y-auto">
+                  <ul className="space-y-2 max-h-32 overflow-y-auto">
                     {blockedFiles.map((file, index) => (
                       <li key={index} className="flex items-start gap-2 text-sm">
                         <XCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
@@ -367,7 +418,7 @@ export function ParentalControlModal({
               )}
 
               {/* Message de succès si tout est OK */}
-              {blockedFiles.length === 0 && (
+              {blockedFiles.length === 0 && warnedFiles.length === 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-5 w-5 text-green-600" />
@@ -381,7 +432,7 @@ export function ParentalControlModal({
 
             {/* Boutons */}
             <div className="flex justify-end gap-3 pt-2">
-              {acceptedFiles.length === 0 ? (
+              {acceptedFiles.length === 0 && warnedFiles.length === 0 ? (
                 <Button onClick={handleCancel}>
                     {language === 'fr' ? 'Fermer' : 'Close'}
                 </Button>
@@ -392,7 +443,9 @@ export function ParentalControlModal({
                   </Button>
                   <Button onClick={handleFinish} className="bg-green-600 hover:bg-green-700">
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    {language === 'fr' ? `Importer ${acceptedFiles.length} fichier(s)` : `Import ${acceptedFiles.length} file(s)`}
+                    {language === 'fr'
+                      ? `Importer ${acceptedFiles.length + warnedFiles.length} fichier(s)${warnedFiles.length > 0 ? ` (dont ${warnedFiles.length} avec avertissement)` : ''}`
+                      : `Import ${acceptedFiles.length + warnedFiles.length} file(s)${warnedFiles.length > 0 ? ` (${warnedFiles.length} with warning)` : ''}`}
                   </Button>
                 </>
               )}
