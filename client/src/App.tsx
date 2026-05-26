@@ -40,6 +40,19 @@ function Router() {
   const [pageTitle, setPageTitle] = useState("Album");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("normal");
 
+  // Prévention globale : empêche Electron de naviguer vers le fichier
+  // quand l'utilisateur dépose un fichier hors d'une zone de drop explicite.
+  // Les zones de drop existantes appellent e.stopPropagation() — elles ne sont pas affectées.
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault();
+    document.addEventListener('dragover', prevent);
+    document.addEventListener('drop', prevent);
+    return () => {
+      document.removeEventListener('dragover', prevent);
+      document.removeEventListener('drop', prevent);
+    };
+  }, []);
+
   return (
     <Switch>
       <Route path="/" component={Landing} />
