@@ -15,7 +15,12 @@ const NSFWJS_CDN_URL =
 
 // Types pour les résultats d'analyse
 export interface NSFWResult {
+  /** Backward compat — alias de isBlocked */
   isInappropriate: boolean;
+  /** Import refusé (niveaux 3-5 selon catégorie) */
+  isBlocked: boolean;
+  /** Avertissement affiché, import toujours possible (niveaux 1-2) */
+  isWarning: boolean;
   confidence: number;
   categories: {
     drawing: number;
@@ -25,19 +30,52 @@ export interface NSFWResult {
     sexy: number;
   };
   blockedReason?: string;
+  warningReason?: string;
 }
 
 // Niveaux de contrôle parental
 export type ParentalControlLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
-// Seuils selon le niveau de contrôle
-const THRESHOLDS: Record<ParentalControlLevel, { porn: number; sexy: number; hentai: number }> = {
-  0: { porn: 1.1, sexy: 1.1, hentai: 1.1 }, // Désactivé (seuils impossibles à atteindre)
-  1: { porn: 0.9, sexy: 1.1, hentai: 0.9 }, // Très permissif
-  2: { porn: 0.7, sexy: 0.9, hentai: 0.7 }, // Permissif
-  3: { porn: 0.5, sexy: 0.7, hentai: 0.5 }, // Modéré
-  4: { porn: 0.3, sexy: 0.5, hentai: 0.3 }, // Strict
-  5: { porn: 0.2, sexy: 0.3, hentai: 0.2 }, // Très strict
+// Seuils par niveau : warn = avertissement (import possible), block = refus
+interface LevelThresholds {
+  warn:  { porn: number; sexy: number; hentai: number };
+  block: { porn: number; sexy: number; hentai: number };
+  /** Niveau 5 : filtrage positif — seules neutral+drawing acceptées */
+  positiveFilter?: boolean;
+}
+
+const THRESHOLDS: Record<ParentalControlLevel, LevelThresholds> = {
+  // Niveau 0 — Désactivé : aucune analyse
+  0: {
+    warn:  { porn: 1.1, sexy: 1.1, hentai: 1.1 },
+    block: { porn: 1.1, sexy: 1.1, hentai: 1.1 },
+  },
+  // Niveau 1 — Analyse + avertissement, import toujours possible
+  1: {
+    warn:  { porn: 0.7, sexy: 0.85, hentai: 0.7 },
+    block: { porn: 1.1, sexy: 1.1,  hentai: 1.1 },
+  },
+  // Niveau 2 — Contenu sexy détecté : avertissement, import toujours possible
+  2: {
+    warn:  { porn: 0.7, sexy: 0.7, hentai: 0.7 },
+    block: { porn: 1.1, sexy: 1.1, hentai: 1.1 },
+  },
+  // Niveau 3 — Sexy → refusé ; ambigu/suggestif → avertissement
+  3: {
+    warn:  { porn: 0.35, sexy: 0.35, hentai: 0.35 },
+    block: { porn: 0.5,  sexy: 0.65, hentai: 0.5  },
+  },
+  // Niveau 4 — Contenu explicite (porn, hentai) refusé ; sexy → avertissement
+  4: {
+    warn:  { porn: 1.1, sexy: 0.3, hentai: 1.1 },
+    block: { porn: 0.3, sexy: 0.5, hentai: 0.3 },
+  },
+  // Niveau 5 — Très strict : seules neutral et drawing acceptées
+  5: {
+    warn:  { porn: 1.1, sexy: 1.1, hentai: 1.1 }, // non utilisé (positiveFilter)
+    block: { porn: 1.1, sexy: 1.1, hentai: 1.1 }, // non utilisé (positiveFilter)
+    positiveFilter: true,
+  },
 };
 
 // Type minimal pour l'API nsfwjs exposée par le bundle CDN
@@ -110,16 +148,13 @@ export async function loadNSFWModel(): Promise<NsfwjsModel> {
   isLoading = true;
   loadPromise = (async () => {
     try {
-      // Étape 1 : charger le script CDN si nécessaire
       await loadNsfwjsScript();
 
-      // Étape 2 : récupérer l'objet nsfwjs depuis window
       const nsfwjsLib = (window as unknown as Record<string, unknown>).nsfwjs as NsfwjsModule;
       if (!nsfwjsLib || typeof nsfwjsLib.load !== "function") {
         throw new Error("La bibliothèque nsfwjs n'est pas disponible après le chargement du script");
       }
 
-      // Étape 3 : charger le modèle (utilise le modèle par défaut MobileNetV2)
       const loadedModel = await nsfwjsLib.load();
       model = loadedModel;
       isLoading = false;
@@ -135,16 +170,22 @@ export async function loadNSFWModel(): Promise<NsfwjsModel> {
 }
 
 /**
- * Analyse une image et retourne si elle est inappropriée selon le niveau de contrôle.
+ * Analyse une image et retourne isBlocked / isWarning selon le niveau de contrôle.
+ *
+ * - isBlocked  : import refusé définitivement (niveaux 3-5 selon catégorie)
+ * - isWarning  : avertissement visible, import toujours possible (niveaux 1-2)
+ * - isInappropriate : alias de isBlocked (backward compat ParentalControlModal)
  */
 export async function analyzeImage(
   imageElement: HTMLImageElement,
   controlLevel: ParentalControlLevel
 ): Promise<NSFWResult> {
-  // Si le contrôle est désactivé, retourner OK directement sans charger le modèle
+  // Niveau 0 : désactivé
   if (controlLevel === 0) {
     return {
       isInappropriate: false,
+      isBlocked: false,
+      isWarning: false,
       confidence: 0,
       categories: { drawing: 0, hentai: 0, neutral: 1, porn: 0, sexy: 0 },
     };
@@ -153,51 +194,82 @@ export async function analyzeImage(
   const nsfwModel = await loadNSFWModel();
   const predictions = await nsfwModel.classify(imageElement);
 
-  // Convertir les prédictions en objet structuré
-  const categories = {
-    drawing: 0,
-    hentai: 0,
-    neutral: 0,
-    porn: 0,
-    sexy: 0,
-  };
-
+  const categories = { drawing: 0, hentai: 0, neutral: 0, porn: 0, sexy: 0 };
   for (const pred of predictions) {
     const key = pred.className.toLowerCase() as keyof typeof categories;
-    if (key in categories) {
-      categories[key] = pred.probability;
-    }
+    if (key in categories) categories[key] = pred.probability;
   }
 
-  // Évaluer selon les seuils du niveau de contrôle
   const thresholds = THRESHOLDS[controlLevel];
-  let isInappropriate = false;
+
+  // ── Niveau 5 : filtrage positif ──────────────────────────────────────────
+  if (thresholds.positiveFilter) {
+    const dominant = (Object.entries(categories) as [keyof typeof categories, number][])
+      .reduce((a, b) => (a[1] > b[1] ? a : b))[0];
+    const isBlocked = dominant !== "neutral" && dominant !== "drawing";
+    return {
+      isInappropriate: isBlocked,
+      isBlocked,
+      isWarning: false,
+      confidence: isBlocked ? Math.max(categories.porn, categories.sexy, categories.hentai) : 0,
+      categories,
+      blockedReason: isBlocked
+        ? "Contenu non neutre détecté (niveau très strict — seules les images neutres et illustrations sont acceptées)"
+        : undefined,
+    };
+  }
+
+  // ── Niveaux 1-4 : seuils warn + block ───────────────────────────────────
+  let isBlocked = false;
+  let isWarning = false;
   let blockedReason = "";
+  let warningReason = "";
   let maxConfidence = 0;
 
-  if (categories.porn >= thresholds.porn) {
-    isInappropriate = true;
+  // Vérifier les seuils de blocage en premier
+  if (categories.porn >= thresholds.block.porn) {
+    isBlocked = true;
     blockedReason = "Contenu pornographique détecté";
     maxConfidence = Math.max(maxConfidence, categories.porn);
   }
-
-  if (categories.hentai >= thresholds.hentai) {
-    isInappropriate = true;
+  if (categories.hentai >= thresholds.block.hentai) {
+    isBlocked = true;
     blockedReason = blockedReason || "Contenu hentai/anime adulte détecté";
     maxConfidence = Math.max(maxConfidence, categories.hentai);
   }
-
-  if (categories.sexy >= thresholds.sexy) {
-    isInappropriate = true;
-    blockedReason = blockedReason || "Contenu suggestif détecté";
+  if (categories.sexy >= thresholds.block.sexy) {
+    isBlocked = true;
+    blockedReason = blockedReason || "Contenu suggestif explicite détecté";
     maxConfidence = Math.max(maxConfidence, categories.sexy);
   }
 
+  // Vérifier les seuils d'avertissement (seulement si pas déjà bloqué)
+  if (!isBlocked) {
+    if (categories.porn >= thresholds.warn.porn) {
+      isWarning = true;
+      warningReason = "Contenu potentiellement inapproprié détecté";
+      maxConfidence = Math.max(maxConfidence, categories.porn);
+    }
+    if (categories.hentai >= thresholds.warn.hentai) {
+      isWarning = true;
+      warningReason = warningReason || "Contenu animé adulte potentiel détecté";
+      maxConfidence = Math.max(maxConfidence, categories.hentai);
+    }
+    if (categories.sexy >= thresholds.warn.sexy) {
+      isWarning = true;
+      warningReason = warningReason || "Contenu suggestif détecté";
+      maxConfidence = Math.max(maxConfidence, categories.sexy);
+    }
+  }
+
   return {
-    isInappropriate,
+    isInappropriate: isBlocked, // backward compat
+    isBlocked,
+    isWarning,
     confidence: maxConfidence,
     categories,
-    blockedReason: isInappropriate ? blockedReason : undefined,
+    blockedReason: isBlocked ? blockedReason : undefined,
+    warningReason: isWarning ? warningReason : undefined,
   };
 }
 
