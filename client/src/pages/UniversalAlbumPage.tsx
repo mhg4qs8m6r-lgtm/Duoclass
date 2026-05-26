@@ -2680,16 +2680,22 @@ export default function UniversalAlbumPage({
 
         // Image : résoudre les URL S3 en base64 si nécessaire
         let imageData = frame.photoUrl;
+        console.log('[PDF] URL source:', imageData.substring(0, 80));
         if (!imageData.startsWith('data:image')) {
           try {
+            console.log('[PDF] Fetch S3 en cours...');
             const response = await fetch(imageData);
+            console.log('[PDF] Fetch status:', response.status, response.ok);
             const blob = await response.blob();
+            console.log('[PDF] Blob type:', blob.type, 'size:', blob.size);
             imageData = await new Promise<string>((resolve) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result as string);
               reader.readAsDataURL(blob);
             });
-          } catch {
+            console.log('[PDF] base64 obtenu, début:', imageData.substring(0, 40));
+          } catch (err) {
+            console.error('[PDF] Fetch échoué:', err);
             imageData = '';
           }
         }
@@ -2697,6 +2703,7 @@ export default function UniversalAlbumPage({
         // Image
         try {
           if (imageData.startsWith('data:image')) {
+            console.log('[PDF] Insertion image dans le PDF...');
             const imgProps = doc.getImageProperties(imageData);
             const pdfWidth = doc.internal.pageSize.getWidth() - 20;
             const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
@@ -2704,7 +2711,9 @@ export default function UniversalAlbumPage({
             const finalHeight = Math.min(pdfHeight, maxPageHeight);
 
             doc.addImage(imageData, 'JPEG', 10, 30, pdfWidth, finalHeight);
+            console.log('[PDF] Image insérée avec succès');
           } else {
+            console.warn('[PDF] imageData invalide — image non insérée. Début:', imageData.substring(0, 40));
              doc.text(language === "fr" ? "(Format non supporté pour la conversion directe)" : "(Format not supported for direct conversion)", 10, 50);
           }
           
