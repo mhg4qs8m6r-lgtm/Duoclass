@@ -217,7 +217,7 @@ export function ParentalControlModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 <Shield className="h-6 w-6 text-blue-600" />
-                {language === 'fr' ? 'Contrôle Parental' : 'Parental Control'}
+                {language === 'fr' ? `Contrôle Parental — Niveau ${controlLevel}` : `Parental Control — Level ${controlLevel}`}
               </DialogTitle>
               <div className="flex items-center gap-2 mt-2">
                 <AlertTriangle className="h-5 w-5 text-orange-500" />
@@ -338,7 +338,7 @@ export function ParentalControlModal({
             <DialogHeader>
               <p className="text-sm font-semibold text-blue-600 flex items-center gap-1 mb-1">
                 <Shield className="h-4 w-4" />
-                {language === 'fr' ? 'Contrôle Parental' : 'Parental Control'}
+                {language === 'fr' ? `Contrôle Parental — Niveau ${controlLevel}` : `Parental Control — Level ${controlLevel}`}
               </p>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 {analysisError ? (
