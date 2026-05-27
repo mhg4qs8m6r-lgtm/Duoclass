@@ -794,62 +794,75 @@ export default function Parametres() {
               {/* --- ONGLET 3: SÉCURITÉ --- */}
               <TabsContent value="security" className="space-y-3 mt-0">
                 
-                {/* Code Maître */}
+                {/* Codes — côte à côte */}
                 <div className="p-3">
-                  <h2 className="text-base font-bold text-purple-800 mb-2 flex items-center gap-2 flex-wrap">
-                    <Lock className="w-5 h-5" /> {t('settings.masterCode')}
-                    <span className="text-xs font-normal text-gray-500">
-                      {masterCodeSetting?.updatedAt
-                        ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                        : (language === 'fr' ? '— jamais modifié' : '— never changed')}
-                    </span>
-                  </h2>
                   <div className="grid grid-cols-2 gap-4">
+
+                    {/* Code Maître */}
                     <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        {t('settings.masterCodeDesc')}
-                      </p>
+                      <h2 className="text-base font-bold text-purple-800 flex items-center gap-2 flex-wrap">
+                        <Lock className="w-5 h-5" /> {t('settings.masterCode')}
+                        <span className="text-xs font-normal text-gray-500">
+                          {masterCodeSetting?.updatedAt
+                            ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                            : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                        </span>
+                      </h2>
+                      <p className="text-sm text-gray-600">{t('settings.masterCodeDesc')}</p>
                       <div className="space-y-2">
                         <Label>{t('settings.newCode')}</Label>
-                        <Input 
-                          type="password" 
-                          value={newMasterCode} 
-                          onChange={(e) => setNewMasterCode(e.target.value)}
-                          placeholder={t('settings.min4chars')}
-                        />
+                        <Input type="password" value={newMasterCode} onChange={(e) => setNewMasterCode(e.target.value)} placeholder={t('settings.min4chars')} />
                       </div>
                       <div className="space-y-2">
                         <Label>{t('settings.confirmCode')}</Label>
-                        <Input 
-                          type="password" 
-                          value={confirmMasterCode} 
-                          onChange={(e) => setConfirmMasterCode(e.target.value)}
-                          placeholder={t('settings.repeatCode')}
-                        />
+                        <Input type="password" value={confirmMasterCode} onChange={(e) => setConfirmMasterCode(e.target.value)} placeholder={t('settings.repeatCode')} />
                       </div>
                       <Button onClick={handleUpdateMasterCode} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
                         {t('settings.updateCode')}
                       </Button>
                     </div>
-                    
-                    {/* Paramètres de session */}
+
+                    {/* Code de Permission */}
                     <div className="space-y-2 border-l pl-4">
-                      <h3 className="font-semibold text-gray-700">{t('settings.sessionDisconnect')}</h3>
-                      
+                      <h2 className="text-base font-bold text-blue-800 flex items-center gap-2 flex-wrap">
+                        <Key className="w-5 h-5" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
+                        <span className="text-xs font-normal text-gray-500">
+                          {permissionCodeSetting?.updatedAt
+                            ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                            : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                        </span>
+                      </h2>
+                      <p className="text-sm text-gray-600">
+                        {language === 'fr' ? 'Débloque l\'import d\'images sensibles aux niveaux 3 et 4.' : 'Unlocks sensitive image import at levels 3 and 4.'}
+                      </p>
+                      <div className="space-y-2">
+                        <Label>{language === 'fr' ? 'Nouveau code de permission' : 'New permission code'}</Label>
+                        <Input type="password" value={newPermissionCode} onChange={(e) => setNewPermissionCode(e.target.value)} placeholder={language === 'fr' ? '4 caractères minimum' : 'At least 4 characters'} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{language === 'fr' ? 'Confirmer le code' : 'Confirm code'}</Label>
+                        <Input type="password" value={confirmPermissionCode} onChange={(e) => setConfirmPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Répéter le code' : 'Repeat code'} />
+                      </div>
+                      <Button onClick={handleUpdatePermissionCode} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                        {language === 'fr' ? 'Mettre à jour' : 'Update'}
+                      </Button>
+                    </div>
+
+                  </div>
+
+                  {/* Session & Déconnexion — rangée en dessous */}
+                  <div className="mt-4 pt-4 border-t">
+                    <h3 className="font-semibold text-gray-700 mb-3">{t('settings.sessionDisconnect')}</h3>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>{t('settings.inactivityDelay')}</Label>
-                        <select 
-                          className="w-full h-10 px-3 rounded-md border border-gray-300"
-                          value={inactivityTimeout}
-                          onChange={(e) => setInactivityTimeout(e.target.value)}
-                        >
+                        <select className="w-full h-10 px-3 rounded-md border border-gray-300" value={inactivityTimeout} onChange={(e) => setInactivityTimeout(e.target.value)}>
                           <option value="5">5 {t('settings.minutes')}</option>
                           <option value="10">10 {t('settings.minutes')} ({t('settings.recommended')})</option>
                           <option value="30">30 {t('settings.minutes')}</option>
                           <option value="60">1 {t('settings.hour')}</option>
                         </select>
                       </div>
-
                       <div className="space-y-2">
                         <Label>{t('settings.noDisconnectTimeRange')}</Label>
                         <div className="flex items-center gap-2">
@@ -858,53 +871,10 @@ export default function Parametres() {
                           <Input type="time" value={autoLogoutExemptEnd} onChange={(e) => setAutoLogoutExemptEnd(e.target.value)} className="w-32" />
                         </div>
                       </div>
-
-                      <Button onClick={handleSaveSessionSettings} variant="outline" className="w-full">
-                        {t('settings.saveSessionSettings')}
-                      </Button>
                     </div>
-                  </div>
-                </div>
-
-                {/* Code de Permission */}
-                <div className="p-3">
-                  <h2 className="text-base font-bold text-blue-800 mb-2 flex items-center gap-2 flex-wrap">
-                    <Key className="w-5 h-5" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
-                    <span className="text-xs font-normal text-gray-500">
-                      {permissionCodeSetting?.updatedAt
-                        ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                        : (language === 'fr' ? '— jamais modifié' : '— never changed')}
-                    </span>
-                  </h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        {language === 'fr'
-                          ? 'Permet de débloquer l\'import d\'images sensibles aux niveaux 3 et 4.'
-                          : 'Allows importing sensitive images at levels 3 and 4.'}
-                      </p>
-                      <div className="space-y-2">
-                        <Label>{language === 'fr' ? 'Nouveau code de permission' : 'New permission code'}</Label>
-                        <Input
-                          type="password"
-                          value={newPermissionCode}
-                          onChange={(e) => setNewPermissionCode(e.target.value)}
-                          placeholder={language === 'fr' ? '4 caractères minimum' : 'At least 4 characters'}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{language === 'fr' ? 'Confirmer le code' : 'Confirm code'}</Label>
-                        <Input
-                          type="password"
-                          value={confirmPermissionCode}
-                          onChange={(e) => setConfirmPermissionCode(e.target.value)}
-                          placeholder={language === 'fr' ? 'Répéter le code' : 'Repeat code'}
-                        />
-                      </div>
-                      <Button onClick={handleUpdatePermissionCode} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                        {language === 'fr' ? 'Mettre à jour le code de permission' : 'Update permission code'}
-                      </Button>
-                    </div>
+                    <Button onClick={handleSaveSessionSettings} variant="outline" className="mt-3">
+                      {t('settings.saveSessionSettings')}
+                    </Button>
                   </div>
                 </div>
 
