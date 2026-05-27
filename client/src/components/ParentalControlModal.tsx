@@ -64,12 +64,15 @@ export function ParentalControlModal({
   // Reset quand la modale s'ouvre
   useEffect(() => {
     if (isOpen) {
-      setStep('consent');
+      setStep(controlLevel === 5 ? 'analyzing' : 'consent');
       setCurrentFileIndex(0);
       setCurrentFileName('');
       setAcceptedFiles([]);
       setWarnedFiles([]);
       setBlockedFiles([]);
+      if (controlLevel === 5) {
+        handleAcceptConsent();
+      }
     }
   }, [isOpen]);
 
@@ -160,7 +163,18 @@ export function ParentalControlModal({
     setAcceptedFiles(accepted);
     setWarnedFiles(warned);
     setBlockedFiles(blocked);
-    setStep('result');
+
+    if (controlLevel === 5) {
+      // Niveau 5 : import automatique des fichiers OK, refus silencieux des bloqués
+      onComplete([...accepted, ...warned.map(w => w.file)]);
+      if (blocked.length === 0) {
+        onClose(); // Tout est OK : fermeture sans afficher la modale
+      } else {
+        setStep('result'); // Informer l'utilisateur des fichiers bloqués
+      }
+    } else {
+      setStep('result');
+    }
   };
 
   // Refuser le consentement
@@ -237,20 +251,6 @@ export function ParentalControlModal({
                 </div>
               </div>
 
-              {/* Avertissement légal */}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-amber-800">
-                    <p className="font-medium mb-1">{language === 'fr' ? "Responsabilité de l'utilisateur" : 'User responsibility'}</p>
-                    <p>
-                      {language === 'fr' 
-                        ? 'En cliquant sur "Analyser et importer", vous confirmez être responsable du contenu que vous importez et acceptez que l\'analyse soit effectuée sur votre appareil.'
-                        : 'By clicking "Analyze and import", you confirm that you are responsible for the content you import and agree that the analysis will be performed on your device.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Boutons */}
@@ -446,7 +446,7 @@ export function ParentalControlModal({
 
             {/* Boutons */}
             <div className="flex justify-end gap-3 pt-2">
-              {acceptedFiles.length === 0 && warnedFiles.length === 0 ? (
+              {controlLevel === 5 || (acceptedFiles.length === 0 && warnedFiles.length === 0) ? (
                 <Button onClick={handleCancel}>
                     {language === 'fr' ? 'Fermer' : 'Close'}
                 </Button>
