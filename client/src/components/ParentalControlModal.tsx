@@ -530,6 +530,28 @@ export function ParentalControlModal({
             </div>
           </>
         )}
+        {/* Légende niveaux — visible sur toutes les modales */}
+        <div className="border-t pt-2 mt-1">
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            {(language === 'fr' ? [
+              'N1 : Très permissif — tout peut être importé',
+              'N2 : Permissif — avertissement, import possible',
+              'N3 : Modéré — code de permission requis',
+              'N4 : Strict — refus sauf avec code de permission',
+              'N5 : Très strict — aucun contenu sensible accepté',
+            ] : [
+              'L1: Very permissive — anything can be imported',
+              'L2: Permissive — warning shown, import possible',
+              'L3: Moderate — permission code required',
+              'L4: Strict — refused unless permission code provided',
+              'L5: Very strict — no sensitive content accepted',
+            ]).map((line, i) => (
+              <li key={i} className={`text-xs ${i + 1 === controlLevel ? 'text-orange-600 font-semibold' : 'text-gray-400'}`}>
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
       </DialogContent>
     </Dialog>
   );
