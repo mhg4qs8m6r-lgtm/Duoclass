@@ -54,6 +54,7 @@ export function ParentalControlModal({
   const [warnedFiles, setWarnedFiles] = useState<WarnedFile[]>([]);
   const [blockedFiles, setBlockedFiles] = useState<BlockedFile[]>([]);
   const [isModelLoading, setIsModelLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState(false);
 
   // Filtrer les images et vidéos (les PDF ne sont pas analysés)
   const imageFiles = files.filter(f => f.type.startsWith('image/'));
@@ -70,6 +71,7 @@ export function ParentalControlModal({
       setAcceptedFiles([]);
       setWarnedFiles([]);
       setBlockedFiles([]);
+      setAnalysisError(false);
       if (controlLevel === 5) {
         handleAcceptConsent();
       }
@@ -109,11 +111,12 @@ export function ParentalControlModal({
       console.error('Erreur chargement modèle:', error);
       setIsModelLoading(false);
       // En cas d'erreur de chargement du modèle → bloquer l'import (fail-safe sécurisé)
+      setAnalysisError(true);
       setBlockedFiles(files.map(f => ({
         name: f.name,
         reason: language === 'fr'
-          ? 'Analyse impossible — modèle de contrôle parental indisponible'
-          : 'Analysis failed — parental control model unavailable',
+          ? 'Cette image ne peut pas être importée.'
+          : 'This image cannot be imported.',
       })));
       setAcceptedFiles([]);
       setWarnedFiles([]);
@@ -335,7 +338,12 @@ export function ParentalControlModal({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
-                {blockedFiles.length === 0 && warnedFiles.length === 0 ? (
+                {analysisError ? (
+                  <>
+                    <ShieldAlert className="h-6 w-6 text-red-600" />
+                    {language === 'fr' ? 'Import refusé' : 'Import refused'}
+                  </>
+                ) : blockedFiles.length === 0 && warnedFiles.length === 0 ? (
                   <>
                     <CheckCircle className="h-6 w-6 text-green-600" />
                     {language === 'fr' ? 'Analyse terminée' : 'Analysis complete'}
@@ -343,12 +351,12 @@ export function ParentalControlModal({
                 ) : blockedFiles.length > 0 ? (
                   <>
                     <ShieldAlert className="h-6 w-6 text-red-600" />
-                    {language === 'fr' ? 'Analyse terminée - Contenu bloqué' : 'Analysis complete - Content blocked'}
+                    {language === 'fr' ? 'Analyse terminée — Contenu bloqué' : 'Analysis complete — Content blocked'}
                   </>
                 ) : (
                   <>
                     <AlertCircle className="h-6 w-6 text-orange-500" />
-                    {language === 'fr' ? 'Analyse terminée - Avertissements' : 'Analysis complete - Warnings'}
+                    {language === 'fr' ? 'Analyse terminée — Avertissements' : 'Analysis complete — Warnings'}
                   </>
                 )}
               </DialogTitle>
@@ -358,29 +366,32 @@ export function ParentalControlModal({
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              {/* Résumé 3 colonnes */}
-              <div className="grid grid-cols-3 gap-3">
-                {/* Fichiers acceptés */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                  <CheckCircle className="h-7 w-7 text-green-600 mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-green-700">{acceptedFiles.length}</p>
-                  <p className="text-xs text-green-600">{language === 'fr' ? 'Accepté(s)' : 'Accepted'}</p>
+              {/* Résumé — uniquement les cases pertinentes */}
+              {!analysisError && (
+                <div className={`grid gap-3 ${[acceptedFiles.length > 0, warnedFiles.length > 0, blockedFiles.length > 0].filter(Boolean).length === 1 ? 'grid-cols-1' : [acceptedFiles.length > 0, warnedFiles.length > 0, blockedFiles.length > 0].filter(Boolean).length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {acceptedFiles.length > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                      <CheckCircle className="h-7 w-7 text-green-600 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-green-700">{acceptedFiles.length}</p>
+                      <p className="text-xs text-green-600">{language === 'fr' ? 'Accepté(s)' : 'Accepted'}</p>
+                    </div>
+                  )}
+                  {warnedFiles.length > 0 && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                      <AlertCircle className="h-7 w-7 text-orange-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-orange-600">{warnedFiles.length}</p>
+                      <p className="text-xs text-orange-500">{language === 'fr' ? 'Avertissement(s)' : 'Warning(s)'}</p>
+                    </div>
+                  )}
+                  {blockedFiles.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                      <XCircle className="h-7 w-7 text-red-600 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-red-700">{blockedFiles.length}</p>
+                      <p className="text-xs text-red-600">{language === 'fr' ? 'Bloqué(s)' : 'Blocked'}</p>
+                    </div>
+                  )}
                 </div>
-
-                {/* Fichiers avec avertissement */}
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
-                  <AlertCircle className="h-7 w-7 text-orange-500 mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-orange-600">{warnedFiles.length}</p>
-                  <p className="text-xs text-orange-500">{language === 'fr' ? 'Avertissement(s)' : 'Warning(s)'}</p>
-                </div>
-
-                {/* Fichiers bloqués */}
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                  <XCircle className="h-7 w-7 text-red-600 mx-auto mb-1" />
-                  <p className="text-2xl font-bold text-red-700">{blockedFiles.length}</p>
-                  <p className="text-xs text-red-600">{language === 'fr' ? 'Bloqué(s)' : 'Blocked'}</p>
-                </div>
-              </div>
+              )}
 
               {/* Bannière avertissement */}
               {warnedFiles.length > 0 && (
