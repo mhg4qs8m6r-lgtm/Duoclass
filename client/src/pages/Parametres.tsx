@@ -880,7 +880,23 @@ export default function Parametres() {
                     <span className="px-3 py-1.5 bg-orange-100 text-orange-800 rounded-full font-bold text-sm border border-orange-200">
                       {t('settings.currentLevel')} : {parentalFilterLevel} / 5
                     </span>
-                    <p className="text-gray-500 text-xs">{t('settings.level5Desc')}</p>
+                    <p className="text-gray-600 text-xs italic">
+                      {language === 'fr' ? ({
+                        0: 'Désactivé — aucune analyse effectuée',
+                        1: 'Très permissif — analyse active, tout peut être importé',
+                        2: 'Permissif — avertissement affiché, import possible',
+                        3: 'Modéré — code de permission requis pour importer',
+                        4: 'Strict — refus sauf avec code de permission',
+                        5: 'Très strict — aucun contenu sensible accepté',
+                      } as Record<number, string>)[parentalFilterLevel] : ({
+                        0: 'Disabled — no analysis performed',
+                        1: 'Very permissive — analysis active, anything can be imported',
+                        2: 'Permissive — warning shown, import still possible',
+                        3: 'Moderate — permission code required to import',
+                        4: 'Strict — refused unless permission code provided',
+                        5: 'Very strict — no sensitive content accepted',
+                      } as Record<number, string>)[parentalFilterLevel]}
+                    </p>
                   </div>
                 </div>
 
