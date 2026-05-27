@@ -17,7 +17,7 @@ import { cleanupUnnecessaryCategories } from "@/lib/cleanupCategories";
 import { trpc } from "@/lib/trpc";
 import { clearSyncQueue, setLastSyncTimestamp, addToSyncQueue } from "@/lib/syncService";
 import { v4 as uuidv4 } from 'uuid';
-import { Check, X, Lock, Unlock, Shield, Save, Info, User, Edit2, Trash2, Upload, AlertTriangle, FileJson, Palette, RotateCcw } from "lucide-react";
+import { Check, X, Lock, Unlock, Shield, Save, Info, User, Edit2, Trash2, Upload, AlertTriangle, FileJson, Palette, RotateCcw, Key } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -115,6 +115,10 @@ export default function Parametres() {
   const masterCode = String(masterCodeSetting?.value ?? '000000');
   const [newMasterCode, setNewMasterCode] = useState("");
   const [confirmMasterCode, setConfirmMasterCode] = useState("");
+
+  const permissionCodeSetting = useLiveQuery(() => db.settings.get('permission_code'));
+  const [newPermissionCode, setNewPermissionCode] = useState("");
+  const [confirmPermissionCode, setConfirmPermissionCode] = useState("");
   const [parentalFilterLevel, setParentalFilterLevel] = useState(5);
   
   // Paramètres de session
@@ -348,6 +352,21 @@ export default function Parametres() {
     setNewMasterCode("");
     setConfirmMasterCode("");
     toast.success(language === "fr" ? "Code Maître mis à jour avec succès" : "Master Code updated successfully");
+  };
+
+  const handleUpdatePermissionCode = async () => {
+    if (newPermissionCode !== confirmPermissionCode) {
+      toast.error(language === "fr" ? "Les codes ne correspondent pas" : "Codes do not match");
+      return;
+    }
+    if (newPermissionCode.length < 4) {
+      toast.error(language === "fr" ? "Le code doit contenir au moins 4 caractères" : "Code must be at least 4 characters");
+      return;
+    }
+    await db.settings.put({ id: 'permission_code', value: newPermissionCode, updatedAt: new Date().toISOString() });
+    setNewPermissionCode("");
+    setConfirmPermissionCode("");
+    toast.success(language === "fr" ? "Code de permission mis à jour avec succès" : "Permission code updated successfully");
   };
 
   const handleSaveSessionSettings = () => {
@@ -842,6 +861,48 @@ export default function Parametres() {
 
                       <Button onClick={handleSaveSessionSettings} variant="outline" className="w-full">
                         {t('settings.saveSessionSettings')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Code de Permission */}
+                <div className="p-3">
+                  <h2 className="text-base font-bold text-blue-800 mb-2 flex items-center gap-2 flex-wrap">
+                    <Key className="w-5 h-5" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
+                    <span className="text-xs font-normal text-gray-500">
+                      {permissionCodeSetting?.updatedAt
+                        ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                        : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                    </span>
+                  </h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">
+                        {language === 'fr'
+                          ? 'Permet de débloquer l\'import d\'images sensibles aux niveaux 3 et 4.'
+                          : 'Allows importing sensitive images at levels 3 and 4.'}
+                      </p>
+                      <div className="space-y-2">
+                        <Label>{language === 'fr' ? 'Nouveau code de permission' : 'New permission code'}</Label>
+                        <Input
+                          type="password"
+                          value={newPermissionCode}
+                          onChange={(e) => setNewPermissionCode(e.target.value)}
+                          placeholder={language === 'fr' ? '4 caractères minimum' : 'At least 4 characters'}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{language === 'fr' ? 'Confirmer le code' : 'Confirm code'}</Label>
+                        <Input
+                          type="password"
+                          value={confirmPermissionCode}
+                          onChange={(e) => setConfirmPermissionCode(e.target.value)}
+                          placeholder={language === 'fr' ? 'Répéter le code' : 'Repeat code'}
+                        />
+                      </div>
+                      <Button onClick={handleUpdatePermissionCode} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                        {language === 'fr' ? 'Mettre à jour le code de permission' : 'Update permission code'}
                       </Button>
                     </div>
                   </div>
