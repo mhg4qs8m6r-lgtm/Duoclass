@@ -344,7 +344,7 @@ export default function Parametres() {
       return;
     }
     
-    await db.settings.put({ key: 'master_code', value: newMasterCode });
+    await db.settings.put({ id: 'master_code', value: newMasterCode });
     setNewMasterCode("");
     setConfirmMasterCode("");
     toast.success(language === "fr" ? "Code Maître mis à jour avec succès" : "Master Code updated successfully");
@@ -463,7 +463,7 @@ export default function Parametres() {
       }
 
       // 6. Réinitialiser le mot de passe maître
-      await db.settings.put({ key: 'master_code', value: '000000' });
+      await db.settings.put({ id: 'master_code', value: '000000' });
 
       setShowFactoryResetDialog(false);
       setFactoryResetConfirmText("");
