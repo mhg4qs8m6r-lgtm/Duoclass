@@ -344,7 +344,7 @@ export default function Parametres() {
       return;
     }
     
-    await db.settings.put({ id: 'master_code', value: newMasterCode });
+    await db.settings.put({ id: 'master_code', value: newMasterCode, updatedAt: new Date().toISOString() });
     setNewMasterCode("");
     setConfirmMasterCode("");
     toast.success(language === "fr" ? "Code Maître mis à jour avec succès" : "Master Code updated successfully");
@@ -806,6 +806,11 @@ export default function Parametres() {
                       <Button onClick={handleUpdateMasterCode} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
                         {t('settings.updateCode')}
                       </Button>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {masterCodeSetting?.updatedAt
+                          ? `${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                          : (language === 'fr' ? 'Code par défaut — jamais modifié' : 'Default code — never changed')}
+                      </p>
                     </div>
                     
                     {/* Paramètres de session */}
