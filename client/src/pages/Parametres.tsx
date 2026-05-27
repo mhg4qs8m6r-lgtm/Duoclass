@@ -777,8 +777,13 @@ export default function Parametres() {
                 
                 {/* Code Maître */}
                 <div className="p-3">
-                  <h2 className="text-base font-bold text-purple-800 mb-2 flex items-center gap-2">
+                  <h2 className="text-base font-bold text-purple-800 mb-2 flex items-center gap-2 flex-wrap">
                     <Lock className="w-5 h-5" /> {t('settings.masterCode')}
+                    <span className="text-xs font-normal text-gray-500">
+                      {masterCodeSetting?.updatedAt
+                        ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                        : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                    </span>
                   </h2>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -806,11 +811,6 @@ export default function Parametres() {
                       <Button onClick={handleUpdateMasterCode} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
                         {t('settings.updateCode')}
                       </Button>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {masterCodeSetting?.updatedAt
-                          ? `${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                          : (language === 'fr' ? 'Code par défaut — jamais modifié' : 'Default code — never changed')}
-                      </p>
                     </div>
                     
                     {/* Paramètres de session */}
