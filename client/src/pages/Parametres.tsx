@@ -833,35 +833,35 @@ export default function Parametres() {
                 </div>
 
                 {/* Ligne 2 : Session & Déconnexion */}
-                <div className="border rounded-lg p-2">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-1">{t('settings.sessionDisconnect')}</h3>
-                  <div className="flex items-end gap-4">
-                    <div className="space-y-1 flex-1">
+                <div className="border rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('settings.sessionDisconnect')}</h3>
+                  <div className="flex items-end gap-6">
+                    <div className="space-y-2 flex-1">
                       <Label className="text-xs">{t('settings.inactivityDelay')}</Label>
-                      <select className="w-full h-8 px-2 text-sm rounded-md border border-gray-300" value={inactivityTimeout} onChange={(e) => setInactivityTimeout(e.target.value)}>
+                      <select className="w-full h-9 px-2 text-sm rounded-md border border-gray-300" value={inactivityTimeout} onChange={(e) => setInactivityTimeout(e.target.value)}>
                         <option value="5">5 {t('settings.minutes')}</option>
                         <option value="10">10 {t('settings.minutes')} ({t('settings.recommended')})</option>
                         <option value="30">30 {t('settings.minutes')}</option>
                         <option value="60">1 {t('settings.hour')}</option>
                       </select>
                     </div>
-                    <div className="space-y-1 flex-1">
+                    <div className="space-y-2 flex-1">
                       <Label className="text-xs">{t('settings.noDisconnectTimeRange')}</Label>
-                      <div className="flex items-center gap-1">
-                        <Input type="time" value={autoLogoutExemptStart} onChange={(e) => setAutoLogoutExemptStart(e.target.value)} className="h-8 text-sm w-28" />
+                      <div className="flex items-center gap-2">
+                        <Input type="time" value={autoLogoutExemptStart} onChange={(e) => setAutoLogoutExemptStart(e.target.value)} className="h-9 text-sm w-28" />
                         <span className="text-xs text-gray-500">{t('settings.to')}</span>
-                        <Input type="time" value={autoLogoutExemptEnd} onChange={(e) => setAutoLogoutExemptEnd(e.target.value)} className="h-8 text-sm w-28" />
+                        <Input type="time" value={autoLogoutExemptEnd} onChange={(e) => setAutoLogoutExemptEnd(e.target.value)} className="h-9 text-sm w-28" />
                       </div>
                     </div>
-                    <Button onClick={handleSaveSessionSettings} variant="outline" size="sm" className="h-8">
+                    <Button onClick={handleSaveSessionSettings} variant="outline" className="h-9">
                       {t('settings.saveSessionSettings')}
                     </Button>
                   </div>
                 </div>
 
                 {/* Ligne 3 : Contrôle Parental */}
-                <div className="border rounded-lg p-2">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <h2 className="text-sm font-bold text-orange-800 flex items-center gap-1">
                       <Shield className="w-4 h-4" /> {t('settings.parentalControl')}
                     </h2>
@@ -869,15 +869,15 @@ export default function Parametres() {
                       <Info className="w-3 h-3" /> {t('settings.aiAnalysis')}
                     </span>
                   </div>
-                  <div className="flex justify-between text-xs font-medium text-gray-500 mb-1">
+                  <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
                     <span>{t('settings.disabled')}</span>
                     <span>{t('settings.moderate')}</span>
                     <span>{t('settings.strict')}</span>
                     <span className="text-red-600 font-bold">{t('settings.veryStrict')}</span>
                   </div>
                   <input type="range" min="0" max="5" step="1" value={parentalFilterLevel} onChange={(e) => setParentalFilterLevel(parseInt(e.target.value))} className="parental-slider" />
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full font-bold text-sm border border-orange-200">
+                  <div className="flex items-center gap-3 mt-3">
+                    <span className="px-3 py-1.5 bg-orange-100 text-orange-800 rounded-full font-bold text-sm border border-orange-200">
                       {t('settings.currentLevel')} : {parentalFilterLevel} / 5
                     </span>
                     <p className="text-gray-500 text-xs">{t('settings.level5Desc')}</p>
