@@ -9,9 +9,8 @@
  * utilisation du contrôle parental.
  */
 
-// URL du bundle nsfwjs depuis CDN officiel
-const NSFWJS_CDN_URL =
-  "https://cdn.jsdelivr.net/npm/nsfwjs@4.1.0/dist/nsfwjs.min.js";
+// Bundle nsfwjs servi localement (client/public/libs/nsfwjs.min.js)
+const NSFWJS_CDN_URL = "/libs/nsfwjs.min.js";
 
 // Types pour les résultats d'analyse
 export interface NSFWResult {

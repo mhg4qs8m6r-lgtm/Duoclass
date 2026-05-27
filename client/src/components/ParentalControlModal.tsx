@@ -108,8 +108,16 @@ export function ParentalControlModal({
     } catch (error) {
       console.error('Erreur chargement modèle:', error);
       setIsModelLoading(false);
-      // En cas d'erreur, accepter tous les fichiers (fail-safe)
-      onComplete(files);
+      // En cas d'erreur de chargement du modèle → bloquer l'import (fail-safe sécurisé)
+      setBlockedFiles(files.map(f => ({
+        name: f.name,
+        reason: language === 'fr'
+          ? 'Analyse impossible — modèle de contrôle parental indisponible'
+          : 'Analysis failed — parental control model unavailable',
+      })));
+      setAcceptedFiles([]);
+      setWarnedFiles([]);
+      setStep('result');
       return;
     }
 
