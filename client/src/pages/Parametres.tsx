@@ -792,133 +792,98 @@ export default function Parametres() {
               </TabsContent>
 
               {/* --- ONGLET 3: SÉCURITÉ --- */}
-              <TabsContent value="security" className="space-y-3 mt-0">
-                
-                {/* Codes — côte à côte */}
-                <div className="p-3">
-                  <div className="grid grid-cols-2 gap-4">
+              <TabsContent value="security" className="mt-0 flex flex-col gap-2 p-2">
 
-                    {/* Code Maître */}
-                    <div className="space-y-2">
-                      <h2 className="text-base font-bold text-purple-800 flex items-center gap-2 flex-wrap">
-                        <Lock className="w-5 h-5" /> {t('settings.masterCode')}
-                        <span className="text-xs font-normal text-gray-500">
-                          {masterCodeSetting?.updatedAt
-                            ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                            : (language === 'fr' ? '— jamais modifié' : '— never changed')}
-                        </span>
-                      </h2>
-                      <p className="text-sm text-gray-600">{t('settings.masterCodeDesc')}</p>
-                      <div className="space-y-2">
-                        <Label>{t('settings.newCode')}</Label>
-                        <Input type="password" value={newMasterCode} onChange={(e) => setNewMasterCode(e.target.value)} placeholder={t('settings.min4chars')} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t('settings.confirmCode')}</Label>
-                        <Input type="password" value={confirmMasterCode} onChange={(e) => setConfirmMasterCode(e.target.value)} placeholder={t('settings.repeatCode')} />
-                      </div>
-                      <Button onClick={handleUpdateMasterCode} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
-                        {t('settings.updateCode')}
-                      </Button>
-                    </div>
+                {/* Ligne 1 : Code Maître + Code de Permission */}
+                <div className="grid grid-cols-2 gap-3 border rounded-lg p-2">
 
-                    {/* Code de Permission */}
-                    <div className="space-y-2 border-l pl-4">
-                      <h2 className="text-base font-bold text-blue-800 flex items-center gap-2 flex-wrap">
-                        <Key className="w-5 h-5" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
-                        <span className="text-xs font-normal text-gray-500">
-                          {permissionCodeSetting?.updatedAt
-                            ? `— ${language === 'fr' ? 'Dernière modification' : 'Last changed'} : ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} à ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                            : (language === 'fr' ? '— jamais modifié' : '— never changed')}
-                        </span>
-                      </h2>
-                      <p className="text-sm text-gray-600">
-                        {language === 'fr' ? 'Débloque l\'import d\'images sensibles aux niveaux 3 et 4.' : 'Unlocks sensitive image import at levels 3 and 4.'}
-                      </p>
-                      <div className="space-y-2">
-                        <Label>{language === 'fr' ? 'Nouveau code de permission' : 'New permission code'}</Label>
-                        <Input type="password" value={newPermissionCode} onChange={(e) => setNewPermissionCode(e.target.value)} placeholder={language === 'fr' ? '4 caractères minimum' : 'At least 4 characters'} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{language === 'fr' ? 'Confirmer le code' : 'Confirm code'}</Label>
-                        <Input type="password" value={confirmPermissionCode} onChange={(e) => setConfirmPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Répéter le code' : 'Repeat code'} />
-                      </div>
-                      <Button onClick={handleUpdatePermissionCode} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                        {language === 'fr' ? 'Mettre à jour' : 'Update'}
-                      </Button>
-                    </div>
-
+                  {/* Code Maître */}
+                  <div className="space-y-1">
+                    <h2 className="text-sm font-bold text-purple-800 flex items-center gap-1 flex-wrap">
+                      <Lock className="w-4 h-4" /> {t('settings.masterCode')}
+                      <span className="text-xs font-normal text-gray-500">
+                        {masterCodeSetting?.updatedAt
+                          ? `— ${new Date(masterCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${new Date(masterCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                          : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                      </span>
+                    </h2>
+                    <Input type="password" value={newMasterCode} onChange={(e) => setNewMasterCode(e.target.value)} placeholder={t('settings.newCode')} className="h-8 text-sm" />
+                    <Input type="password" value={confirmMasterCode} onChange={(e) => setConfirmMasterCode(e.target.value)} placeholder={t('settings.confirmCode')} className="h-8 text-sm" />
+                    <Button onClick={handleUpdateMasterCode} size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white h-8">
+                      {t('settings.updateCode')}
+                    </Button>
                   </div>
 
-                  {/* Session & Déconnexion — rangée en dessous */}
-                  <div className="mt-4 pt-4 border-t">
-                    <h3 className="font-semibold text-gray-700 mb-3">{t('settings.sessionDisconnect')}</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t('settings.inactivityDelay')}</Label>
-                        <select className="w-full h-10 px-3 rounded-md border border-gray-300" value={inactivityTimeout} onChange={(e) => setInactivityTimeout(e.target.value)}>
-                          <option value="5">5 {t('settings.minutes')}</option>
-                          <option value="10">10 {t('settings.minutes')} ({t('settings.recommended')})</option>
-                          <option value="30">30 {t('settings.minutes')}</option>
-                          <option value="60">1 {t('settings.hour')}</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t('settings.noDisconnectTimeRange')}</Label>
-                        <div className="flex items-center gap-2">
-                          <Input type="time" value={autoLogoutExemptStart} onChange={(e) => setAutoLogoutExemptStart(e.target.value)} className="w-32" />
-                          <span>{t('settings.to')}</span>
-                          <Input type="time" value={autoLogoutExemptEnd} onChange={(e) => setAutoLogoutExemptEnd(e.target.value)} className="w-32" />
-                        </div>
+                  {/* Code de Permission */}
+                  <div className="space-y-1 border-l pl-3">
+                    <h2 className="text-sm font-bold text-blue-800 flex items-center gap-1 flex-wrap">
+                      <Key className="w-4 h-4" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
+                      <span className="text-xs font-normal text-gray-500">
+                        {permissionCodeSetting?.updatedAt
+                          ? `— ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
+                          : (language === 'fr' ? '— jamais modifié' : '— never changed')}
+                      </span>
+                    </h2>
+                    <Input type="password" value={newPermissionCode} onChange={(e) => setNewPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Nouveau code de permission' : 'New permission code'} className="h-8 text-sm" />
+                    <Input type="password" value={confirmPermissionCode} onChange={(e) => setConfirmPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Confirmer le code' : 'Confirm code'} className="h-8 text-sm" />
+                    <Button onClick={handleUpdatePermissionCode} size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white h-8">
+                      {language === 'fr' ? 'Mettre à jour' : 'Update'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Ligne 2 : Session & Déconnexion */}
+                <div className="border rounded-lg p-2">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-1">{t('settings.sessionDisconnect')}</h3>
+                  <div className="flex items-end gap-4">
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">{t('settings.inactivityDelay')}</Label>
+                      <select className="w-full h-8 px-2 text-sm rounded-md border border-gray-300" value={inactivityTimeout} onChange={(e) => setInactivityTimeout(e.target.value)}>
+                        <option value="5">5 {t('settings.minutes')}</option>
+                        <option value="10">10 {t('settings.minutes')} ({t('settings.recommended')})</option>
+                        <option value="30">30 {t('settings.minutes')}</option>
+                        <option value="60">1 {t('settings.hour')}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">{t('settings.noDisconnectTimeRange')}</Label>
+                      <div className="flex items-center gap-1">
+                        <Input type="time" value={autoLogoutExemptStart} onChange={(e) => setAutoLogoutExemptStart(e.target.value)} className="h-8 text-sm w-28" />
+                        <span className="text-xs text-gray-500">{t('settings.to')}</span>
+                        <Input type="time" value={autoLogoutExemptEnd} onChange={(e) => setAutoLogoutExemptEnd(e.target.value)} className="h-8 text-sm w-28" />
                       </div>
                     </div>
-                    <Button onClick={handleSaveSessionSettings} variant="outline" className="mt-3">
+                    <Button onClick={handleSaveSessionSettings} variant="outline" size="sm" className="h-8">
                       {t('settings.saveSessionSettings')}
                     </Button>
                   </div>
                 </div>
 
-                {/* Contrôle Parental */}
-                <div className="p-3">
-                  <h2 className="text-base font-bold text-orange-800 mb-2 flex items-center gap-2">
-                    <Shield className="w-5 h-5" /> {t('settings.parentalControl')}
-                  </h2>
-                  
-                  <div className="bg-orange-50 p-2 rounded-lg mb-2 border border-orange-200">
-                    <p className="text-orange-800 font-medium flex items-center gap-2">
-                      <Info className="w-5 h-5" />
-                      {t('settings.aiAnalysis')}
-                    </p>
+                {/* Ligne 3 : Contrôle Parental */}
+                <div className="border rounded-lg p-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-sm font-bold text-orange-800 flex items-center gap-1">
+                      <Shield className="w-4 h-4" /> {t('settings.parentalControl')}
+                    </h2>
+                    <span className="text-xs text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Info className="w-3 h-3" /> {t('settings.aiAnalysis')}
+                    </span>
                   </div>
-
-                  <div className="space-y-2 px-2">
-                    <div className="flex justify-between text-sm font-medium text-gray-500 mb-2">
-                      <span>{t('settings.disabled')}</span>
-                      <span>{t('settings.moderate')}</span>
-                      <span>{t('settings.strict')}</span>
-                      <span className="text-red-600 font-bold">{t('settings.veryStrict')}</span>
-                    </div>
-                    
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="5" 
-                      step="1" 
-                      value={parentalFilterLevel}
-                      onChange={(e) => setParentalFilterLevel(parseInt(e.target.value))}
-                      className="parental-slider"
-                    />
-                    
-                    <div className="text-center">
-                      <span className="inline-block px-4 py-2 bg-orange-100 text-orange-800 rounded-full font-bold text-lg border border-orange-200">
-                        {t('settings.currentLevel')} : {parentalFilterLevel} / 5
-                      </span>
-                      <p className="text-gray-500 mt-2 text-sm">
-                        {t('settings.level5Desc')}
-                      </p>
-                    </div>
+                  <div className="flex justify-between text-xs font-medium text-gray-500 mb-1">
+                    <span>{t('settings.disabled')}</span>
+                    <span>{t('settings.moderate')}</span>
+                    <span>{t('settings.strict')}</span>
+                    <span className="text-red-600 font-bold">{t('settings.veryStrict')}</span>
+                  </div>
+                  <input type="range" min="0" max="5" step="1" value={parentalFilterLevel} onChange={(e) => setParentalFilterLevel(parseInt(e.target.value))} className="parental-slider" />
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full font-bold text-sm border border-orange-200">
+                      {t('settings.currentLevel')} : {parentalFilterLevel} / 5
+                    </span>
+                    <p className="text-gray-500 text-xs">{t('settings.level5Desc')}</p>
                   </div>
                 </div>
+
               </TabsContent>
 
               {/* --- ONGLET 4: SAUVEGARDES --- */}
