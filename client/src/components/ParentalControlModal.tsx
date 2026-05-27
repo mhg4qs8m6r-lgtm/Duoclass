@@ -256,7 +256,6 @@ export function ParentalControlModal({
                       <li>{language === 'fr' ? <>L'analyse est effectuée <strong>localement sur votre appareil</strong></> : <>Analysis is performed <strong>locally on your device</strong></>}</li>
                       <li>{language === 'fr' ? "Aucune image n'est envoyée sur Internet" : 'No image is sent to the Internet'}</li>
                       <li>{language === 'fr' ? 'Les images inappropriées seront bloquées selon le niveau choisi' : 'Inappropriate images will be blocked according to the chosen level'}</li>
-                      <li>{language === 'fr' ? 'Vous restez responsable du contenu importé' : 'You remain responsible for the imported content'}</li>
                     </ul>
                   </div>
                 </div>
@@ -397,8 +396,33 @@ export function ParentalControlModal({
                 </div>
               )}
 
-              {/* Bannière avertissement */}
-              {warnedFiles.length > 0 && (
+              {/* Niveau 4 : confirmation explicite OUI/NON */}
+              {controlLevel === 4 && warnedFiles.length > 0 && (
+                <div className="bg-orange-50 border border-orange-300 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                    <p className="text-orange-800 font-semibold">
+                      {language === 'fr' ? 'Photo sensible détectée' : 'Sensitive photo detected'}
+                    </p>
+                  </div>
+                  <p className="text-sm text-orange-700">
+                    {language === 'fr'
+                      ? 'Seul votre accord peut permettre l\'import de cette image.'
+                      : 'Only your agreement can allow importing this image.'}
+                  </p>
+                  <ul className="space-y-1 max-h-24 overflow-y-auto">
+                    {warnedFiles.map((wf, index) => (
+                      <li key={index} className="flex items-center gap-2 text-sm text-orange-700">
+                        <AlertCircle className="h-4 w-4 text-orange-400 flex-shrink-0" />
+                        <span className="font-medium">{wf.file.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Bannière avertissement (niveaux 1-3) */}
+              {controlLevel !== 4 && warnedFiles.length > 0 && (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <div className="flex items-start gap-2 mb-3">
                     <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
@@ -469,9 +493,18 @@ export function ParentalControlModal({
 
             {/* Boutons */}
             <div className="flex justify-end gap-3 pt-2">
-              {controlLevel === 5 || (acceptedFiles.length === 0 && warnedFiles.length === 0) ? (
+              {controlLevel === 4 && warnedFiles.length > 0 ? (
+                <>
+                  <Button variant="outline" onClick={handleCancel} className="border-red-300 text-red-700 hover:bg-red-50">
+                    {language === 'fr' ? 'NON — Annuler' : 'NO — Cancel'}
+                  </Button>
+                  <Button onClick={handleFinish} className="bg-orange-500 hover:bg-orange-600 text-white">
+                    {language === 'fr' ? 'OUI — Importer quand même' : 'YES — Import anyway'}
+                  </Button>
+                </>
+              ) : controlLevel === 5 || (acceptedFiles.length === 0 && warnedFiles.length === 0) ? (
                 <Button onClick={handleCancel}>
-                    {language === 'fr' ? 'Fermer' : 'Close'}
+                  {language === 'fr' ? 'Fermer' : 'Close'}
                 </Button>
               ) : (
                 <>
