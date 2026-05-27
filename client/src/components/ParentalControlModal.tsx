@@ -536,14 +536,14 @@ export function ParentalControlModal({
             {(language === 'fr' ? [
               'N1 : Très permissif — tout peut être importé',
               'N2 : Permissif — avertissement, import possible',
-              'N3 : Modéré — code de permission requis',
-              'N4 : Strict — refus sauf avec code de permission',
+              '🔑 N3 : Modéré — code de permission requis',
+              '🔑 N4 : Strict — refus sauf avec code de permission',
               'N5 : Très strict — aucun contenu sensible accepté',
             ] : [
               'L1: Very permissive — anything can be imported',
               'L2: Permissive — warning shown, import possible',
-              'L3: Moderate — permission code required',
-              'L4: Strict — refused unless permission code provided',
+              '🔑 L3: Moderate — permission code required',
+              '🔑 L4: Strict — refused unless permission code provided',
               'L5: Very strict — no sensitive content accepted',
             ]).map((line, i) => (
               <li key={i} className={`text-xs ${i + 1 === controlLevel ? 'text-orange-600 font-semibold' : 'text-gray-400'}`}>
