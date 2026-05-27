@@ -397,7 +397,7 @@ export function ParentalControlModal({
               )}
 
               {/* Niveau 4 : confirmation explicite OUI/NON */}
-              {controlLevel === 4 && warnedFiles.length > 0 && (
+              {controlLevel === 4 && (warnedFiles.length > 0 || blockedFiles.length > 0 || analysisError) && (
                 <div className="bg-orange-50 border border-orange-300 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0" />
@@ -410,14 +410,22 @@ export function ParentalControlModal({
                       ? 'Seul votre accord peut permettre l\'import de cette image.'
                       : 'Only your agreement can allow importing this image.'}
                   </p>
-                  <ul className="space-y-1 max-h-24 overflow-y-auto">
-                    {warnedFiles.map((wf, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm text-orange-700">
-                        <AlertCircle className="h-4 w-4 text-orange-400 flex-shrink-0" />
-                        <span className="font-medium">{wf.file.name}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {(warnedFiles.length > 0 || blockedFiles.length > 0) && (
+                    <ul className="space-y-1 max-h-24 overflow-y-auto">
+                      {warnedFiles.map((wf, index) => (
+                        <li key={index} className="flex items-center gap-2 text-sm text-orange-700">
+                          <AlertCircle className="h-4 w-4 text-orange-400 flex-shrink-0" />
+                          <span className="font-medium">{wf.file.name}</span>
+                        </li>
+                      ))}
+                      {blockedFiles.map((bf, index) => (
+                        <li key={`b-${index}`} className="flex items-center gap-2 text-sm text-orange-700">
+                          <AlertCircle className="h-4 w-4 text-orange-400 flex-shrink-0" />
+                          <span className="font-medium">{bf.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -493,12 +501,12 @@ export function ParentalControlModal({
 
             {/* Boutons */}
             <div className="flex justify-end gap-3 pt-2">
-              {controlLevel === 4 && warnedFiles.length > 0 ? (
+              {controlLevel === 4 && (warnedFiles.length > 0 || blockedFiles.length > 0 || analysisError) ? (
                 <>
                   <Button variant="outline" onClick={handleCancel} className="border-red-300 text-red-700 hover:bg-red-50">
                     {language === 'fr' ? 'NON — Annuler' : 'NO — Cancel'}
                   </Button>
-                  <Button onClick={handleFinish} className="bg-orange-500 hover:bg-orange-600 text-white">
+                  <Button onClick={() => onComplete(files)} className="bg-orange-500 hover:bg-orange-600 text-white">
                     {language === 'fr' ? 'OUI — Importer quand même' : 'YES — Import anyway'}
                   </Button>
                 </>
