@@ -65,14 +65,14 @@ export function ParentalControlModal({
   // Reset quand la modale s'ouvre
   useEffect(() => {
     if (isOpen) {
-      setStep(controlLevel === 5 ? 'analyzing' : 'consent');
+      setStep(controlLevel >= 4 ? 'analyzing' : 'consent');
       setCurrentFileIndex(0);
       setCurrentFileName('');
       setAcceptedFiles([]);
       setWarnedFiles([]);
       setBlockedFiles([]);
       setAnalysisError(false);
-      if (controlLevel === 5) {
+      if (controlLevel >= 4) {
         handleAcceptConsent();
       }
     }
