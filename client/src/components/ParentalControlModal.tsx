@@ -417,6 +417,20 @@ export function ParentalControlModal({
                 </div>
               )}
 
+              {/* Bannière refus définitif si mix bloqués + acceptés */}
+              {blockedFiles.length > 0 && (acceptedFiles.length > 0 || warnedFiles.length > 0) && (
+                <div className="bg-red-100 border border-red-400 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-red-700 flex-shrink-0" />
+                    <p className="text-red-800 font-semibold">
+                      {language === 'fr'
+                        ? `${blockedFiles.length} fichier(s) définitivement refusé(s) — import impossible`
+                        : `${blockedFiles.length} file(s) permanently refused — import not possible`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Message de succès si tout est OK */}
               {blockedFiles.length === 0 && warnedFiles.length === 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
