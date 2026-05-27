@@ -337,6 +337,10 @@ export function ParentalControlModal({
         {step === 'result' && (
           <>
             <DialogHeader>
+              <p className="text-sm font-semibold text-blue-600 flex items-center gap-1 mb-1">
+                <Shield className="h-4 w-4" />
+                {language === 'fr' ? 'Contrôle Parental' : 'Parental Control'}
+              </p>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 {analysisError ? (
                   <>
