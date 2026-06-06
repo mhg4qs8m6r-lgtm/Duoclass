@@ -32,9 +32,7 @@ import Diaporama from '@/components/Diaporama';
 import PhotoRetouchModal from '@/components/PhotoRetouchModal';
 import RetouchePhoto from '@/pages/RetouchePhoto';
 import ImportPreviewModal from '@/components/ImportPreviewModal';
-import { ParentalControlModal } from '@/components/ParentalControlModal';
 import { VideoPlayerModal } from '@/components/VideoPlayerModal';
-import { VideoParentalWarningModal } from '@/components/VideoParentalWarningModal';
 import VideoPlaylistModal from '@/components/VideoPlaylistModal';
 import SendModal from '@/components/SendModal';
 import QuitConfirmModal from '@/components/QuitConfirmModal';
@@ -253,16 +251,6 @@ export default function UniversalAlbumPage({
   // --- PRÉVISUALISATION IMPORT ---
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
-
-  // --- CONTRÔLE PARENTAL ---
-  const [showParentalControl, setShowParentalControl] = useState(false);
-  const [pendingFilesForParentalControl, setPendingFilesForParentalControl] = useState<File[]>([]);
-  const [parentalControlLevel, setParentalControlLevel] = useState(0);
-
-  // --- AVERTISSEMENT VIDÉO / CONTRÔLE PARENTAL ---
-  const [showVideoParentalWarning, setShowVideoParentalWarning] = useState(false);
-  const [pendingVideoFiles, setPendingVideoFiles] = useState<File[]>([]);
-  const [videoWarningCallback, setVideoWarningCallback] = useState<(() => void) | null>(null);
 
   // --- DRAG & DROP ---
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -931,50 +919,11 @@ export default function UniversalAlbumPage({
       return;
     }
 
-    // Vérifier le contrôle parental
-    const parentalLevel = parseInt(localStorage.getItem('parental_control_level') || '0');
-    console.log('Niveau contrôle parental:', parentalLevel);
-
-    // Vérifier s'il y a des vidéos dans les fichiers
-    const videoFiles = validFiles.filter(f => f.type.startsWith('video/'));
-    const hasVideos = videoFiles.length > 0;
-
-    // Si contrôle parental actif ET vidéos présentes, afficher l'avertissement
-    if (parentalLevel >= 1 && hasVideos && isPhoto) {
-      console.log('Vidéos détectées avec contrôle parental actif - affichage avertissement');
-      setPendingVideoFiles(validFiles);
-      setParentalControlLevel(parentalLevel);
-      setPendingExternalDrop(false); // Ce n'est pas un drag & drop
-      setPendingDropFrameId(null); // Ce n'est pas un drop sur cadre
-      setShowVideoParentalWarning(true);
-      return;
-    }
-
-    if (parentalLevel >= 1) {
-      // Pour le contrôle parental (sans vidéos), on analyse les images
-      const mediaFiles = validFiles.filter(f => f.type.startsWith('image/'));
-      console.log('Images à analyser:', mediaFiles.length);
-      
-      if (mediaFiles.length > 0) {
-        console.log('Ouverture modale contrôle parental');
-        setPendingFilesForParentalControl(validFiles);
-        setParentalControlLevel(parentalLevel);
-        setShowParentalControl(true);
-        return; // Attendre le consentement et l'analyse
-      }
-    }
-
-    // Si pas de contrôle parental ou pas de médias, importer directement
-    console.log('Import direct sans contrôle parental');
     await performImport(validFiles);
   };
 
   // Fonction d'import après prévisualisation
-  // VERSION: ab28ee1a-fix - Contrôle parental pour Importer/Ajouter
   const handleImportFromPreview = async (selectedFiles: File[]) => {
-    console.log('=== handleImportFromPreview appelé [VERSION ab28ee1a-fix] ===');
-    console.log('Nombre de fichiers:', selectedFiles.length);
-    console.log('Version du code: cc9b3a47 - Contrôle parental activé');
     
     if (selectedFiles.length === 0) return;
 
@@ -1005,105 +954,9 @@ export default function UniversalAlbumPage({
     setShowImportPreview(false);
     setPreviewFiles([]);
 
-    // Vérifier le niveau de contrôle parental
-    const parentalLevel = parseInt(localStorage.getItem('parental_control_level') || '0');
-    console.log('Niveau contrôle parental:', parentalLevel);
-    
-    // Si le contrôle parental est actif (niveau >= 2 = Modéré ou plus), demander le consentement
-    // Niveau 0 = Désactivé, Niveau 1+ = Contrôle actif (seuils progressifs)
-    if (parentalLevel >= 1) {
-      // Filtrer seulement les images (pas les PDF)
-      const imageFiles = selectedFiles.filter(f => f.type.startsWith('image/'));
-      console.log('Images trouvées:', imageFiles.length);
-      
-      if (imageFiles.length > 0) {
-        console.log('Ouverture de la modale de contrôle parental...');
-        setPendingFilesForParentalControl(selectedFiles);
-        setParentalControlLevel(parentalLevel);
-        // Petit délai pour laisser la prévisualisation se fermer
-        setTimeout(() => {
-          setShowParentalControl(true);
-        }, 150);
-        return; // Attendre le consentement et l'analyse
-      }
-    }
-    
-    console.log('Import direct sans contrôle parental');
-    // Si pas de contrôle ou pas d'images, importer directement
     await performImport(selectedFiles);
   };
 
-  // État pour distinguer si le contrôle parental vient d'un drag & drop général
-  const [pendingExternalDrop, setPendingExternalDrop] = useState(false);
-
-  // Handler quand le contrôle parental est terminé
-  // Gère à la fois l'import classique, le drag & drop général et le drop sur cadre
-  const handleParentalControlComplete = async (acceptedFiles: File[]) => {
-    setShowParentalControl(false);
-    
-    if (acceptedFiles.length > 0) {
-      // Vérifier si c'est un drop sur un cadre spécifique
-      if (pendingDropFrameId !== null) {
-        // Drop sur un cadre spécifique - utiliser processDropOnFrame
-        await processDropOnFrame(pendingDropFrameId, acceptedFiles[0]);
-        setPendingDropFrameId(null);
-      } else if (pendingExternalDrop) {
-        // Drag & drop général - utiliser processExternalDropFiles
-        await processExternalDropFiles(acceptedFiles);
-        setPendingExternalDrop(false);
-      } else {
-        // Import classique (bouton Ajouter/Importer)
-        await performImport(acceptedFiles);
-      }
-    } else {
-      // Aucun fichier accepté, réinitialiser les états
-      setPendingDropFrameId(null);
-      setPendingExternalDrop(false);
-    }
-    
-    // Réinitialiser les fichiers en attente
-    setPendingFilesForParentalControl([]);
-  };
-
-  // Handler pour l'avertissement vidéo / contrôle parental
-  const handleVideoParentalWarningContinue = async (autoRestore: boolean) => {
-    const previousLevel = parentalControlLevel;
-    
-    // Désactiver temporairement le contrôle parental
-    localStorage.setItem('parental_control_level', '0');
-    
-    setShowVideoParentalWarning(false);
-    
-    // Exécuter l'import
-    if (pendingVideoFiles.length > 0) {
-      toast.info(language === 'fr' ? 'Contrôle parental désactivé temporairement pour l\'import' : 'Parental control temporarily disabled for import');
-      
-      // Vérifier si c'est un drop sur un cadre spécifique
-      if (pendingDropFrameId !== null) {
-        await processDropOnFrame(pendingDropFrameId, pendingVideoFiles[0]);
-        setPendingDropFrameId(null);
-      } else if (pendingExternalDrop) {
-        await processExternalDropFiles(pendingVideoFiles);
-        setPendingExternalDrop(false);
-      } else {
-        await performImport(pendingVideoFiles);
-      }
-      
-      // Rétablir le contrôle parental si demandé
-      if (autoRestore) {
-        localStorage.setItem('parental_control_level', previousLevel.toString());
-        toast.success(language === 'fr' ? `Contrôle parental rétabli au niveau ${previousLevel}` : `Parental control restored to level ${previousLevel}`);
-      } else {
-        toast.warning(language === 'fr' ? 'N\'oubliez pas de réactiver le contrôle parental dans Administration' : 'Don\'t forget to re-enable parental control in Settings');
-      }
-    }
-    
-    // Réinitialiser les états
-    setPendingVideoFiles([]);
-    setVideoWarningCallback(null);
-  };
-
-  // Fonction d'import réelle (après consentement NSFW si nécessaire)
   const performImport = async (selectedFiles: File[]) => {
     const toastId = toast.loading(language === 'fr' ? `Traitement des ${selectedFiles.length} élément(s)...` : `Processing ${selectedFiles.length} item(s)...`);
 
@@ -1425,47 +1278,9 @@ export default function UniversalAlbumPage({
       return;
     }
 
-    // Vérifier le contrôle parental pour le drag & drop aussi
-    const parentalLevel = parseInt(localStorage.getItem('parental_control_level') || '0');
-    console.log('=== handleExternalDrop - Contrôle parental ===');
-    console.log('Niveau:', parentalLevel);
-    console.log('Fichiers valides:', validFiles.length);
-    
-    // Vérifier s'il y a des vidéos
-    const videoFiles = validFiles.filter(f => f.type.startsWith('video/'));
-    const hasVideos = videoFiles.length > 0;
-    
-    // Si contrôle parental actif ET vidéos présentes, afficher l'avertissement
-    if (parentalLevel >= 1 && hasVideos && isPhoto) {
-      console.log('Vidéos détectées avec contrôle parental actif - affichage avertissement');
-      setPendingVideoFiles(validFiles);
-      setParentalControlLevel(parentalLevel);
-      setPendingExternalDrop(true); // C'est un drag & drop général
-      setPendingDropFrameId(null);
-      setShowVideoParentalWarning(true);
-      return;
-    }
-    
-    if (parentalLevel >= 1) {
-      // Analyser les images uniquement (sans vidéos)
-      const mediaFiles = validFiles.filter(f => f.type.startsWith('image/'));
-      console.log('Images à analyser:', mediaFiles.length);
-      
-      if (mediaFiles.length > 0) {
-        console.log('Ouverture modale contrôle parental pour drag & drop');
-        setPendingFilesForParentalControl(validFiles);
-        setParentalControlLevel(parentalLevel);
-        setPendingExternalDrop(true); // Marquer que c'est un drag & drop général
-        setShowParentalControl(true);
-        return; // Attendre le consentement et l'analyse
-      }
-    }
-
-    // Si pas de contrôle parental, procéder directement
     await processExternalDropFiles(validFiles);
   };
 
-  // Fonction pour traiter les fichiers du drag & drop (après contrôle parental si nécessaire)
   const processExternalDropFiles = async (validFiles: File[]) => {
     const toastId = toast.loading(`Traitement de ${validFiles.length} fichier(s)...`);
     const albumId = currentAlbumId;
@@ -1646,38 +1461,9 @@ export default function UniversalAlbumPage({
       return;
     }
 
-    // Vérifier le contrôle parental pour le drop sur cadre aussi
-    const parentalLevel = parseInt(localStorage.getItem('parental_control_level') || '0');
-    console.log('=== handleExternalDropOnFrame - Contrôle parental ===');
-    console.log('Niveau:', parentalLevel);
-    console.log('Frame ID:', frameId);
-    
-    // Si c'est une vidéo avec contrôle parental actif, afficher l'avertissement
-    if (parentalLevel >= 1 && file.type.startsWith('video/') && isPhoto) {
-      console.log('Vidéo détectée avec contrôle parental actif - affichage avertissement');
-      setPendingDropFrameId(frameId);
-      setPendingVideoFiles([file]);
-      setParentalControlLevel(parentalLevel);
-      setPendingExternalDrop(false);
-      setShowVideoParentalWarning(true);
-      return;
-    }
-    
-    // Analyser les images uniquement (pas les vidéos)
-    if (parentalLevel >= 1 && file.type.startsWith('image/')) {
-      console.log('Ouverture modale contrôle parental pour drop sur cadre');
-      setPendingDropFrameId(frameId);
-      setPendingFilesForParentalControl([file]);
-      setParentalControlLevel(parentalLevel);
-      setShowParentalControl(true);
-      return; // Attendre le consentement et l'analyse
-    }
-
-    // Si pas de contrôle parental, procéder directement
     await processDropOnFrame(frameId, file);
   };
 
-  // Fonction pour traiter le drop sur un cadre (après contrôle parental si nécessaire)
   const processDropOnFrame = async (frameId: number, file: File) => {
     const toastId = toast.loading("Traitement du fichier...");
     const albumId = currentAlbumId;
@@ -4117,33 +3903,6 @@ export default function UniversalAlbumPage({
         isPhoto={isPhoto}
       />
 
-      {/* MODALE CONTRÔLE PARENTAL UNIFIÉE */}
-      <ParentalControlModal
-        isOpen={showParentalControl}
-        onClose={() => setShowParentalControl(false)}
-        onComplete={handleParentalControlComplete}
-        files={pendingFilesForParentalControl}
-        controlLevel={parentalControlLevel}
-        isPhoto={isPhoto}
-      />
-
-      {/* MODALE AVERTISSEMENT VIDÉO / CONTRÔLE PARENTAL */}
-      <VideoParentalWarningModal
-        isOpen={showVideoParentalWarning}
-        onClose={() => {
-          setShowVideoParentalWarning(false);
-          setPendingVideoFiles([]);
-          setVideoWarningCallback(null);
-        }}
-        onDisableAndContinue={handleVideoParentalWarningContinue}
-        onCancel={() => {
-          setShowVideoParentalWarning(false);
-          setPendingVideoFiles([]);
-          setVideoWarningCallback(null);
-          toast.info(language === 'fr' ? 'Import annulé' : 'Import cancelled');
-        }}
-        currentLevel={parentalControlLevel}
-      />
 
       {/* MODALE CONFIRMATION QUITTER */}
       <QuitConfirmModal

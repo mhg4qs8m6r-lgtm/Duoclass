@@ -116,10 +116,6 @@ export default function Parametres() {
   const [newMasterCode, setNewMasterCode] = useState("");
   const [confirmMasterCode, setConfirmMasterCode] = useState("");
 
-  const permissionCodeSetting = useLiveQuery(() => db.settings.get('permission_code'));
-  const [newPermissionCode, setNewPermissionCode] = useState("");
-  const [confirmPermissionCode, setConfirmPermissionCode] = useState("");
-  const [parentalFilterLevel, setParentalFilterLevel] = useState(5);
   
   // Paramètres de session
   const [inactivityTimeout, setInactivityTimeout] = useState("10");
@@ -172,10 +168,6 @@ export default function Parametres() {
       const storedExemptEnd = localStorage.getItem("auto_logout_exempt_end");
       if (storedExemptEnd) setAutoLogoutExemptEnd(storedExemptEnd);
       
-      // Charger le niveau de contrôle parental
-      const storedParentalLevel = localStorage.getItem("parental_control_level");
-      if (storedParentalLevel) setParentalFilterLevel(parseInt(storedParentalLevel));
-      
       // Charger les paramètres de sauvegarde automatique
       const storedAutoBackupEnabled = localStorage.getItem("auto_backup_enabled");
       if (storedAutoBackupEnabled) setAutoBackupEnabled(storedAutoBackupEnabled === 'true');
@@ -199,11 +191,6 @@ export default function Parametres() {
     };
     loadSettings();
   }, []);
-
-  // Sauvegarder le niveau de contrôle parental quand il change
-  useEffect(() => {
-    localStorage.setItem("parental_control_level", parentalFilterLevel.toString());
-  }, [parentalFilterLevel]);
 
   // --- HANDLERS ---
 
@@ -352,21 +339,6 @@ export default function Parametres() {
     setNewMasterCode("");
     setConfirmMasterCode("");
     toast.success(language === "fr" ? "Code Maître mis à jour avec succès" : "Master Code updated successfully");
-  };
-
-  const handleUpdatePermissionCode = async () => {
-    if (newPermissionCode !== confirmPermissionCode) {
-      toast.error(language === "fr" ? "Les codes ne correspondent pas" : "Codes do not match");
-      return;
-    }
-    if (newPermissionCode.length < 4) {
-      toast.error(language === "fr" ? "Le code doit contenir au moins 4 caractères" : "Code must be at least 4 characters");
-      return;
-    }
-    await db.settings.put({ id: 'permission_code', value: newPermissionCode, updatedAt: new Date().toISOString() });
-    setNewPermissionCode("");
-    setConfirmPermissionCode("");
-    toast.success(language === "fr" ? "Code de permission mis à jour avec succès" : "Permission code updated successfully");
   };
 
   const handleSaveSessionSettings = () => {
@@ -794,10 +766,8 @@ export default function Parametres() {
               {/* --- ONGLET 3: SÉCURITÉ --- */}
               <TabsContent value="security" className="mt-0 flex flex-col gap-2 p-2">
 
-                {/* Ligne 1 : Code Maître + Code de Permission */}
-                <div className="grid grid-cols-2 gap-3 border rounded-lg p-2">
-
-                  {/* Code Maître */}
+                {/* Code Maître */}
+                <div className="border rounded-lg p-2">
                   <div className="space-y-1">
                     <h2 className="text-sm font-bold text-purple-800 flex items-center gap-1 flex-wrap">
                       <Lock className="w-4 h-4" /> {t('settings.masterCode')}
@@ -811,23 +781,6 @@ export default function Parametres() {
                     <Input type="password" value={confirmMasterCode} onChange={(e) => setConfirmMasterCode(e.target.value)} placeholder={t('settings.confirmCode')} className="h-8 text-sm" />
                     <Button onClick={handleUpdateMasterCode} size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white h-8">
                       {t('settings.updateCode')}
-                    </Button>
-                  </div>
-
-                  {/* Code de Permission */}
-                  <div className="space-y-1 border-l pl-3">
-                    <h2 className="text-sm font-bold text-blue-800 flex items-center gap-1 flex-wrap">
-                      <Key className="w-4 h-4" /> {language === 'fr' ? 'Code de permission' : 'Permission code'}
-                      <span className="text-xs font-normal text-gray-500">
-                        {permissionCodeSetting?.updatedAt
-                          ? `— ${new Date(permissionCodeSetting.updatedAt as string).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${new Date(permissionCodeSetting.updatedAt as string).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`
-                          : (language === 'fr' ? '— jamais modifié' : '— never changed')}
-                      </span>
-                    </h2>
-                    <Input type="password" value={newPermissionCode} onChange={(e) => setNewPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Nouveau code de permission' : 'New permission code'} className="h-8 text-sm" />
-                    <Input type="password" value={confirmPermissionCode} onChange={(e) => setConfirmPermissionCode(e.target.value)} placeholder={language === 'fr' ? 'Confirmer le code' : 'Confirm code'} className="h-8 text-sm" />
-                    <Button onClick={handleUpdatePermissionCode} size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white h-8">
-                      {language === 'fr' ? 'Mettre à jour' : 'Update'}
                     </Button>
                   </div>
                 </div>
@@ -859,46 +812,6 @@ export default function Parametres() {
                   </div>
                 </div>
 
-                {/* Ligne 3 : Contrôle Parental */}
-                <div className="border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-sm font-bold text-orange-800 flex items-center gap-1">
-                      <Shield className="w-4 h-4" /> {t('settings.parentalControl')}
-                    </h2>
-                    <span className="text-xs text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Info className="w-3 h-3" /> {t('settings.aiAnalysis')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs font-medium text-gray-500 mb-2">
-                    <span>{t('settings.disabled')}</span>
-                    <span>{t('settings.moderate')}</span>
-                    <span>{t('settings.strict')}</span>
-                    <span className="text-red-600 font-bold">{t('settings.veryStrict')}</span>
-                  </div>
-                  <input type="range" min="0" max="5" step="1" value={parentalFilterLevel} onChange={(e) => setParentalFilterLevel(parseInt(e.target.value))} className="parental-slider" />
-                  <div className="flex items-center gap-3 mt-3">
-                    <span className="px-3 py-1.5 bg-orange-100 text-orange-800 rounded-full font-bold text-sm border border-orange-200">
-                      {t('settings.currentLevel')} : {parentalFilterLevel} / 5
-                    </span>
-                    <p className="text-gray-600 text-xs italic">
-                      {language === 'fr' ? ({
-                        0: 'Désactivé — aucune analyse effectuée',
-                        1: 'Très permissif — analyse active, tout peut être importé',
-                        2: 'Permissif — avertissement affiché, import possible',
-                        3: 'Modéré — code de permission requis pour importer',
-                        4: 'Strict — refus sauf avec code de permission',
-                        5: 'Très strict — aucun contenu sensible accepté',
-                      } as Record<number, string>)[parentalFilterLevel] : ({
-                        0: 'Disabled — no analysis performed',
-                        1: 'Very permissive — analysis active, anything can be imported',
-                        2: 'Permissive — warning shown, import still possible',
-                        3: 'Moderate — permission code required to import',
-                        4: 'Strict — refused unless permission code provided',
-                        5: 'Very strict — no sensitive content accepted',
-                      } as Record<number, string>)[parentalFilterLevel]}
-                    </p>
-                  </div>
-                </div>
 
               </TabsContent>
 

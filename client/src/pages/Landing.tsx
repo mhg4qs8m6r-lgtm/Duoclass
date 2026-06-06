@@ -8,7 +8,6 @@ import {
   Camera,
   Sparkles,
   Shield,
-  ShieldCheck,
   Palette,
   Send,
   ImageIcon,
@@ -40,7 +39,6 @@ import screenshotRetouchesAvancees from "@/assets/retouches_avancées.png";
 import screenshotAtelier from "@/assets/Atelier_créatif.png";
 import screenshotImport from "@/assets/Import_et_partage.png";
 import screenshotPrives from "@/assets/Albums_privés.png";
-import screenshotParental from "@/assets/Controle_parental.png";
 import screenshotDoublons from "@/assets/Doublons.png";
 
 /* ────────────── Photo Carousel (12 photos, 3 visible) ────────────── */
@@ -234,16 +232,16 @@ export default function Landing() {
       screenshots: [screenshotPrives],
     },
     {
-      emoji: "🛡️",
-      title: fr ? "Contrôle Parental & Détection des Doublons" : "Parental Control & Duplicate Detection",
-      icon: ShieldCheck,
+      emoji: "🔍",
+      title: fr ? "Détection des Doublons" : "Duplicate Detection",
+      icon: Shield,
       gradient: "from-violet-500 to-purple-600",
       description: fr
-        ? "DuoClass intègre un contrôle parental pour protéger les plus jeunes. Grâce à un curseur de progression, définissez le niveau d'accès global aux contenus sensibles sur l'appareil. Une application familiale en toute sécurité. Avec le temps, les photos en double s'accumulent et occupent inutilement de l'espace. DuoClass détecte automatiquement vos photos en double et vous propose en un clic de les supprimer, de les conserver en cas de retouches, ou de faire votre choix ultérieurement. Libérez de l'espace, gardez vos albums propres et bien organisés — sans effort !"
-        : "DuoClass includes parental controls to protect younger users. With a progress slider, set the overall access level to sensitive content on the device. A family app in complete safety. Over time, duplicate photos pile up and waste space. DuoClass automatically detects your duplicate photos and lets you delete them in one click, keep them in case of retouching, or decide later. Free up space, keep your albums clean and well organized — effortlessly!",
+        ? "Avec le temps, les photos en double s'accumulent et occupent inutilement de l'espace. DuoClass détecte automatiquement vos photos en double et vous propose en un clic de les supprimer, de les conserver en cas de retouches, ou de faire votre choix ultérieurement. Libérez de l'espace, gardez vos albums propres et bien organisés — sans effort !"
+        : "Over time, duplicate photos pile up and waste space. DuoClass automatically detects your duplicate photos and lets you delete them in one click, keep them in case of retouching, or decide later. Free up space, keep your albums clean and well organized — effortlessly!",
       placeholder: fr ? "Photo de démonstration à venir" : "Demo photo coming soon",
       placeholderIcon: ImageLucide,
-      screenshots: [screenshotParental, screenshotDoublons],
+      screenshots: [screenshotDoublons],
     },
   ];
 
