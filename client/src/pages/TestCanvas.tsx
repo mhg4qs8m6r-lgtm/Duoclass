@@ -581,9 +581,7 @@ export default function TestCanvas() {
             <button
               type="button"
               onClick={() => {
-                if (window.opener) {
-                  window.opener.postMessage({ type: "detourage-result", elementId, result }, "*");
-                }
+                localStorage.setItem("detourage-result", JSON.stringify({ elementId, result }));
                 window.close();
               }}
               style={{ marginLeft: "auto", padding: "6px 20px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "none", background: "#16a34a", color: "#fff", cursor: "pointer" }}

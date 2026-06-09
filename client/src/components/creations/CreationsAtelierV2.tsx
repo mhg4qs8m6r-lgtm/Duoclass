@@ -1306,22 +1306,23 @@ export default function CreationsAtelierV2({
     eraserCanvasRef.current = null;
   }
 
-  // Écouter le résultat du détourage manuel (retour depuis /test-canvas via postMessage)
+  // Écouter le résultat du détourage manuel (retour depuis /test-canvas via localStorage)
   useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type !== "detourage-result") return;
-      const { elementId: eid, result } = e.data;
-      if (!result) return;
-      // Appliquer le détourage sur l'élément d'origine
-      if (eid) {
-        updateCanvasElement(eid, { src: result });
-      }
-      toast.success(language === "fr" ? "Détourage appliqué !" : "Cutout applied!");
-      // Nettoyage
-      localStorage.removeItem("detourage-image");
+    const handler = (e: StorageEvent) => {
+      if (e.key !== "detourage-result" || !e.newValue) return;
+      try {
+        const { elementId: eid, result } = JSON.parse(e.newValue);
+        if (!result) return;
+        if (eid) {
+          updateCanvasElement(eid, { src: result });
+        }
+        toast.success(language === "fr" ? "Détourage appliqué !" : "Cutout applied!");
+        localStorage.removeItem("detourage-result");
+        localStorage.removeItem("detourage-image");
+      } catch { /* JSON invalide */ }
     };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
   }, [language]);
 
   // ─── Gomme : utilitaires pour le canvas principal ──────────────────────────
