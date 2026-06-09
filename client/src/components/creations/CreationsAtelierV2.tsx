@@ -1316,8 +1316,6 @@ export default function CreationsAtelierV2({
       if (eid) {
         updateCanvasElement(eid, { src: result });
       }
-      // Ajouter aussi au collecteur
-      addToCollector(result, language === "fr" ? "Détourage manuel" : "Manual cutout", "detourage");
       toast.success(language === "fr" ? "Détourage appliqué !" : "Cutout applied!");
       // Nettoyage
       localStorage.removeItem("detourage-image");
@@ -5988,8 +5986,8 @@ export default function CreationsAtelierV2({
                     <DetourageToolsPanel
                       activePhoto={activeCanvasPhoto}
                       selectedElementId={selectedElementId}
-                      onDetourageComplete={(result, name) => {
-                        addToCollector(result, name, "detourage");
+                      onDetourageComplete={(_result, _name) => {
+                        // L'utilisateur ajoute manuellement au Collecteur via le clic droit
                       }}
                       onApplyDetourageToElement={(elementId, detourageResult) => {
                         // Appliquer le détourage directement sur l'élément sélectionné
