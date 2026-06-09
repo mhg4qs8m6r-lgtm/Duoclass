@@ -1295,6 +1295,19 @@ export default function CreationsAtelierV2({
   // ─── État gomme sur le canvas principal ─────────────────────────────────────
   const [isEraserActive, setIsEraserActive] = useState(false);
   const [eraserSize, setEraserSize] = useState(12);
+  const [eraserShape, setEraserShape] = useState<"round" | "square">("round");
+
+  // Curseur dynamique qui reflète la forme et la taille de la gomme
+  const eraserCursor = (() => {
+    if (!isEraserActive) return undefined;
+    const d = Math.max(10, Math.min(eraserSize * 2, 100));
+    const r = d / 2;
+    const inner = eraserShape === "round"
+      ? `<circle cx="${r}" cy="${r}" r="${r - 1.5}" stroke="white" stroke-width="2.5" fill="none"/><circle cx="${r}" cy="${r}" r="${r - 1.5}" stroke="black" stroke-width="1" fill="rgba(0,0,0,0.08)"/>`
+      : `<rect x="1.5" y="1.5" width="${d - 3}" height="${d - 3}" stroke="white" stroke-width="2.5" fill="none"/><rect x="1.5" y="1.5" width="${d - 3}" height="${d - 3}" stroke="black" stroke-width="1" fill="rgba(0,0,0,0.08)"/>`;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${d}' height='${d}'>${inner}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${r} ${r}, crosshair`;
+  })();
   const eraserCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const eraserImageDataRef = useRef<ImageData | null>(null);
   const isErasingOnCanvasRef = useRef(false);
@@ -6025,9 +6038,10 @@ export default function CreationsAtelierV2({
                         eraserImageDataRef.current = null;
                         eraserCanvasRef.current = null;
                       }}
-                      onEraserChange={(active, size) => {
+                      onEraserChange={(active, size, shape) => {
                         setIsEraserActive(active);
                         setEraserSize(size);
+                        setEraserShape(shape);
                         if (!active) {
                           eraserImageDataRef.current = null;
                           eraserCanvasRef.current = null;
@@ -7622,11 +7636,12 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-cell' : isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète
                   minWidth: canvasDimensions.workspaceWidth,
                   minHeight: canvasDimensions.workspaceHeight,
+                  ...(isEraserActive && eraserCursor ? { cursor: eraserCursor } : {}),
                 }}
                 onContextMenu={(e) => {
                   // Désactiver le menu contextuel par défaut du navigateur

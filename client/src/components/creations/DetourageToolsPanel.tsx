@@ -16,8 +16,8 @@ interface DetourageToolsPanelProps {
   onDetourageComplete: (result: string, name: string) => void;
   onApplyDetourageToElement?: (elementId: string, detourageResult: string) => void;
   onModeChange?: (mode: DetourageMode, tool: ManualTool | null) => void;
-  /** Appelé quand l'état de la gomme change (active/inactive + taille) */
-  onEraserChange?: (active: boolean, size: number) => void;
+  /** Appelé quand l'état de la gomme change (active/inactive + taille + forme) */
+  onEraserChange?: (active: boolean, size: number, shape: "round" | "square") => void;
 }
 
 /**
@@ -207,12 +207,13 @@ export default function DetourageToolsPanel({
   // ─── État gomme ────────────────────────────────────────────────────────────
   const [eraserActive, setEraserActive] = useState(false);
   const [eraserSize, setEraserSize] = useState(12);
+  const [eraserShape, setEraserShape] = useState<"round" | "square">("round");
   const isErasingRef = useRef(false);
 
   // Notifier le parent des changements de la gomme
   useEffect(() => {
-    onEraserChange?.(eraserActive, eraserSize);
-  }, [eraserActive, eraserSize, onEraserChange]);
+    onEraserChange?.(eraserActive, eraserSize, eraserShape);
+  }, [eraserActive, eraserSize, eraserShape, onEraserChange]);
 
   // ─── Charger l'image sélectionnée dans le flood fill ───────────────────────
   const loadImageForFloodFill = useCallback(() => {
@@ -644,23 +645,41 @@ export default function DetourageToolsPanel({
               </div>
             )}
 
-            {/* Slider taille gomme */}
+            {/* Slider taille gomme + forme */}
             {eraserActive && (
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <Label className="text-xs text-gray-600">
-                    {language === "fr" ? "Taille gomme" : "Eraser size"}
-                  </Label>
-                  <span className="text-xs font-mono text-gray-500">{eraserSize}px</span>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <Label className="text-xs text-gray-600">
+                      {language === "fr" ? "Taille gomme" : "Eraser size"}
+                    </Label>
+                    <span className="text-xs font-mono text-gray-500">{eraserSize}px</span>
+                  </div>
+                  <Slider
+                    min={2}
+                    max={50}
+                    step={1}
+                    value={[eraserSize]}
+                    onValueChange={(val) => setEraserSize(val[0])}
+                    className="w-full"
+                  />
                 </div>
-                <Slider
-                  min={2}
-                  max={50}
-                  step={1}
-                  value={[eraserSize]}
-                  onValueChange={(val) => setEraserSize(val[0])}
-                  className="w-full"
-                />
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEraserShape("round")}
+                    className={`flex-1 text-xs py-1 rounded border transition-colors ${eraserShape === "round" ? "bg-amber-100 border-amber-400 text-amber-700 font-medium" : "border-gray-300 text-gray-500 hover:border-amber-300"}`}
+                  >
+                    ○ {language === "fr" ? "Rond" : "Round"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEraserShape("square")}
+                    className={`flex-1 text-xs py-1 rounded border transition-colors ${eraserShape === "square" ? "bg-amber-100 border-amber-400 text-amber-700 font-medium" : "border-gray-300 text-gray-500 hover:border-amber-300"}`}
+                  >
+                    □ {language === "fr" ? "Carré" : "Square"}
+                  </button>
+                </div>
               </div>
             )}
 
