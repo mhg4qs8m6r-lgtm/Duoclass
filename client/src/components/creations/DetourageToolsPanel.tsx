@@ -595,65 +595,6 @@ export default function DetourageToolsPanel({
         </Label>
 
         <div className="grid grid-cols-1 gap-2">
-          {/* Supprimer fond extérieur */}
-          <Button
-            variant={mode === "floodfill" && floodFillActive === "exterior" && !eraserActive ? "default" : "outline"}
-            size="sm"
-            className={`justify-start gap-2 text-xs ${
-              mode === "floodfill" && floodFillActive === "exterior" && !eraserActive
-                ? "bg-rose-500 hover:bg-rose-600"
-                : ""
-            }`}
-            disabled={!selectedElementId}
-            onClick={() => {
-              if (mode !== "floodfill") handleModeChange("floodfill");
-              setFloodFillActive("exterior");
-              setEraserActive(false);
-            }}
-          >
-            <Eraser className="w-4 h-4" />
-            {language === "fr" ? "Supprimer fond extérieur" : "Remove outer background"}
-          </Button>
-
-          {/* Supprimer intérieur */}
-          <Button
-            variant={mode === "floodfill" && floodFillActive === "interior" && !eraserActive ? "default" : "outline"}
-            size="sm"
-            className={`justify-start gap-2 text-xs ${
-              mode === "floodfill" && floodFillActive === "interior" && !eraserActive
-                ? "bg-rose-500 hover:bg-rose-600"
-                : ""
-            }`}
-            disabled={!selectedElementId}
-            onClick={() => {
-              if (mode !== "floodfill") handleModeChange("floodfill");
-              setFloodFillActive("interior");
-              setEraserActive(false);
-            }}
-          >
-            <Eraser className="w-4 h-4" />
-            {language === "fr" ? "Supprimer intérieur" : "Remove inner area"}
-          </Button>
-
-          {/* Gomme manuelle */}
-          <Button
-            variant={mode === "floodfill" && eraserActive ? "default" : "outline"}
-            size="sm"
-            className={`justify-start gap-2 text-xs ${
-              mode === "floodfill" && eraserActive
-                ? "bg-amber-500 hover:bg-amber-600"
-                : ""
-            }`}
-            disabled={!selectedElementId}
-            onClick={() => {
-              if (mode !== "floodfill") handleModeChange("floodfill");
-              setEraserActive(true);
-              setFloodFillActive(null);
-            }}
-          >
-            <Circle className="w-4 h-4" />
-            {language === "fr" ? "Gomme manuelle" : "Manual eraser"}
-          </Button>
         </div>
 
         {/* Contrôles flood fill + gomme */}

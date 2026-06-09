@@ -54,6 +54,9 @@ export default function TestCanvas() {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
+  // Mode de sélection : conserver l'intérieur (défaut) ou supprimer l'intérieur
+  const [invertSelection, setInvertSelection] = useState(false);
+
   // Zoom & pan
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -354,12 +357,22 @@ export default function TestCanvas() {
       const out = document.createElement("canvas");
       out.width = imageSize.w; out.height = imageSize.h;
       const octx = out.getContext("2d")!;
-      octx.beginPath();
-      octx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
-      octx.closePath();
-      octx.clip();
-      octx.drawImage(clean, 0, 0);
+      if (invertSelection) {
+        octx.drawImage(clean, 0, 0);
+        octx.globalCompositeOperation = "destination-out";
+        octx.beginPath();
+        octx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
+        octx.closePath();
+        octx.fill();
+      } else {
+        octx.beginPath();
+        octx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
+        octx.closePath();
+        octx.clip();
+        octx.drawImage(clean, 0, 0);
+      }
 
       const dataUrl = cropToBoundingBox(out);
       console.log("[TestCanvas] cutout done, result length:", dataUrl.length);
@@ -375,12 +388,22 @@ export default function TestCanvas() {
       const out = document.createElement("canvas");
       out.width = imageSize.w; out.height = imageSize.h;
       const octx = out.getContext("2d")!;
-      octx.beginPath();
-      octx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
-      octx.closePath();
-      octx.clip();
-      octx.drawImage(clean, 0, 0);
+      if (invertSelection) {
+        octx.drawImage(clean, 0, 0);
+        octx.globalCompositeOperation = "destination-out";
+        octx.beginPath();
+        octx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
+        octx.closePath();
+        octx.fill();
+      } else {
+        octx.beginPath();
+        octx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) octx.lineTo(points[i].x, points[i].y);
+        octx.closePath();
+        octx.clip();
+        octx.drawImage(clean, 0, 0);
+      }
 
       setResult(out.toDataURL("image/png"));
     }
@@ -496,6 +519,17 @@ export default function TestCanvas() {
                 1:1
               </button>
             )}
+
+            {/* Options de sélection */}
+            <span style={{ marginLeft: 8, fontSize: 12, color: "#9ca3af" }}>|</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+              <input type="radio" name="invertSelection" checked={!invertSelection} onChange={() => setInvertSelection(false)} />
+              ⬤ Conserver l'intérieur
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+              <input type="radio" name="invertSelection" checked={invertSelection} onChange={() => setInvertSelection(true)} />
+              ○ Supprimer la sélection intérieure
+            </label>
 
             {closed && points.length >= 3 && (
               <button
