@@ -595,6 +595,25 @@ export default function DetourageToolsPanel({
         </Label>
 
         <div className="grid grid-cols-1 gap-2">
+          {/* Gomme manuelle */}
+          <Button
+            variant={mode === "floodfill" && eraserActive ? "default" : "outline"}
+            size="sm"
+            className={`justify-start gap-2 text-xs ${
+              mode === "floodfill" && eraserActive
+                ? "bg-amber-500 hover:bg-amber-600"
+                : ""
+            }`}
+            disabled={!selectedElementId}
+            onClick={() => {
+              if (mode !== "floodfill") handleModeChange("floodfill");
+              setEraserActive(true);
+              setFloodFillActive(null);
+            }}
+          >
+            <Circle className="w-4 h-4" />
+            {language === "fr" ? "Gomme manuelle" : "Manual eraser"}
+          </Button>
         </div>
 
         {/* Contrôles flood fill + gomme */}
