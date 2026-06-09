@@ -63,11 +63,8 @@ export default function TestCanvas() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ mouse: Point; pan: Point } | null>(null);
 
-  // ─── 1. Récupérer l'image depuis localStorage (une seule fois au montage) ──
-  const didLoadRef = useRef(false);
-  useEffect(() => {
-    if (didLoadRef.current) return; // éviter de recharger si le composant remonte
-    didLoadRef.current = true;
+  // ─── Charger (ou recharger) l'image depuis localStorage ──────────────────
+  const loadFromStorage = useCallback(() => {
     const data = localStorage.getItem("detourage-image");
     if (data) {
       try {
@@ -77,8 +74,31 @@ export default function TestCanvas() {
       } catch {
         setImageSrc(data);
       }
+      // Réinitialiser tout l'état de dessin
+      setPoints([]);
+      setClosed(false);
+      setCursorPos(null);
+      setDragIdx(null);
+      setResult(null);
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      setInvertSelection(false);
     }
   }, []);
+
+  // ─── 1. Récupérer l'image au montage ──────────────────────────────────────
+  useEffect(() => {
+    loadFromStorage();
+  }, [loadFromStorage]);
+
+  // ─── 1b. Écouter les changements de localStorage (nouvelle image depuis la fenêtre principale) ──
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "detourage-image") loadFromStorage();
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadFromStorage]);
 
   // ─── 2. Charger l'image et dimensionner le canvas ─────────────────────────
   useEffect(() => {
