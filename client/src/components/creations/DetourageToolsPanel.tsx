@@ -135,6 +135,22 @@ export function eraseCircle(imageData: ImageData, cx: number, cy: number, radius
   }
 }
 
+// ─── Gomme : effacer un carré de pixels ────────────────────────────────────
+export function eraseSquare(imageData: ImageData, cx: number, cy: number, radius: number) {
+  const { width, height, data } = imageData;
+  const r = Math.round(radius);
+  const x0 = Math.max(0, Math.round(cx) - r);
+  const y0 = Math.max(0, Math.round(cy) - r);
+  const x1 = Math.min(width - 1, Math.round(cx) + r);
+  const y1 = Math.min(height - 1, Math.round(cy) + r);
+
+  for (let py = y0; py <= y1; py++) {
+    for (let px = x0; px <= x1; px++) {
+      data[(py * width + px) * 4 + 3] = 0;
+    }
+  }
+}
+
 // ─── Motif damier (transparence) ───────────────────────────────────────────
 function createCheckerPattern(): CanvasPattern | null {
   const size = 10;

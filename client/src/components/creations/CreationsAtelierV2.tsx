@@ -18,7 +18,7 @@ import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
 // Import des panneaux d'outils (inline, pas de modales)
-import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle } from "./DetourageToolsPanel";
+import DetourageToolsPanel, { DetourageMode, ManualTool, eraseCircle, eraseSquare } from "./DetourageToolsPanel";
 import AssemblagePanel, { PassePartoutData, FiletConfig, SectionId } from "./AssemblagePanel";
 import { type HoleDescriptor } from "./PeleMelePanel";
 import Collecteur from "../Collecteur";
@@ -1297,17 +1297,8 @@ export default function CreationsAtelierV2({
   const [eraserSize, setEraserSize] = useState(12);
   const [eraserShape, setEraserShape] = useState<"round" | "square">("round");
 
-  // Curseur dynamique qui reflète la forme et la taille de la gomme
-  const eraserCursor = (() => {
-    if (!isEraserActive) return undefined;
-    const d = Math.max(10, Math.min(eraserSize * 2, 100));
-    const r = d / 2;
-    const inner = eraserShape === "round"
-      ? `<circle cx="${r}" cy="${r}" r="${r - 1.5}" stroke="white" stroke-width="2.5" fill="none"/><circle cx="${r}" cy="${r}" r="${r - 1.5}" stroke="black" stroke-width="1" fill="rgba(0,0,0,0.08)"/>`
-      : `<rect x="1.5" y="1.5" width="${d - 3}" height="${d - 3}" stroke="white" stroke-width="2.5" fill="none"/><rect x="1.5" y="1.5" width="${d - 3}" height="${d - 3}" stroke="black" stroke-width="1" fill="rgba(0,0,0,0.08)"/>`;
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${d}' height='${d}'>${inner}</svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${r} ${r}, crosshair`;
-  })();
+  // Overlay DOM pour le curseur gomme (position mise à jour sans re-render)
+  const eraserOverlayRef = useRef<HTMLDivElement>(null);
   const eraserCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const eraserImageDataRef = useRef<ImageData | null>(null);
   const isErasingOnCanvasRef = useRef(false);
@@ -7636,12 +7627,11 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-none' : isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète
                   minWidth: canvasDimensions.workspaceWidth,
                   minHeight: canvasDimensions.workspaceHeight,
-                  ...(isEraserActive && eraserCursor ? { cursor: eraserCursor } : {}),
                 }}
                 onContextMenu={(e) => {
                   // Désactiver le menu contextuel par défaut du navigateur
@@ -7683,6 +7673,14 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseMove={(e) => {
+                  // Overlay curseur gomme : position mise à jour directement sur le DOM (sans re-render)
+                  if (isEraserActive && eraserOverlayRef.current && canvasRef.current) {
+                    const rect = canvasRef.current.getBoundingClientRect();
+                    const x = e.clientX - rect.left - eraserSize;
+                    const y = e.clientY - rect.top - eraserSize;
+                    eraserOverlayRef.current.style.transform = `translate(${x}px, ${y}px)`;
+                    eraserOverlayRef.current.style.display = 'block';
+                  }
                   // Mode découpe : mettre à jour le point d'arrivée
                   if (isCutMode && cutStart && selectedElementId) {
                     const canvas = canvasRef.current;
@@ -7709,7 +7707,7 @@ export default function CreationsAtelierV2({
                       const coords = eraserGetImageCoords(e, el);
                       if (coords) {
                         const imgData = eraserImageDataRef.current;
-                        eraseCircle(imgData, coords.x, coords.y, eraserSize * (imgData.width / (el.width * canvasDimensions.pxPerCm)));
+                        (eraserShape === 'square' ? eraseSquare : eraseCircle)(imgData, coords.x, coords.y, eraserSize * (imgData.width / (el.width * canvasDimensions.pxPerCm)));
                         // Mettre à jour l'affichage en temps réel via le DOM
                         const domCanvas = document.querySelector(`canvas[data-element-id="${selectedElementId}"]`) as HTMLCanvasElement | null;
                         if (domCanvas) {
@@ -7796,6 +7794,7 @@ export default function CreationsAtelierV2({
                     setCutStart(null);
                     setCutEnd(null);
                   }
+                  if (eraserOverlayRef.current) eraserOverlayRef.current.style.display = 'none';
                   handleMouseUp();
                   handleLassoEnd();
                   setCursorPosition(null);
@@ -8267,14 +8266,14 @@ export default function CreationsAtelierV2({
                               // Appliquer le premier point
                               const coords = eraserGetImageCoords(e, element);
                               if (coords) {
-                                eraseCircle(imageData, coords.x, coords.y, eraserSize * (imageData.width / (element.width * canvasDimensions.pxPerCm)));
+                                (eraserShape === 'square' ? eraseSquare : eraseCircle)(imageData, coords.x, coords.y, eraserSize * (imageData.width / (element.width * canvasDimensions.pxPerCm)));
                                 eraserImageDataRef.current = imageData;
                               }
                             });
                           } else {
                             const coords = eraserGetImageCoords(e, element);
                             if (coords) {
-                              eraseCircle(eraserImageDataRef.current, coords.x, coords.y, eraserSize * (eraserImageDataRef.current.width / (element.width * canvasDimensions.pxPerCm)));
+                              (eraserShape === 'square' ? eraseSquare : eraseCircle)(eraserImageDataRef.current, coords.x, coords.y, eraserSize * (eraserImageDataRef.current.width / (element.width * canvasDimensions.pxPerCm)));
                             }
                           }
                           return;
@@ -9649,6 +9648,27 @@ export default function CreationsAtelierV2({
                     </div>
                   );
                 })()}
+
+                {/* Overlay curseur gomme — suit la souris sans re-render React */}
+                {isEraserActive && (
+                  <div
+                    ref={eraserOverlayRef}
+                    style={{
+                      position: 'absolute',
+                      display: 'none',
+                      left: 0,
+                      top: 0,
+                      width: eraserSize * 2,
+                      height: eraserSize * 2,
+                      borderRadius: eraserShape === 'round' ? '50%' : '0',
+                      border: '2px solid white',
+                      boxShadow: '0 0 0 1px black',
+                      pointerEvents: 'none',
+                      zIndex: 9999,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
 
                 {/* SVG pour le détourage manuel point par point - positionné sur la PAGE */}
                 {isDetourageActive && manualTool === "polygon" && selectedElementId && (
