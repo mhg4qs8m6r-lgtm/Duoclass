@@ -7627,11 +7627,13 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isEraserActive ? 'cursor-none' : isLassoing ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isLassoing && !isEraserActive ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète
                   minWidth: canvasDimensions.workspaceWidth,
                   minHeight: canvasDimensions.workspaceHeight,
+                  // cursor:none en style inline pour forcer sur tous les enfants (priorité sur Tailwind)
+                  ...(isEraserActive ? { cursor: 'none' } : {}),
                 }}
                 onContextMenu={(e) => {
                   // Désactiver le menu contextuel par défaut du navigateur
@@ -7673,12 +7675,10 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseMove={(e) => {
-                  // Overlay curseur gomme : position mise à jour directement sur le DOM (sans re-render)
-                  if (isEraserActive && eraserOverlayRef.current && canvasRef.current) {
-                    const rect = canvasRef.current.getBoundingClientRect();
-                    const x = e.clientX - rect.left - eraserSize;
-                    const y = e.clientY - rect.top - eraserSize;
-                    eraserOverlayRef.current.style.transform = `translate(${x}px, ${y}px)`;
+                  // Overlay curseur gomme : position fixed → coordonnées viewport directes, aucun décalage possible
+                  if (isEraserActive && eraserOverlayRef.current) {
+                    eraserOverlayRef.current.style.left = `${e.clientX - eraserSize}px`;
+                    eraserOverlayRef.current.style.top = `${e.clientY - eraserSize}px`;
                     eraserOverlayRef.current.style.display = 'block';
                   }
                   // Mode découpe : mettre à jour le point d'arrivée
@@ -9649,22 +9649,20 @@ export default function CreationsAtelierV2({
                   );
                 })()}
 
-                {/* Overlay curseur gomme — suit la souris sans re-render React */}
+                {/* Overlay curseur gomme — position:fixed → coordonnées viewport, centré sur la souris */}
                 {isEraserActive && (
                   <div
                     ref={eraserOverlayRef}
                     style={{
-                      position: 'absolute',
+                      position: 'fixed',
                       display: 'none',
-                      left: 0,
-                      top: 0,
                       width: eraserSize * 2,
                       height: eraserSize * 2,
                       borderRadius: eraserShape === 'round' ? '50%' : '0',
                       border: '2px solid white',
                       boxShadow: '0 0 0 1px black',
                       pointerEvents: 'none',
-                      zIndex: 9999,
+                      zIndex: 99999,
                       boxSizing: 'border-box',
                     }}
                   />
