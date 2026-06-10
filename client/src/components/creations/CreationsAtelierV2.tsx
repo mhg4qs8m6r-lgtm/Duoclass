@@ -1774,22 +1774,23 @@ export default function CreationsAtelierV2({
     const loadProjectPhotos = async () => {
       if (isOpen && targetProjectId) {
         try {
+          // RC-2 : accumuler la valeur finale dans une variable locale,
+          // setSourcePhotos sera appelé une seule fois à la fin (après les deux await)
+          let finalSourcePhotos: CollectorItem[] = [];
+
           // Charger les photos depuis l'album projet (IndexedDB)
           const albumData = await db.albums.get(targetProjectId);
           if (albumData && albumData.frames) {
             // Filtrer pour ne garder que les frames avec une photoUrl
             const photosWithUrl = albumData.frames.filter((frame: any) => frame.photoUrl);
-            const projectPhotos: CollectorItem[] = photosWithUrl.map((frame: any) => ({
+            finalSourcePhotos = photosWithUrl.map((frame: any) => ({
               id: `photo_${frame.id}`,
               type: 'photo' as const,
               src: frame.photoUrl,
               name: frame.title || 'Photo',
               thumbnail: frame.thumbnailUrl || frame.photoUrl
             }));
-            setSourcePhotos(projectPhotos);
-            console.log(`[Créations] ${projectPhotos.length} photos chargées depuis le projet`);
-          } else {
-            setSourcePhotos([]);
+            console.log(`[Créations] ${finalSourcePhotos.length} photos chargées depuis le projet`);
           }
           
           // Charger les données du canvas sauvegardées
@@ -1884,23 +1885,22 @@ export default function CreationsAtelierV2({
                 setImageZoom(savedData.imageZoom);
               }
               
-              // Restaurer les photos sources depuis les données sauvegardées
+              // RC-2 : override finalSourcePhotos avec la source la plus autoritaire
               if (savedData.sourcePhotos && Array.isArray(savedData.sourcePhotos)) {
-                setSourcePhotos(savedData.sourcePhotos);
+                finalSourcePhotos = savedData.sourcePhotos;
                 console.log('[Créations] Photos sources restaurées:', savedData.sourcePhotos.length);
               } else if (creationsProject.photos && creationsProject.photos.length > 0) {
                 // Fallback: charger depuis le champ photos du projet
-                const projectPhotos: CollectorItem[] = creationsProject.photos.map(photo => ({
+                finalSourcePhotos = creationsProject.photos.map(photo => ({
                   id: String(photo.id ?? Date.now()),
                   type: 'photo' as const,
                   src: String(photo.photoUrl ?? ''),
                   name: photo.photoTitle || 'Photo',
                   thumbnail: photo.thumbnail ?? photo.photoUrl ?? undefined
                 }));
-                setSourcePhotos(projectPhotos);
-                console.log('[Créations] Photos sources chargées depuis projet:', projectPhotos.length);
+                console.log('[Créations] Photos sources chargées depuis projet:', finalSourcePhotos.length);
               }
-              
+
               toast.info(language === "fr" ? "Projet chargé" : "Project loaded");
               // Marquer le chargement comme terminé — l'auto-save peut maintenant s'activer
               isInitialLoadRef.current = false;
@@ -1908,6 +1908,8 @@ export default function CreationsAtelierV2({
               console.error('Erreur lors du parsing des données canvas:', parseError);
             }
           }
+          // RC-2 : écriture unique de sourcePhotos, après les deux await
+          setSourcePhotos(finalSourcePhotos);
         } catch (error) {
           console.error('Erreur lors du chargement des photos du projet:', error);
           setSourcePhotos([]);
