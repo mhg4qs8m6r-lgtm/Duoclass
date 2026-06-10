@@ -8213,7 +8213,7 @@ export default function CreationsAtelierV2({
                     <div
                       key={element.id}
                       data-canvas-element="true"
-                      className={`absolute ${element.locked ? "cursor-not-allowed" : (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"}`}
+                      className={`absolute ${isEraserActive ? "cursor-none" : element.locked ? "cursor-not-allowed" : (isSelected || isInMultiSelection) ? "cursor-move" : "cursor-default"}`}
                       // Bordure appliquée via style pour supporter les pointillés sur les groupes
                       data-grouped={element.groupId ? "true" : undefined}
                       style={{
@@ -9649,8 +9649,8 @@ export default function CreationsAtelierV2({
                   );
                 })()}
 
-                {/* Overlay curseur gomme — position:fixed → coordonnées viewport, centré sur la souris */}
-                {isEraserActive && (
+                {/* Overlay curseur gomme — portal sur document.body pour bypasser overflow:hidden */}
+                {isEraserActive && createPortal(
                   <div
                     ref={eraserOverlayRef}
                     style={{
@@ -9665,7 +9665,8 @@ export default function CreationsAtelierV2({
                       zIndex: 99999,
                       boxSizing: 'border-box',
                     }}
-                  />
+                  />,
+                  document.body
                 )}
 
                 {/* SVG pour le détourage manuel point par point - positionné sur la PAGE */}
