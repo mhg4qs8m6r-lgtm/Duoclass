@@ -1408,6 +1408,10 @@ export default function CreationsAtelierV2({
   // + vérification de liaison projet
   const prevCollecteurCountRef = useRef<number>(0);
   useEffect(() => {
+    // RC-3 : si projectId (prop) est fourni mais currentProjectId (state) ne l'a pas encore
+    // rattrapé (Effet A n'a pas encore commité son setState), ne pas filtrer avec une valeur périmée.
+    // Effet C se ré-exécutera automatiquement quand currentProjectId = projectId.
+    if (projectId && currentProjectId !== projectId) return;
     if (!currentProjectId) return;
 
     console.log("[COLLECTEUR] items en DB:", collecteurDbItems.length);
