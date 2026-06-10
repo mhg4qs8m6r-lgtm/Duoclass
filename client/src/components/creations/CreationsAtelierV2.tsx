@@ -1310,6 +1310,12 @@ export default function CreationsAtelierV2({
     eraserCanvasRef.current = null;
   }
 
+  // ─── Synchronisation Effet A → Effet B (RC-1) ──────────────────────────────
+  // projectsReadyRef : quel projectId l'Effet A a terminé de charger (ref = pas de re-render)
+  // projectsLoadTick : incrémenté par Effet A pour déclencher Effet B après sa complétion
+  const projectsReadyRef = useRef<string | null>(undefined as any);
+  const [projectsLoadTick, setProjectsLoadTick] = useState(0);
+
   // Écouter le résultat du détourage manuel (retour depuis /test-canvas via localStorage)
   useEffect(() => {
     const handler = (e: StorageEvent) => {
@@ -1661,6 +1667,8 @@ export default function CreationsAtelierV2({
   // Combine les projets de creations_projects ET les albums de la catégorie "MES PROJETS CRÉATIONS"
   useEffect(() => {
     if (isOpen) {
+      // RC-1 : signaler à l'Effet B que le chargement n'est pas encore prêt
+      projectsReadyRef.current = null;
       // Réinitialiser le canvas à chaque ouverture
       // Si un projectId est fourni, le conserver pour que le collecteur se charge correctement
       if (!projectId) {
@@ -1749,16 +1757,19 @@ export default function CreationsAtelierV2({
             }
           }
         }
+        // RC-1 : Effet A terminé — autoriser l'Effet B à démarrer
+        projectsReadyRef.current = projectId ?? null;
+        setProjectsLoadTick(t => t + 1);
       };
-      
+
       loadProjects();
     }
   }, [isOpen, projectId]);
   
-  // Charger les photos du projet sélectionné quand l'Atelier s'ouvre
-  // IMPORTANT: utiliser projectId (prop) et non currentProjectId (état)
-  // car le setState du useEffect précédent n'est pas encore effectif dans ce rendu.
+  // Charger les photos du projet sélectionné — démarre APRÈS que l'Effet A ait terminé (RC-1)
   useEffect(() => {
+    // RC-1 : attendre que l'Effet A ait chargé la liste des projets pour ce projectId
+    if (projectId && projectsReadyRef.current !== projectId) return;
     const targetProjectId = projectId ?? null;
     const loadProjectPhotos = async () => {
       if (isOpen && targetProjectId) {
@@ -1908,7 +1919,9 @@ export default function CreationsAtelierV2({
     };
 
     loadProjectPhotos();
-  }, [isOpen, projectId, language]);
+  // projectsLoadTick déclenche cet effet après que l'Effet A ait terminé (RC-1)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, projectId, language, projectsLoadTick]);
   
   // Raccourcis clavier : Ctrl+A (tout sélectionner), Delete (supprimer sélection), Escape (désélectionner)
   useEffect(() => {
