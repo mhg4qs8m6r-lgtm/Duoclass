@@ -54,15 +54,18 @@ export function DroppableFrame({ frame, index, zoomLevel, displayMode = "normal"
   const handleDrop = (e: React.DragEvent) => {
     // Ne traiter que si le cadre est vide
     if (!frame.photoUrl && onExternalDrop && e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      e.stopPropagation(); // Stopper la propagation uniquement lors du drop réussi
       dragCounterRef.current = 0;
       setIsExternalDragOver(false);
 
       const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
+      if (files.length === 1) {
+        // Fichier unique : remplir ce cadre spécifiquement
+        e.preventDefault();
+        e.stopPropagation();
         onExternalDrop(frame.id, files);
       }
+      // Plusieurs fichiers : laisser remonter vers handleExternalDrop
+      // → processExternalDropFiles traite TOUS les fichiers (comme performImport)
     }
   };
 
