@@ -1413,6 +1413,11 @@ export default function CreationsAtelierV2({
     // Effet C se ré-exécutera automatiquement quand currentProjectId = projectId.
     if (projectId && currentProjectId !== projectId) return;
     if (!currentProjectId) return;
+    // RC-5 : la live query peut déclencher cet effet pendant la fenêtre de chargement
+    // (entre projectsReadyRef=null et la fin d'Effet A). Attendre qu'Effet A ait terminé
+    // avant de filtrer, pour éviter d'afficher des items d'un projet précédent ou orphelins.
+    // Sans effet quand projectId est null (nouveau projet créé in-Atelier).
+    if (projectId && projectsReadyRef.current !== projectId) return;
 
     console.log("[COLLECTEUR] items en DB:", collecteurDbItems.length);
     console.log("[COLLECTEUR] currentProjectId:", currentProjectId);
