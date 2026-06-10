@@ -1906,16 +1906,21 @@ export default function CreationsAtelierV2({
               }
 
               toast.info(language === "fr" ? "Projet chargé" : "Project loaded");
-              // Marquer le chargement comme terminé — l'auto-save peut maintenant s'activer
-              isInitialLoadRef.current = false;
             } catch (parseError) {
               console.error('Erreur lors du parsing des données canvas:', parseError);
             }
           }
+          // RC-4 : déverrouiller l'auto-save dans TOUS les chemins du outer try
+          // (happy path, parseError rattrapé, et absence de canvasData).
+          // L'auto-save a son propre guard canvasElements.length===0 qui empêche
+          // de sauvegarder un canvas vide en cas d'erreur de parsing.
+          isInitialLoadRef.current = false;
           // RC-2 : écriture unique de sourcePhotos, après les deux await
           setSourcePhotos(finalSourcePhotos);
         } catch (error) {
           console.error('Erreur lors du chargement des photos du projet:', error);
+          // RC-4 : déverrouiller aussi en cas d'erreur DB (outer catch)
+          isInitialLoadRef.current = false;
           setSourcePhotos([]);
         }
       } else if (isOpen && !targetProjectId) {
