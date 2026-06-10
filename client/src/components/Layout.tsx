@@ -159,10 +159,10 @@ export default function Layout(props: LayoutProps) {
   }, []);
   
   // Normalisation du zoomValue pour le Slider (qui attend un tableau)
-  // Si zoomValue est fourni (contrôlé), on l'utilise, sinon on utilise localZoom
-  const currentZoom = zoomValue !== undefined 
-    ? (Array.isArray(zoomValue) ? zoomValue : [zoomValue]) 
-    : localZoom;
+  // Priorité : zoomValue > zoomLevel (prop) > localZoom
+  const currentZoom = zoomValue !== undefined
+    ? (Array.isArray(zoomValue) ? zoomValue : [zoomValue])
+    : (props.zoomLevel !== undefined ? [props.zoomLevel] : localZoom);
 
   const handleZoomChange = (val: number[]) => {
     setLocalZoom(val);
