@@ -1461,7 +1461,9 @@ export default function CreationsAtelierV2({
       }
       return mapped;
     });
-  }, [collecteurDbItems, currentProjectId, language]);
+  // projectsLoadTick : déclenche Effet C après qu'Effet A ait terminé (symétrique avec Effet B)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collecteurDbItems, currentProjectId, language, projectsLoadTick]);
 
   // Compteur réactif des items du Collecteur par projet
   // Recalculé à chaque changement de collecteurDbItems (live query)
