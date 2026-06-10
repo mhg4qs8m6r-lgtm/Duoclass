@@ -35,10 +35,26 @@ import { cleanupAllExceptNonClassee } from "./lib/cleanupCategories";
 import SyncInitializer from "./components/SyncInitializer";
 
 function Router() {
-  const [zoomLevel, setZoomLevel] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState<number>(() => {
+    const saved = localStorage.getItem('duoclass_zoom_level');
+    const parsed = saved !== null ? parseInt(saved, 10) : NaN;
+    return isNaN(parsed) ? 0 : Math.max(0, Math.min(100, parsed));
+  });
   const [toolbarAction, setToolbarAction] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState("Album");
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("normal");
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
+    const saved = localStorage.getItem('duoclass_display_mode') as DisplayMode | null;
+    return saved === 'half' || saved === 'twothirds' ? saved : 'normal';
+  });
+
+  // Persister displayMode et zoomLevel dans localStorage à chaque changement
+  useEffect(() => {
+    localStorage.setItem('duoclass_display_mode', displayMode);
+  }, [displayMode]);
+
+  useEffect(() => {
+    localStorage.setItem('duoclass_zoom_level', String(zoomLevel));
+  }, [zoomLevel]);
 
   // Prévention globale : empêche Electron de naviguer vers le fichier
   // quand l'utilisateur dépose un fichier hors d'une zone de drop explicite.
