@@ -705,9 +705,37 @@ export default function Aide() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-800">L'Atelier Créatif</h3>
           <p className="text-gray-600">
-            Créez des compositions uniques avec nos outils professionnels.
+            Créez des compositions uniques avec nos outils professionnels, à partir de modèles ou de zéro.
           </p>
-          
+
+          <div className="space-y-3">
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+              <p className="font-medium text-amber-800 mb-2">Les modèles de la Bibliothèque</p>
+              <p className="text-sm text-amber-700">
+                La Bibliothèque propose des <strong>gabarits de référence</strong> (passe-partout, pêle-mêle, cadres, bordures).
+                Ces modèles <strong>ne sont pas modifiables directement</strong> : ils servent de base pour créer vos propres projets.
+              </p>
+            </div>
+
+            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+              <p className="font-medium text-green-800 mb-2">Vos projets personnels</p>
+              <p className="text-sm text-green-700">
+                Les projets que vous créez (visibles dans « Projets en cours ») sont <strong>entièrement modifiables</strong>.
+                Vous pouvez les personnaliser, les sauvegarder et les exporter à tout moment en image ou en PDF.
+              </p>
+            </div>
+
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="font-medium text-blue-800 mb-2">Comment utiliser un modèle ?</p>
+              <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                <li>Ouvrez l'<strong>Atelier</strong> depuis le menu principal.</li>
+                <li>Cliquez sur <strong>« + Créer un nouveau projet »</strong> et choisissez un type (passe-partout, pêle-mêle, etc.).</li>
+                <li>Dans l'Atelier, la <strong>Bibliothèque de modèles</strong> vous propose des gabarits prêts à personnaliser.</li>
+                <li>Ajoutez vos photos, ajustez les dimensions, puis <strong>sauvegardez ou exportez</strong> votre création.</li>
+              </ol>
+            </div>
+          </div>
+
           {/* Section Comment démarrer un projet */}
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 mb-4">
             <div className="flex items-center gap-2 mb-2">
@@ -792,9 +820,37 @@ export default function Aide() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-800">Creative Workshop</h3>
           <p className="text-gray-600">
-            Create unique compositions with our professional tools.
+            Create unique compositions with our professional tools, from templates or from scratch.
           </p>
-          
+
+          <div className="space-y-3">
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+              <p className="font-medium text-amber-800 mb-2">Library templates</p>
+              <p className="text-sm text-amber-700">
+                The Library offers <strong>reference templates</strong> (mat boards, collages, frames, borders).
+                These templates <strong>cannot be edited directly</strong> — they serve as a starting point for creating your own projects.
+              </p>
+            </div>
+
+            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+              <p className="font-medium text-green-800 mb-2">Your personal projects</p>
+              <p className="text-sm text-green-700">
+                Projects you create (shown under "Current projects") are <strong>fully editable</strong>.
+                You can customize, save and export them at any time as an image or PDF.
+              </p>
+            </div>
+
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="font-medium text-blue-800 mb-2">How to use a template?</p>
+              <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                <li>Open the <strong>Workshop</strong> from the main menu.</li>
+                <li>Click <strong>"+ Create a new project"</strong> and choose a type (mat board, collage, etc.).</li>
+                <li>Inside the Workshop, the <strong>Template Library</strong> offers ready-made designs to customize.</li>
+                <li>Add your photos, adjust dimensions, then <strong>save or export</strong> your creation.</li>
+              </ol>
+            </div>
+          </div>
+
           {/* Section How to start a project */}
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 mb-4">
             <div className="flex items-center gap-2 mb-2">
@@ -871,84 +927,6 @@ export default function Aide() {
                 <li>• <strong>📝 Text</strong>: Add titles and captions</li>
                 <li>• <strong>⭐ Shapes</strong>: Decorative elements and dividers</li>
               </ul>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: "atelier-creations",
-      titleFr: "Atelier Créations",
-      titleEn: "Creations Workshop",
-      icon: <Palette className="w-5 h-5" />,
-      contentFr: (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">L'Atelier Créations</h3>
-          <p className="text-gray-600">
-            L'Atelier vous permet de réaliser vos propres créations à partir de modèles et de vos photos personnelles.
-          </p>
-
-          <div className="space-y-3">
-            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-              <p className="font-medium text-amber-800 mb-2">Les modèles de la Bibliothèque</p>
-              <p className="text-sm text-amber-700">
-                La Bibliothèque propose des <strong>gabarits de référence</strong> (passe-partout, pêle-mêle, cadres, bordures).
-                Ces modèles <strong>ne sont pas modifiables directement</strong> : ils servent de base pour créer vos propres projets.
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-              <p className="font-medium text-green-800 mb-2">Vos projets personnels</p>
-              <p className="text-sm text-green-700">
-                Les projets que vous créez (visibles dans « Projets en cours ») sont <strong>entièrement modifiables</strong>.
-                Vous pouvez les personnaliser, les sauvegarder et les exporter à tout moment en image ou en PDF.
-              </p>
-            </div>
-
-            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <p className="font-medium text-blue-800 mb-2">Comment utiliser un modèle ?</p>
-              <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                <li>Ouvrez l'<strong>Atelier</strong> depuis le menu principal.</li>
-                <li>Cliquez sur <strong>« + Créer un nouveau projet »</strong> et choisissez un type (passe-partout, pêle-mêle, etc.).</li>
-                <li>Dans l'Atelier, la <strong>Bibliothèque de modèles</strong> vous propose des gabarits prêts à personnaliser.</li>
-                <li>Ajoutez vos photos, ajustez les dimensions, puis <strong>sauvegardez ou exportez</strong> votre création.</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-      ),
-      contentEn: (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">The Creations Workshop</h3>
-          <p className="text-gray-600">
-            The Workshop lets you create your own designs from templates and your personal photos.
-          </p>
-
-          <div className="space-y-3">
-            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-              <p className="font-medium text-amber-800 mb-2">Library templates</p>
-              <p className="text-sm text-amber-700">
-                The Library offers <strong>reference templates</strong> (mat boards, collages, frames, borders).
-                These templates <strong>cannot be edited directly</strong> — they serve as a starting point for creating your own projects.
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-              <p className="font-medium text-green-800 mb-2">Your personal projects</p>
-              <p className="text-sm text-green-700">
-                Projects you create (shown under "Current projects") are <strong>fully editable</strong>.
-                You can customize, save and export them at any time as an image or PDF.
-              </p>
-            </div>
-
-            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <p className="font-medium text-blue-800 mb-2">How to use a template?</p>
-              <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                <li>Open the <strong>Workshop</strong> from the main menu.</li>
-                <li>Click <strong>"+ Create a new project"</strong> and choose a type (mat board, collage, etc.).</li>
-                <li>Inside the Workshop, the <strong>Template Library</strong> offers ready-made designs to customize.</li>
-                <li>Add your photos, adjust dimensions, then <strong>save or export</strong> your creation.</li>
-              </ol>
             </div>
           </div>
         </div>
