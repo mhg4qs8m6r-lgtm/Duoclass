@@ -64,35 +64,36 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
   const showResolutionWarning = !isPdf && !isVideo;
 
   // --- Rognage ---
+  type CropHandle = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   const [isCropping, setIsCropping] = useState(false);
+  const [showCropConfirm, setShowCropConfirm] = useState(false);
   const [cropBox, setCropBox] = useState({ top: 15, left: 15, bottom: 85, right: 85 });
-  const draggingRef = useRef<{ handle: 'top' | 'bottom' | 'left' | 'right'; startCoord: number; startValue: number } | null>(null);
+  const draggingRef = useRef<{ handle: CropHandle; startX: number; startY: number; startBox: typeof cropBox } | null>(null);
   const imgWrapperRef = useRef<HTMLDivElement>(null);
 
-  const handleCropHandleMouseDown = (e: React.MouseEvent, handle: 'top' | 'bottom' | 'left' | 'right') => {
+  const handleCropHandleMouseDown = (e: React.MouseEvent, handle: CropHandle) => {
     e.preventDefault();
     e.stopPropagation();
-    const isVertical = handle === 'top' || handle === 'bottom';
-    draggingRef.current = {
-      handle,
-      startCoord: isVertical ? e.clientY : e.clientX,
-      startValue: cropBox[handle],
-    };
+    draggingRef.current = { handle, startX: e.clientX, startY: e.clientY, startBox: { ...cropBox } };
   };
 
   const handleCropMouseMove = (e: React.MouseEvent) => {
     if (!draggingRef.current || !imgWrapperRef.current) return;
-    const { handle, startCoord, startValue } = draggingRef.current;
-    const isVertical = handle === 'top' || handle === 'bottom';
+    const { handle, startX, startY, startBox } = draggingRef.current;
     const rect = imgWrapperRef.current.getBoundingClientRect();
-    const size = isVertical ? rect.height : rect.width;
-    const current = isVertical ? e.clientY : e.clientX;
-    const raw = Math.max(0, Math.min(100, startValue + ((current - startCoord) / size) * 100));
+    const dx = ((e.clientX - startX) / rect.width)  * 100;
+    const dy = ((e.clientY - startY) / rect.height) * 100;
     setCropBox(prev => {
-      if (handle === 'top')    return { ...prev, top:    Math.min(raw, prev.bottom - 5) };
-      if (handle === 'bottom') return { ...prev, bottom: Math.max(raw, prev.top    + 5) };
-      if (handle === 'left')   return { ...prev, left:   Math.min(raw, prev.right  - 5) };
-                               return { ...prev, right:  Math.max(raw, prev.left   + 5) };
+      const b = { ...prev };
+      if (handle === 'top'    || handle === 'top-left'    || handle === 'top-right')
+        b.top    = Math.max(0,   Math.min(startBox.top    + dy, prev.bottom - 5));
+      if (handle === 'bottom' || handle === 'bottom-left' || handle === 'bottom-right')
+        b.bottom = Math.min(100, Math.max(startBox.bottom + dy, prev.top    + 5));
+      if (handle === 'left'   || handle === 'top-left'    || handle === 'bottom-left')
+        b.left   = Math.max(0,   Math.min(startBox.left   + dx, prev.right  - 5));
+      if (handle === 'right'  || handle === 'top-right'   || handle === 'bottom-right')
+        b.right  = Math.min(100, Math.max(startBox.right  + dx, prev.left   + 5));
+      return b;
     });
   };
 
@@ -100,6 +101,7 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
 
   const resetCrop = () => {
     setIsCropping(false);
+    setShowCropConfirm(false);
     setCropBox({ top: 15, left: 15, bottom: 85, right: 85 });
     draggingRef.current = null;
   };
@@ -111,7 +113,30 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
   const thirdV1 = cropBox.left + (cropBox.right  - cropBox.left) / 3;
   const thirdV2 = cropBox.left + (cropBox.right  - cropBox.left) * 2 / 3;
 
+  // Poignée de coin en L
+  const CornerHandle = ({ vEdge, hEdge }: { vEdge: 'top' | 'bottom'; hEdge: 'left' | 'right' }) => (
+    <div
+      style={{
+        position: 'absolute',
+        width: 18,
+        height: 18,
+        top:  vEdge === 'top'    ? `${cropBox.top}%`    : `${cropBox.bottom}%`,
+        left: hEdge === 'left'   ? `${cropBox.left}%`   : `${cropBox.right}%`,
+        transform: 'translate(-50%, -50%)',
+        borderTop:    vEdge === 'top'    ? '3px solid white' : undefined,
+        borderBottom: vEdge === 'bottom' ? '3px solid white' : undefined,
+        borderLeft:   hEdge === 'left'   ? '3px solid white' : undefined,
+        borderRight:  hEdge === 'right'  ? '3px solid white' : undefined,
+        cursor: (vEdge === 'top' && hEdge === 'left') || (vEdge === 'bottom' && hEdge === 'right')
+          ? 'nwse-resize' : 'nesw-resize',
+        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))',
+      }}
+      onMouseDown={(e) => handleCropHandleMouseDown(e, `${vEdge}-${hEdge}` as CropHandle)}
+    />
+  );
+
   return (
+    <>
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[90vw] max-h-[90vh] w-full h-full flex flex-col p-0 bg-black/90 border-none">
         <DialogHeader className="p-4 shrink-0 bg-black/50 text-white absolute top-0 left-0 right-0 z-10 flex flex-row justify-between items-center">
@@ -146,7 +171,7 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
                   variant="ghost"
                   size="sm"
                   className="text-green-400 hover:bg-white/20 font-semibold"
-                  onClick={() => { /* TODO: logique de sauvegarde (étape suivante) */ }}
+                  onClick={() => setShowCropConfirm(true)}
                 >
                   {language === 'fr' ? 'Valider' : 'Apply'}
                 </Button>
@@ -227,30 +252,25 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
                   <div className="absolute border-l border-white/30 pointer-events-none"
                     style={{ left: `${thirdV2}%`, top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%` }} />
 
-                  {/* Poignée — Haut */}
-                  <div
-                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
+                  {/* Poignées milieu de bord */}
+                  <div className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
                     style={{ top: `${cropBox.top}%`, left: `${midV}%`, transform: 'translate(-50%, -50%)' }}
-                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'top')}
-                  />
-                  {/* Poignée — Bas */}
-                  <div
-                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'top')} />
+                  <div className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
                     style={{ top: `${cropBox.bottom}%`, left: `${midV}%`, transform: 'translate(-50%, -50%)' }}
-                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'bottom')}
-                  />
-                  {/* Poignée — Gauche */}
-                  <div
-                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'bottom')} />
+                  <div className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
                     style={{ top: `${midH}%`, left: `${cropBox.left}%`, transform: 'translate(-50%, -50%)' }}
-                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'left')}
-                  />
-                  {/* Poignée — Droite */}
-                  <div
-                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'left')} />
+                  <div className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
                     style={{ top: `${midH}%`, left: `${cropBox.right}%`, transform: 'translate(-50%, -50%)' }}
-                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'right')}
-                  />
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'right')} />
+
+                  {/* Poignées de coin en L */}
+                  <CornerHandle vEdge="top"    hEdge="left"  />
+                  <CornerHandle vEdge="top"    hEdge="right" />
+                  <CornerHandle vEdge="bottom" hEdge="left"  />
+                  <CornerHandle vEdge="bottom" hEdge="right" />
                 </div>
               )}
             </div>
@@ -266,6 +286,48 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
         )}
       </DialogContent>
     </Dialog>
+
+    {/* ── Boîte de dialogue de confirmation du rognage ── */}
+    <AlertDialog open={showCropConfirm} onOpenChange={setShowCropConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {language === 'fr' ? 'Appliquer le rognage' : 'Apply crop'}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {language === 'fr'
+              ? 'Comment souhaitez-vous enregistrer l\'image rognée ?'
+              : 'How would you like to save the cropped image?'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-col gap-2">
+          <AlertDialogAction
+            className="w-full"
+            onClick={() => {
+              setShowCropConfirm(false);
+              // TODO: remplacer l'originale par l'image rognée
+            }}
+          >
+            {language === 'fr' ? 'Remplacer l\'originale' : 'Replace original'}
+          </AlertDialogAction>
+          <AlertDialogAction
+            className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            onClick={() => {
+              setShowCropConfirm(false);
+              // TODO: créer une copie rognée et conserver l'originale
+            }}
+          >
+            {language === 'fr'
+              ? 'Conserver l\'originale et créer une copie rognée'
+              : 'Keep original and create a cropped copy'}
+          </AlertDialogAction>
+          <AlertDialogCancel className="w-full">
+            {language === 'fr' ? 'Annuler' : 'Cancel'}
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 };
 
