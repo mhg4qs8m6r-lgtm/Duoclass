@@ -58,72 +58,8 @@ interface HelpSection {
   contentEn: React.ReactNode;
 }
 
-export default function Aide() {
-  const { language } = useLanguage();
-  const [activeSection, setActiveSection] = useState<string>("getting-started");
-  const [pdfProgress, setPdfProgress] = useState<number | null>(null);
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
-  const generatePDF = async () => {
-    const container = pdfContainerRef.current;
-    if (!container) return;
-    setPdfProgress(0);
-    try {
-      const { default: html2canvas } = await import('html2canvas-pro');
-      const { default: jsPDF } = await import('jspdf');
-
-      const MARGIN_MM = 10;
-      const A4_W_MM = 210;
-      const A4_H_MM = 297;
-      const CONTENT_W_MM = A4_W_MM - 2 * MARGIN_MM;
-      const CONTENT_H_MM = A4_H_MM - 2 * MARGIN_MM;
-
-      const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-pdf-section]'));
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-      let isFirstPage = true;
-
-      for (let i = 0; i < sections.length; i++) {
-        const el = sections[i];
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
-
-        // Pixels per A4 page height at this canvas width
-        const pageHeightPx = Math.round(canvas.width * (CONTENT_H_MM / CONTENT_W_MM));
-        const totalPages = Math.ceil(canvas.height / pageHeightPx);
-
-        for (let p = 0; p < totalPages; p++) {
-          if (!isFirstPage) pdf.addPage();
-          isFirstPage = false;
-
-          const srcY = p * pageHeightPx;
-          const srcH = Math.min(pageHeightPx, canvas.height - srcY);
-
-          // Slice canvas to one A4 page worth of pixels
-          const slice = document.createElement('canvas');
-          slice.width = canvas.width;
-          slice.height = pageHeightPx;
-          const ctx = slice.getContext('2d')!;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, slice.width, slice.height);
-          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-
-          pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_W_MM, CONTENT_H_MM);
-        }
-
-        setPdfProgress(Math.round(((i + 1) / sections.length) * 100));
-      }
-
-      pdf.save('Guide_DuoClass.pdf');
-    } finally {
-      setPdfProgress(null);
-    }
-  };
-
-  const helpSections: HelpSection[] = [
+export const helpSections: HelpSection[] = [
     {
       id: "getting-started",
       titleFr: "Premiers pas",
@@ -1572,7 +1508,73 @@ export default function Aide() {
         </div>
       )
     }
-  ];
+];
+
+export default function Aide() {
+  const { language } = useLanguage();
+  const [activeSection, setActiveSection] = useState<string>("getting-started");
+  const [pdfProgress, setPdfProgress] = useState<number | null>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+
+  const generatePDF = async () => {
+    const container = pdfContainerRef.current;
+    if (!container) return;
+    setPdfProgress(0);
+    try {
+      const { default: html2canvas } = await import('html2canvas-pro');
+      const { default: jsPDF } = await import('jspdf');
+
+      const MARGIN_MM = 10;
+      const A4_W_MM = 210;
+      const A4_H_MM = 297;
+      const CONTENT_W_MM = A4_W_MM - 2 * MARGIN_MM;
+      const CONTENT_H_MM = A4_H_MM - 2 * MARGIN_MM;
+
+      const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-pdf-section]'));
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      let isFirstPage = true;
+
+      for (let i = 0; i < sections.length; i++) {
+        const el = sections[i];
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+
+        // Pixels per A4 page height at this canvas width
+        const pageHeightPx = Math.round(canvas.width * (CONTENT_H_MM / CONTENT_W_MM));
+        const totalPages = Math.ceil(canvas.height / pageHeightPx);
+
+        for (let p = 0; p < totalPages; p++) {
+          if (!isFirstPage) pdf.addPage();
+          isFirstPage = false;
+
+          const srcY = p * pageHeightPx;
+          const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+
+          // Slice canvas to one A4 page worth of pixels
+          const slice = document.createElement('canvas');
+          slice.width = canvas.width;
+          slice.height = pageHeightPx;
+          const ctx = slice.getContext('2d')!;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, slice.width, slice.height);
+          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+          pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_W_MM, CONTENT_H_MM);
+        }
+
+        setPdfProgress(Math.round(((i + 1) / sections.length) * 100));
+      }
+
+      pdf.save('Guide_DuoClass.pdf');
+    } finally {
+      setPdfProgress(null);
+    }
+  };
+
 
   const activeContent = helpSections.find(s => s.id === activeSection);
 
@@ -1676,5 +1678,47 @@ export default function Aide() {
         ))}
       </div>
     </MainLayout>
+  );
+}
+
+export function AideContent() {
+  const { language } = useLanguage();
+  const [activeSection, setActiveSection] = useState<string>("getting-started");
+  const activeContent = helpSections.find(s => s.id === activeSection);
+
+  return (
+    <div className="flex gap-4 h-full overflow-hidden">
+      {/* Menu latéral */}
+      <div className="w-56 shrink-0 overflow-y-auto">
+        <nav className="space-y-1">
+          {helpSections.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => setActiveSection(section.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                activeSection === section.id
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {section.icon}
+              <span className="flex-1 text-sm">
+                {language === 'fr' ? section.titleFr : section.titleEn}
+              </span>
+              {activeSection === section.id && (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Contenu de la section */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {activeContent && (
+          language === 'fr' ? activeContent.contentFr : activeContent.contentEn
+        )}
+      </div>
+    </div>
   );
 }
