@@ -223,7 +223,6 @@ export default function Layout(props: LayoutProps) {
     { id: "themes", label: t('sidebar.themes'), icon: Settings, path: "/themes", img: "/assets/icons/sidebar/parametres.png" },
     { id: "utilitaires", label: t('sidebar.utilities'), icon: Wrench, path: "/utilitaires", img: "/assets/icons/sidebar/Utilitaires.png" },
     { id: "adresses-utiles", label: language === 'fr' ? 'Adresses Utiles' : 'Useful Links', icon: BookMarked, path: "#adresses-utiles" },
-    { id: "aide", label: t('sidebar.help'), icon: Wrench, path: "/aide", img: "/assets/icons/sidebar/Utilitaires.png" },
   ];
 
   // Toolbar items (traduits)
