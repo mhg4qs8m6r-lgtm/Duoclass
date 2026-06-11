@@ -71,7 +71,7 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose, frameId, onCropSav
   const showResolutionWarning = !isPdf && !isVideo;
 
   // --- Rognage ---
-  type CropHandle = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  type CropHandle = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'move';
   const [isCropping, setIsCropping] = useState(false);
   const [showCropConfirm, setShowCropConfirm] = useState(false);
   const [cropBox, setCropBox] = useState({ top: 15, left: 15, bottom: 85, right: 85 });
@@ -92,14 +92,25 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose, frameId, onCropSav
     const dy = ((e.clientY - startY) / rect.height) * 100;
     setCropBox(prev => {
       const b = { ...prev };
-      if (handle === 'top'    || handle === 'top-left'    || handle === 'top-right')
-        b.top    = Math.max(0,   Math.min(startBox.top    + dy, prev.bottom - 5));
-      if (handle === 'bottom' || handle === 'bottom-left' || handle === 'bottom-right')
-        b.bottom = Math.min(100, Math.max(startBox.bottom + dy, prev.top    + 5));
-      if (handle === 'left'   || handle === 'top-left'    || handle === 'bottom-left')
-        b.left   = Math.max(0,   Math.min(startBox.left   + dx, prev.right  - 5));
-      if (handle === 'right'  || handle === 'top-right'   || handle === 'bottom-right')
-        b.right  = Math.min(100, Math.max(startBox.right  + dx, prev.left   + 5));
+      if (handle === 'move') {
+        const w       = startBox.right  - startBox.left;
+        const h       = startBox.bottom - startBox.top;
+        const newLeft = Math.max(0, Math.min(startBox.left + dx, 100 - w));
+        const newTop  = Math.max(0, Math.min(startBox.top  + dy, 100 - h));
+        b.left   = newLeft;
+        b.right  = newLeft + w;
+        b.top    = newTop;
+        b.bottom = newTop  + h;
+      } else {
+        if (handle === 'top'    || handle === 'top-left'    || handle === 'top-right')
+          b.top    = Math.max(0,   Math.min(startBox.top    + dy, prev.bottom - 5));
+        if (handle === 'bottom' || handle === 'bottom-left' || handle === 'bottom-right')
+          b.bottom = Math.min(100, Math.max(startBox.bottom + dy, prev.top    + 5));
+        if (handle === 'left'   || handle === 'top-left'    || handle === 'bottom-left')
+          b.left   = Math.max(0,   Math.min(startBox.left   + dx, prev.right  - 5));
+        if (handle === 'right'  || handle === 'top-right'   || handle === 'bottom-right')
+          b.right  = Math.min(100, Math.max(startBox.right  + dx, prev.left   + 5));
+      }
       return b;
     });
   };
@@ -307,6 +318,18 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose, frameId, onCropSav
                     style={{ left: `${thirdV1}%`, top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%` }} />
                   <div className="absolute border-l border-white/30 pointer-events-none"
                     style={{ left: `${thirdV2}%`, top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%` }} />
+
+                  {/* Zone de déplacement du cadre entier */}
+                  <div
+                    className="absolute cursor-move"
+                    style={{
+                      top:    `${cropBox.top}%`,
+                      left:   `${cropBox.left}%`,
+                      right:  `${100 - cropBox.right}%`,
+                      bottom: `${100 - cropBox.bottom}%`,
+                    }}
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'move')}
+                  />
 
                   {/* Poignées milieu de bord */}
                   <div className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
