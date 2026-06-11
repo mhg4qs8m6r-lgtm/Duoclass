@@ -293,7 +293,7 @@ export default function Utilitaires() {
       icon: <Download className="w-6 h-6 text-orange-500" />,
       action: language === 'fr' ? "Télécharger" : "Download",
       color: "bg-orange-50 border-orange-200 hover:bg-orange-100",
-      downloadUrl: "/help/DuoClass-Guide-Complet.pdf"
+      downloadUrl: "/assets/Guide_Final_DuoClass.pdf"
     },
     {
       title: t('help.userManual'),
@@ -301,7 +301,7 @@ export default function Utilitaires() {
       icon: <BookOpen className="w-6 h-6 text-green-500" />,
       action: t('help.read'),
       color: "bg-green-50 border-green-200 hover:bg-green-100",
-      url: "/assets/docs/manuel-utilisateur.pdf"
+      url: "/assets/Guide_Final_DuoClass.pdf"
     },
 
     {
@@ -423,7 +423,7 @@ export default function Utilitaires() {
                 className="p-3 rounded-lg border-2 bg-yellow-50 border-yellow-200 hover:bg-yellow-100 transition-all cursor-pointer flex items-center gap-3"
                 onClick={() => {
                   const link = document.createElement('a');
-                  link.href = '/GUIDE_UTILISATION.pdf';
+                  link.href = '/assets/Guide_Final_DuoClass.pdf';
                   link.download = 'DuoClass-Guide-Complet.pdf';
                   document.body.appendChild(link);
                   link.click();

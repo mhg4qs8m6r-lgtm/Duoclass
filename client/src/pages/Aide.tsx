@@ -1421,7 +1421,7 @@ export default function Aide() {
           </div>
           <button onClick={() => {
             const link = document.createElement('a');
-            link.href = '/GUIDE_UTILISATION.pdf';
+            link.href = '/assets/Guide_Final_DuoClass.pdf';
             link.download = 'DuoClass-Guide-Complet.pdf';
             document.body.appendChild(link);
             link.click();
