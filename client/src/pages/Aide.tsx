@@ -44,7 +44,7 @@ import {
   Frame,
   Share2
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SymbolWithTooltip } from "@/components/SymbolWithTooltip";
@@ -61,6 +61,67 @@ interface HelpSection {
 export default function Aide() {
   const { language } = useLanguage();
   const [activeSection, setActiveSection] = useState<string>("getting-started");
+  const [pdfProgress, setPdfProgress] = useState<number | null>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+
+  const generatePDF = async () => {
+    const container = pdfContainerRef.current;
+    if (!container) return;
+    setPdfProgress(0);
+    try {
+      const { default: html2canvas } = await import('html2canvas-pro');
+      const { default: jsPDF } = await import('jspdf');
+
+      const MARGIN_MM = 10;
+      const A4_W_MM = 210;
+      const A4_H_MM = 297;
+      const CONTENT_W_MM = A4_W_MM - 2 * MARGIN_MM;
+      const CONTENT_H_MM = A4_H_MM - 2 * MARGIN_MM;
+
+      const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-pdf-section]'));
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      let isFirstPage = true;
+
+      for (let i = 0; i < sections.length; i++) {
+        const el = sections[i];
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        });
+
+        // Pixels per A4 page height at this canvas width
+        const pageHeightPx = Math.round(canvas.width * (CONTENT_H_MM / CONTENT_W_MM));
+        const totalPages = Math.ceil(canvas.height / pageHeightPx);
+
+        for (let p = 0; p < totalPages; p++) {
+          if (!isFirstPage) pdf.addPage();
+          isFirstPage = false;
+
+          const srcY = p * pageHeightPx;
+          const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+
+          // Slice canvas to one A4 page worth of pixels
+          const slice = document.createElement('canvas');
+          slice.width = canvas.width;
+          slice.height = pageHeightPx;
+          const ctx = slice.getContext('2d')!;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, slice.width, slice.height);
+          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+          pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_W_MM, CONTENT_H_MM);
+        }
+
+        setPdfProgress(Math.round(((i + 1) / sections.length) * 100));
+      }
+
+      pdf.save('Guide_DuoClass.pdf');
+    } finally {
+      setPdfProgress(null);
+    }
+  };
 
   const helpSections: HelpSection[] = [
     {
@@ -1526,16 +1587,36 @@ export default function Aide() {
               {language === 'fr' ? 'Centre d\'aide DuoClass' : 'DuoClass Help Center'}
             </h1>
           </div>
-          <button onClick={() => {
-            const link = document.createElement('a');
-            link.href = '/assets/Guide_Final_DuoClass.pdf';
-            link.download = 'DuoClass-Guide-Complet.pdf';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
-            <span className="text-sm font-medium">{language === 'fr' ? 'Télécharger le guide PDF' : 'Download PDF Guide'}</span>
+          <button
+            onClick={generatePDF}
+            disabled={pdfProgress !== null}
+            className="relative flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors overflow-hidden min-w-[200px]"
+          >
+            {/* Barre de progression en fond */}
+            {pdfProgress !== null && (
+              <span
+                className="absolute inset-0 bg-green-500 transition-all duration-300"
+                style={{ width: `${pdfProgress}%` }}
+              />
+            )}
+            <span className="relative flex items-center gap-2">
+              {pdfProgress !== null ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  <span className="text-sm font-medium">
+                    {language === 'fr' ? `Génération… ${pdfProgress}%` : `Generating… ${pdfProgress}%`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span className="text-sm font-medium">{language === 'fr' ? 'Télécharger le guide PDF' : 'Download PDF Guide'}</span>
+                </>
+              )}
+            </span>
           </button>
         </div>
 
@@ -1573,6 +1654,26 @@ export default function Aide() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Conteneur hors-écran pour la génération PDF — toujours rendu, jamais visible */}
+      <div
+        ref={pdfContainerRef}
+        aria-hidden="true"
+        style={{ position: 'absolute', left: '-9999px', top: 0, width: '794px', pointerEvents: 'none' }}
+      >
+        {helpSections.map((section) => (
+          <div
+            key={section.id}
+            data-pdf-section={section.id}
+            style={{ padding: '32px', background: '#ffffff', fontFamily: 'sans-serif' }}
+          >
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>
+              {language === 'fr' ? section.titleFr : section.titleEn}
+            </h2>
+            {language === 'fr' ? section.contentFr : section.contentEn}
+          </div>
+        ))}
       </div>
     </MainLayout>
   );
