@@ -41,7 +41,14 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import CustomScrollbar from '@/components/CustomScrollbar';
 
 // --- COMPOSANT INTERNE : VISIONNEUSE SIMPLE (AVEC ROTATION) ---
-const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; title: string; rotation?: number; onClose: () => void }) => {
+const UniversalViewer = ({ url, title, rotation = 0, onClose, frameId, onCropSave }: {
+  url: string;
+  title: string;
+  rotation?: number;
+  onClose: () => void;
+  frameId: number;
+  onCropSave: (croppedUrl: string, mode: 'replace' | 'copy') => void;
+}) => {
   const { language } = useLanguage();
   const isPdf = url.startsWith('data:application/pdf') || url.endsWith('.pdf');
   // Détecter si c'est une vidéo
@@ -98,6 +105,55 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
   };
 
   const handleCropMouseUp = () => { draggingRef.current = null; };
+
+  const [isCropSaving, setIsCropSaving] = useState(false);
+
+  const performCrop = (): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const W = img.naturalWidth;
+        const H = img.naturalHeight;
+        // Dessiner l'image avec sa rotation sur un canvas intermédiaire
+        const isRot90 = normalizedRotation === 90 || normalizedRotation === 270;
+        const canvasW = isRot90 ? H : W;
+        const canvasH = isRot90 ? W : H;
+        const rotCanvas = document.createElement('canvas');
+        rotCanvas.width  = canvasW;
+        rotCanvas.height = canvasH;
+        const rotCtx = rotCanvas.getContext('2d')!;
+        rotCtx.save();
+        rotCtx.translate(canvasW / 2, canvasH / 2);
+        rotCtx.rotate((normalizedRotation * Math.PI) / 180);
+        rotCtx.drawImage(img, -W / 2, -H / 2, W, H);
+        rotCtx.restore();
+        // Extraire la zone rognée selon les pourcentages des poignées
+        const sx = Math.round((cropBox.left                    / 100) * canvasW);
+        const sy = Math.round((cropBox.top                     / 100) * canvasH);
+        const sw = Math.round(((cropBox.right  - cropBox.left) / 100) * canvasW);
+        const sh = Math.round(((cropBox.bottom - cropBox.top)  / 100) * canvasH);
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width  = Math.max(1, sw);
+        cropCanvas.height = Math.max(1, sh);
+        cropCanvas.getContext('2d')!.drawImage(rotCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        resolve(cropCanvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+
+  const handleValidateCrop = async (mode: 'replace' | 'copy') => {
+    setIsCropSaving(true);
+    try {
+      const croppedUrl = await performCrop();
+      onCropSave(croppedUrl, mode);
+      resetCrop();
+    } catch {
+      // silencieux — le parent gère le feedback utilisateur
+    } finally {
+      setIsCropSaving(false);
+    }
+  };
 
   const resetCrop = () => {
     setIsCropping(false);
@@ -303,19 +359,15 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
         <AlertDialogFooter className="flex-col sm:flex-col gap-2">
           <AlertDialogAction
             className="w-full"
-            onClick={() => {
-              setShowCropConfirm(false);
-              // TODO: remplacer l'originale par l'image rognée
-            }}
+            disabled={isCropSaving}
+            onClick={(e) => { e.preventDefault(); handleValidateCrop('replace'); }}
           >
-            {language === 'fr' ? 'Remplacer l\'originale' : 'Replace original'}
+            {isCropSaving ? '…' : (language === 'fr' ? 'Remplacer l\'originale' : 'Replace original')}
           </AlertDialogAction>
           <AlertDialogAction
             className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
-            onClick={() => {
-              setShowCropConfirm(false);
-              // TODO: créer une copie rognée et conserver l'originale
-            }}
+            disabled={isCropSaving}
+            onClick={(e) => { e.preventDefault(); handleValidateCrop('copy'); }}
           >
             {language === 'fr'
               ? 'Conserver l\'originale et créer une copie rognée'
@@ -431,7 +483,7 @@ export default function UniversalAlbumPage({
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedFrameForDetails, setSelectedFrameForDetails] = useState<PhotoFrame | null>(null);
   
-  const [viewedDoc, setViewedDoc] = useState<{ url: string, title: string, rotation: number } | null>(null);
+  const [viewedDoc, setViewedDoc] = useState<{ url: string, title: string, rotation: number, frameId: number } | null>(null);
   const [videoToPlay, setVideoToPlay] = useState<{ url: string, title: string, rotation: number, frameId: number } | null>(null);
   
   const [showSendModal, setShowSendModal] = useState(false);
@@ -1909,10 +1961,34 @@ export default function UniversalAlbumPage({
         (window as any).electronAPI.invoke('open-pdf', frame.photoUrl);
       } else if (frame.photoUrl) {
         // Ouvrir la visionneuse d'image/PDF (fallback web)
-        setViewedDoc({ url: frame.photoUrl, title: frame.title, rotation: frame.rotation || 0 });
+        setViewedDoc({ url: frame.photoUrl, title: frame.title, rotation: frame.rotation || 0, frameId: frame.id });
       }
     }
   };
+
+  const handleCropSave = useCallback((croppedUrl: string, mode: 'replace' | 'copy') => {
+    if (!viewedDoc) return;
+    const { frameId } = viewedDoc;
+    if (mode === 'replace') {
+      setFrames(prev => prev.map(f => f.id === frameId ? { ...f, photoUrl: croppedUrl } : f));
+      toast.success(language === 'fr' ? 'Photo rognée et remplacée' : 'Photo cropped and replaced');
+    } else {
+      setFrames(prev => {
+        const newId = prev.length > 0 ? Math.max(...prev.map(f => f.id)) + 1 : 1;
+        const src   = prev.find(f => f.id === frameId);
+        const newFrame: PhotoFrame = {
+          id:         newId,
+          title:      (src?.title || (isPhoto ? 'Cadre' : 'Document')) + (language === 'fr' ? ' (copie rognée)' : ' (cropped copy)'),
+          isSelected: false,
+          format:     src?.format || (isPhoto ? 'JPG' : 'PDF'),
+          photoUrl:   croppedUrl,
+        };
+        return [...prev, newFrame];
+      });
+      toast.success(language === 'fr' ? 'Copie rognée créée' : 'Cropped copy created');
+    }
+    setViewedDoc(null);
+  }, [viewedDoc, language, isPhoto]);
 
   const handleEdit = (id: number) => {
     const frame = frames.find(f => f.id === id);
@@ -3131,11 +3207,13 @@ export default function UniversalAlbumPage({
 
       {/* VISIONNEUSE */}
       {viewedDoc && (
-        <UniversalViewer 
-          url={viewedDoc.url} 
+        <UniversalViewer
+          url={viewedDoc.url}
           title={viewedDoc.title}
           rotation={viewedDoc.rotation}
+          frameId={viewedDoc.frameId}
           onClose={() => setViewedDoc(null)}
+          onCropSave={handleCropSave}
         />
       )}
 
