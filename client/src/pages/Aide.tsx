@@ -508,188 +508,338 @@ export default function Aide() {
       titleEn: "Photo Editing",
       icon: <Wand2 className="w-5 h-5" />,
       contentFr: (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">Les 12 fonctions de retouche</h3>
+        <div className="space-y-5">
+          <h3 className="text-lg font-semibold text-gray-800">Les 19 fonctions de retouche</h3>
           <p className="text-gray-600">
-            DuoClass propose 12 outils de retouche professionnels pour améliorer vos photos.
+            DuoClass propose 19 outils de retouche répartis en 4 catégories pour améliorer, transformer et restaurer vos photos.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-yellow-100 rounded-lg"><Sun className="w-4 h-4 text-yellow-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">☀️ Luminosité</p>
-                <p className="text-xs text-gray-600">Éclaircir ou assombrir l'image</p>
+
+          {/* Amélioration */}
+          <div>
+            <p className="text-sm font-semibold text-blue-700 mb-2">🛠️ Amélioration (7 fonctions)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-cyan-100 rounded-lg"><Sparkles className="w-4 h-4 text-cyan-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Qualité, netteté, couleurs</p>
+                  <p className="text-xs text-gray-600">Amélioration automatique par IA</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg"><ZoomIn className="w-4 h-4 text-blue-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Agrandissement d'image</p>
+                  <p className="text-xs text-gray-600">Augmenter la résolution sans perte</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-red-100 rounded-lg"><Eraser className="w-4 h-4 text-red-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Correction yeux rouges</p>
+                  <p className="text-xs text-gray-600">Supprimer l'effet yeux rouges</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-yellow-100 rounded-lg"><Sun className="w-4 h-4 text-yellow-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Luminosité</p>
+                  <p className="text-xs text-gray-600">Éclaircir ou assombrir l'image</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-indigo-100 rounded-lg"><Focus className="w-4 h-4 text-indigo-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Réduction du bruit</p>
+                  <p className="text-xs text-gray-600">Atténuer le grain numérique</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-orange-100 rounded-lg"><Wand2 className="w-4 h-4 text-orange-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Correction de l'exposition</p>
+                  <p className="text-xs text-gray-600">Rééquilibrer les zones sur/sous-exposées</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 rounded-lg"><Crop className="w-4 h-4 text-green-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Recadrage</p>
+                  <p className="text-xs text-gray-600">Couper les bords indésirables</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-purple-100 rounded-lg"><Contrast className="w-4 h-4 text-purple-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">⚫⚪ Contraste</p>
-                <p className="text-xs text-gray-600">Accentuer les différences clairs/foncés</p>
+          </div>
+
+          {/* Effets artistiques */}
+          <div>
+            <p className="text-sm font-semibold text-purple-700 mb-2">🎨 Effets artistiques (10 fonctions)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-gray-200 rounded-lg"><Image className="w-4 h-4 text-gray-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Noir & Blanc</p>
+                  <p className="text-xs text-gray-600">Convertir en niveaux de gris</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-amber-100 rounded-lg"><Image className="w-4 h-4 text-amber-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Sépia</p>
+                  <p className="text-xs text-gray-600">Effet photo ancienne</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-yellow-100 rounded-lg"><Sparkles className="w-4 h-4 text-yellow-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Vintage</p>
+                  <p className="text-xs text-gray-600">Ambiance rétro délavée</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg"><Droplets className="w-4 h-4 text-blue-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Aquarelle</p>
+                  <p className="text-xs text-gray-600">Rendu peinture à l'eau</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-orange-100 rounded-lg"><PaintBucket className="w-4 h-4 text-orange-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Peinture à l'huile</p>
+                  <p className="text-xs text-gray-600">Texture huile sur toile</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-gray-100 rounded-lg"><Edit className="w-4 h-4 text-gray-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Dessin au trait</p>
+                  <p className="text-xs text-gray-600">Contours nets sur fond blanc</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-stone-100 rounded-lg"><Edit className="w-4 h-4 text-stone-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Sketch / Crayon</p>
+                  <p className="text-xs text-gray-600">Rendu crayonné texturé</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-zinc-100 rounded-lg"><Layers className="w-4 h-4 text-zinc-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Gravure</p>
+                  <p className="text-xs text-gray-600">Effet taille-douce en noir et blanc</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-pink-100 rounded-lg"><Palette className="w-4 h-4 text-pink-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Pop Art</p>
+                  <p className="text-xs text-gray-600">Couleurs vives style Warhol</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-teal-100 rounded-lg"><Sun className="w-4 h-4 text-teal-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">HDR</p>
+                  <p className="text-xs text-gray-600">Contraste et détails extrêmes</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-orange-100 rounded-lg"><Droplets className="w-4 h-4 text-orange-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🌈 Saturation</p>
-                <p className="text-xs text-gray-600">Intensifier ou atténuer les couleurs</p>
+          </div>
+
+          {/* Nettoyage */}
+          <div>
+            <p className="text-sm font-semibold text-green-700 mb-2">🧹 Nettoyage (1 fonction)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 rounded-lg"><Eraser className="w-4 h-4 text-green-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Suppression d'arrière-plan</p>
+                  <p className="text-xs text-gray-600">Détourer le sujet automatiquement</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg"><Focus className="w-4 h-4 text-blue-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🔍 Nettete</p>
-                <p className="text-xs text-gray-600">Rendre l'image plus nette</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded-lg"><Crop className="w-4 h-4 text-green-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">✂️ Recadrage</p>
-                <p className="text-xs text-gray-600">Couper les bords indésirables</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-indigo-100 rounded-lg"><RotateCw className="w-4 h-4 text-indigo-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🔄 Rotation</p>
-                <p className="text-xs text-gray-600">Pivoter l'image (90°, 180°, libre)</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-pink-100 rounded-lg"><FlipHorizontal className="w-4 h-4 text-pink-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🪞 Miroir</p>
-                <p className="text-xs text-gray-600">Retourner horizontalement/verticalement</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-cyan-100 rounded-lg"><Sparkles className="w-4 h-4 text-cyan-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">✨ Amélioration auto</p>
-                <p className="text-xs text-gray-600">Optimisation automatique par IA</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-gray-200 rounded-lg"><Image className="w-4 h-4 text-gray-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">⬜ Noir & Blanc</p>
-                <p className="text-xs text-gray-600">Convertir en niveaux de gris</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-amber-100 rounded-lg"><Image className="w-4 h-4 text-amber-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🟤 Sépia</p>
-                <p className="text-xs text-gray-600">Effet photo ancienne</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-red-100 rounded-lg"><Eraser className="w-4 h-4 text-red-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">👁️ Yeux rouges</p>
-                <p className="text-xs text-gray-600">Corriger l'effet yeux rouges</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-teal-100 rounded-lg"><PaintBucket className="w-4 h-4 text-teal-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🎨 Filtres artistiques</p>
-                <p className="text-xs text-gray-600">Vintage, Aquarelle</p>
+          </div>
+
+          {/* Restauration */}
+          <div>
+            <p className="text-sm font-semibold text-rose-700 mb-2">🖼️ Restauration (1 fonction)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-rose-100 rounded-lg"><Image className="w-4 h-4 text-rose-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Photo NB / couleur</p>
+                  <p className="text-xs text-gray-600">Coloriser une photo ancienne en N&B</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       ),
       contentEn: (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">12 Editing Functions</h3>
+        <div className="space-y-5">
+          <h3 className="text-lg font-semibold text-gray-800">19 Editing Functions</h3>
           <p className="text-gray-600">
-            DuoClass offers 12 professional editing tools to enhance your photos.
+            DuoClass offers 19 editing tools in 4 categories to enhance, transform, and restore your photos.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-yellow-100 rounded-lg"><Sun className="w-4 h-4 text-yellow-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">☀️ Brightness</p>
-                <p className="text-xs text-gray-600">Lighten or darken the image</p>
+
+          {/* Enhancement */}
+          <div>
+            <p className="text-sm font-semibold text-blue-700 mb-2">🛠️ Enhancement (7 functions)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-cyan-100 rounded-lg"><Sparkles className="w-4 h-4 text-cyan-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Quality, sharpness, colors</p>
+                  <p className="text-xs text-gray-600">AI-powered automatic enhancement</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg"><ZoomIn className="w-4 h-4 text-blue-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Image enlargement</p>
+                  <p className="text-xs text-gray-600">Upscale resolution without quality loss</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-red-100 rounded-lg"><Eraser className="w-4 h-4 text-red-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Red eye correction</p>
+                  <p className="text-xs text-gray-600">Remove the red eye effect</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-yellow-100 rounded-lg"><Sun className="w-4 h-4 text-yellow-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Brightness</p>
+                  <p className="text-xs text-gray-600">Lighten or darken the image</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-indigo-100 rounded-lg"><Focus className="w-4 h-4 text-indigo-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Noise reduction</p>
+                  <p className="text-xs text-gray-600">Reduce digital grain</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-orange-100 rounded-lg"><Wand2 className="w-4 h-4 text-orange-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Exposure correction</p>
+                  <p className="text-xs text-gray-600">Rebalance over/under-exposed areas</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 rounded-lg"><Crop className="w-4 h-4 text-green-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Crop</p>
+                  <p className="text-xs text-gray-600">Remove unwanted edges</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-purple-100 rounded-lg"><Contrast className="w-4 h-4 text-purple-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">⚫⚪ Contrast</p>
-                <p className="text-xs text-gray-600">Enhance light/dark differences</p>
+          </div>
+
+          {/* Artistic effects */}
+          <div>
+            <p className="text-sm font-semibold text-purple-700 mb-2">🎨 Artistic effects (10 functions)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-gray-200 rounded-lg"><Image className="w-4 h-4 text-gray-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Black & White</p>
+                  <p className="text-xs text-gray-600">Convert to grayscale</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-amber-100 rounded-lg"><Image className="w-4 h-4 text-amber-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Sepia</p>
+                  <p className="text-xs text-gray-600">Old photo effect</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-yellow-100 rounded-lg"><Sparkles className="w-4 h-4 text-yellow-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Vintage</p>
+                  <p className="text-xs text-gray-600">Faded retro look</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg"><Droplets className="w-4 h-4 text-blue-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Watercolor</p>
+                  <p className="text-xs text-gray-600">Watercolor painting look</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-orange-100 rounded-lg"><PaintBucket className="w-4 h-4 text-orange-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Oil painting</p>
+                  <p className="text-xs text-gray-600">Oil on canvas texture</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-gray-100 rounded-lg"><Edit className="w-4 h-4 text-gray-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Line drawing</p>
+                  <p className="text-xs text-gray-600">Sharp outlines on white background</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-stone-100 rounded-lg"><Edit className="w-4 h-4 text-stone-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Sketch / Pencil</p>
+                  <p className="text-xs text-gray-600">Textured pencil drawing look</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-zinc-100 rounded-lg"><Layers className="w-4 h-4 text-zinc-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Engraving</p>
+                  <p className="text-xs text-gray-600">Black and white etching effect</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-pink-100 rounded-lg"><Palette className="w-4 h-4 text-pink-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Pop Art</p>
+                  <p className="text-xs text-gray-600">Vivid Warhol-style colors</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-teal-100 rounded-lg"><Sun className="w-4 h-4 text-teal-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">HDR</p>
+                  <p className="text-xs text-gray-600">Extreme contrast and detail</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-orange-100 rounded-lg"><Droplets className="w-4 h-4 text-orange-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🌈 Saturation</p>
-                <p className="text-xs text-gray-600">Intensify or mute colors</p>
+          </div>
+
+          {/* Cleanup */}
+          <div>
+            <p className="text-sm font-semibold text-green-700 mb-2">🧹 Cleanup (1 function)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 rounded-lg"><Eraser className="w-4 h-4 text-green-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">Background removal</p>
+                  <p className="text-xs text-gray-600">Automatically isolate the subject</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg"><Focus className="w-4 h-4 text-blue-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🔍 Sharpness</p>
-                <p className="text-xs text-gray-600">Make the image sharper</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded-lg"><Crop className="w-4 h-4 text-green-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">✂️ Crop</p>
-                <p className="text-xs text-gray-600">Remove unwanted edges</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-indigo-100 rounded-lg"><RotateCw className="w-4 h-4 text-indigo-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🔄 Rotation</p>
-                <p className="text-xs text-gray-600">Rotate the image (90°, 180°, free)</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-pink-100 rounded-lg"><FlipHorizontal className="w-4 h-4 text-pink-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🪞 Mirror</p>
-                <p className="text-xs text-gray-600">Flip horizontally/vertically</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-cyan-100 rounded-lg"><Sparkles className="w-4 h-4 text-cyan-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">✨ Auto Enhance</p>
-                <p className="text-xs text-gray-600">AI-powered automatic optimization</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-gray-200 rounded-lg"><Image className="w-4 h-4 text-gray-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">⬜ Black & White</p>
-                <p className="text-xs text-gray-600">Convert to grayscale</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-amber-100 rounded-lg"><Image className="w-4 h-4 text-amber-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🟤 Sepia</p>
-                <p className="text-xs text-gray-600">Vintage photo effect</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-red-100 rounded-lg"><Eraser className="w-4 h-4 text-red-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">👁️ Red Eye</p>
-                <p className="text-xs text-gray-600">Fix red eye effect</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-teal-100 rounded-lg"><PaintBucket className="w-4 h-4 text-teal-600" /></div>
-              <div>
-                <p className="font-medium text-gray-800">🎨 Artistic Filters</p>
-                <p className="text-xs text-gray-600">Vintage, Watercolor</p>
+          </div>
+
+          {/* Restoration */}
+          <div>
+            <p className="text-sm font-semibold text-rose-700 mb-2">🖼️ Restoration (1 function)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-rose-100 rounded-lg"><Image className="w-4 h-4 text-rose-600" /></div>
+                <div>
+                  <p className="font-medium text-gray-800">B&W / color photo</p>
+                  <p className="text-xs text-gray-600">Colorize an old black-and-white photo</p>
+                </div>
               </div>
             </div>
           </div>
