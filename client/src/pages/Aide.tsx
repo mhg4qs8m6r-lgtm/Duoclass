@@ -370,7 +370,7 @@ export default function Aide() {
               <div className="p-2 bg-blue-100 rounded-lg"><Palette className="w-4 h-4 text-blue-600" /></div>
               <div>
                 <p className="font-medium text-gray-800">Thèmes de couleurs</p>
-                <p className="text-sm text-gray-600">Choisissez parmi 10 thèmes : Classique, Nordique, Océan, Forêt...</p>
+                <p className="text-sm text-gray-600">Personnalisez librement l'apparence de l'application : couleurs d'interface et textures de fond catégorisées (Cuir, Marbre, Moiré, Or, Bambou…).</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
