@@ -366,18 +366,8 @@ export default function Utilitaires() {
                 onClick={() => {
                   if (resource.onClick) {
                     resource.onClick();
-                  } else if (resource.downloadUrl) {
-                    // Téléchargement du PDF
-                    const link = document.createElement('a');
-                    link.href = resource.downloadUrl;
-                    link.download = 'DuoClass-Guide-Complet.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
                   } else if (resource.email) {
                     window.location.href = `mailto:${resource.email}?subject=Support DuoClass`;
-                  } else if (resource.url) {
-                    alert(t('help.fileNotAvailable'));
                   } else {
                     alert(t('help.comingSoon'));
                   }

@@ -893,7 +893,7 @@ export const helpSections: HelpSection[] = [
             <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
               <div className="flex items-center gap-2 mb-2">
                 <Scissors className="w-5 h-5 text-purple-600" />
-                <h4 className="font-semibold text-purple-800">{language === "fr" ? "Détourage" : "Cutout"}</h4>
+                <h4 className="font-semibold text-purple-800">Détourage</h4>
               </div>
               <p className="text-sm text-purple-700 mb-2">Supprimez l'arrière-plan de vos photos pour isoler les sujets.</p>
               <ul className="text-xs text-purple-600 space-y-1">
@@ -1198,7 +1198,7 @@ export const helpSections: HelpSection[] = [
               <li>⏱️ <strong>Durée</strong> : 3, 5, 10 ou 15 secondes par photo</li>
               <li>🌈 <strong>Transitions</strong> : Fondu, glissement, zoom</li>
               <li>🔄 <strong>Boucle</strong> : Répéter automatiquement</li>
-              <li>📺 <strong>{language === "fr" ? "Plein écran" : "Full screen"}</strong> : Affichage immersif</li>
+              <li>📺 <strong>Plein écran</strong> : Affichage immersif</li>
             </ul>
           </div>
         </div>
