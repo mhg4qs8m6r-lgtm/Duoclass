@@ -11,6 +11,7 @@ import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import QuitConfirmModal from "@/components/QuitConfirmModal";
+import { AideContent } from "@/pages/Aide";
 
 // Composant Visionneuse PDF (Réutilisé de ClassPapiers)
 const PdfViewer = ({ url, title, onClose }: { url: string, title: string, onClose: () => void }) => {
@@ -228,6 +229,8 @@ export default function Utilitaires() {
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showPhotoBookGuide, setShowPhotoBookGuide] = useState(false);
+  const [showManuelModal, setShowManuelModal] = useState(false);
+  const [manuelTab, setManuelTab] = useState<'intro' | 'aide' | 'manuel'>('intro');
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [flatDuplicates, setFlatDuplicates] = useState<Array<{ id: string; src: string; name: string; date?: string }>>([]);
@@ -284,7 +287,7 @@ export default function Utilitaires() {
       icon: <BookOpen className="w-6 h-6 text-green-500" />,
       action: t('help.read'),
       color: "bg-green-50 border-green-200 hover:bg-green-100",
-      url: "/assets/Guide_Final_DuoClass.pdf"
+      onClick: () => { setManuelTab('intro'); setShowManuelModal(true); }
     },
 
     {
@@ -544,6 +547,86 @@ export default function Utilitaires() {
           
           <DialogFooter className="mt-2">
             <Button size="sm" onClick={() => setShowShortcutsModal(false)}>{language === 'fr' ? 'Fermer' : 'Close'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODALE MANUEL UTILISATEUR */}
+      <Dialog open={showManuelModal} onOpenChange={setShowManuelModal}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 gap-0">
+          {/* Header */}
+          <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <BookOpen className="w-5 h-5 text-green-600" />
+              {language === 'fr' ? 'Manuel DuoClass' : 'DuoClass Manual'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Onglets */}
+          <div className="flex gap-1 px-6 pt-3 border-b shrink-0">
+            {([
+              { key: 'intro',  labelFr: 'Introduction',      labelEn: 'Introduction' },
+              { key: 'aide',   labelFr: 'Aide',              labelEn: 'Help' },
+              { key: 'manuel', labelFr: 'Manuel détaillé',   labelEn: 'Detailed Manual' },
+            ] as const).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setManuelTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                  manuelTab === tab.key
+                    ? 'border-green-600 text-green-700 bg-green-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {language === 'fr' ? tab.labelFr : tab.labelEn}
+              </button>
+            ))}
+          </div>
+
+          {/* Contenu des onglets */}
+          <div className="flex-1 overflow-hidden">
+            {manuelTab === 'intro' && (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center text-gray-400 space-y-3">
+                  <BookOpen className="w-16 h-16 mx-auto opacity-30" />
+                  <p className="text-lg font-medium">
+                    {language === 'fr' ? 'Contenu à venir' : 'Content coming soon'}
+                  </p>
+                  <p className="text-sm">
+                    {language === 'fr'
+                      ? 'La section Introduction sera disponible prochainement.'
+                      : 'The Introduction section will be available soon.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {manuelTab === 'aide' && (
+              <div className="h-full p-4 overflow-hidden">
+                <AideContent />
+              </div>
+            )}
+
+            {manuelTab === 'manuel' && (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center text-gray-400 space-y-3">
+                  <FileText className="w-16 h-16 mx-auto opacity-30" />
+                  <p className="text-lg font-medium">
+                    {language === 'fr' ? 'Contenu à venir' : 'Content coming soon'}
+                  </p>
+                  <p className="text-sm">
+                    {language === 'fr'
+                      ? 'Le manuel détaillé sera disponible prochainement.'
+                      : 'The detailed manual will be available soon.'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 py-3 border-t shrink-0">
+            <Button size="sm" onClick={() => setShowManuelModal(false)}>
+              {language === 'fr' ? 'Fermer' : 'Close'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
