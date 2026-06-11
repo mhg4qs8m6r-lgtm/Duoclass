@@ -767,6 +767,8 @@ const en: Record<string, string> = {
   'trial.daysRemainingPlural': 'days remaining',
   'trial.photosRemaining': 'photos remaining',
   'trial.subscribe': 'Subscribe',
+  'trial.photoLimitReached': 'Photo limit reached',
+  'trial.wouldExceedLimit': 'This action would exceed the photo limit',
   
   // Toolbar
   'toolbar.display': 'Display',
@@ -1109,7 +1111,8 @@ const en: Record<string, string> = {
   'help.shortcutsDesc': 'All shortcuts to go faster.',
   'help.techSupportTitle': 'Technical Support',
   'help.techSupportDesc': 'Contact our team.',
-  
+  'help.email': 'support@duoclass.fr',
+
   // WorkSpace
   'workspace.title': 'Workspace',
   'workspace.emptyZone': 'Empty workspace',
@@ -1241,6 +1244,7 @@ const en: Record<string, string> = {
   'toast.imageTooLarge': 'Image must not exceed 2 MB',
   'toast.cleanupComplete': 'Cleanup complete: {count} categories deleted',
   'toast.cleanupError': 'Error during cleanup',
+  'toast.renameError': 'Rename error',
   'settings.accessGranted': 'Access granted',
   
   // Help (complements)
