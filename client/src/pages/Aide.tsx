@@ -22,7 +22,6 @@ import {
   Edit,
   Search,
   ChevronRight,
-  Cloud,
   Scissors,
   Wand2,
   Layers,
@@ -483,22 +482,6 @@ export default function Aide() {
               <strong>💡 Tip:</strong> Make a backup at least once a month on an external drive or in the cloud.
             </p>
           </div>
-        </div>
-      )
-    },
-    {
-      id: "cloud-storage",
-      titleFr: "Stockage Cloud",
-      titleEn: "Cloud Storage",
-      icon: <Cloud className="w-5 h-5" />,
-      contentFr: (
-        <div className="space-y-4">
-          <p>Vos photos et documents sont stockés localement sur votre appareil. La synchronisation avec le serveur permet de conserver vos métadonnées et miniatures en toute sécurité.</p>
-        </div>
-      ),
-      contentEn: (
-        <div className="space-y-4">
-          <p>Your photos and documents are stored locally on your device. Server synchronization keeps your metadata and thumbnails safe.</p>
         </div>
       )
     },
