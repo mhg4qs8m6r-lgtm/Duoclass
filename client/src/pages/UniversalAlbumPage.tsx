@@ -1983,7 +1983,9 @@ export default function UniversalAlbumPage({
           format:     src?.format || (isPhoto ? 'JPG' : 'PDF'),
           photoUrl:   croppedUrl,
         };
-        return [...prev, newFrame];
+        const idx = prev.findIndex(f => f.id === frameId);
+        const insertAt = idx === -1 ? prev.length : idx + 1;
+        return [...prev.slice(0, insertAt), newFrame, ...prev.slice(insertAt)];
       });
       toast.success(language === 'fr' ? 'Copie rognée créée' : 'Cropped copy created');
     }
