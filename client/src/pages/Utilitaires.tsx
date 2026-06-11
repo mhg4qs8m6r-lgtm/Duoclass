@@ -279,23 +279,6 @@ export default function Utilitaires() {
       onClick: () => loadDuplicates()
     },
     {
-      title: t('help.quickStart'),
-      description: t('help.quickStartDesc'),
-      icon: <Video className="w-6 h-6 text-blue-500" />,
-      action: t('help.view'),
-      color: "bg-blue-50 border-blue-200 hover:bg-blue-100"
-    },
-    {
-      title: language === 'fr' ? "Guide Complet PDF" : "Complete PDF Guide",
-      description: language === 'fr' 
-        ? language === "fr" ? "Téléchargez le guide complet de DuoClass au format PDF (modifiable)" : "Download the complete DuoClass guide in PDF format (editable)" 
-        : "Download the complete DuoClass guide in PDF format (editable)",
-      icon: <Download className="w-6 h-6 text-orange-500" />,
-      action: language === 'fr' ? "Télécharger" : "Download",
-      color: "bg-orange-50 border-orange-200 hover:bg-orange-100",
-      downloadUrl: "/assets/Guide_Final_DuoClass.pdf"
-    },
-    {
       title: t('help.userManual'),
       description: t('help.userManualDesc'),
       icon: <BookOpen className="w-6 h-6 text-green-500" />,
@@ -418,29 +401,6 @@ export default function Utilitaires() {
               {language === 'fr' ? 'Informations Légales' : 'Legal Information'}
             </h3>
             <div className="grid grid-cols-3 gap-3">
-              {/* Lien de téléchargement du PDF guide */}
-              <div 
-                className="p-3 rounded-lg border-2 bg-yellow-50 border-yellow-200 hover:bg-yellow-100 transition-all cursor-pointer flex items-center gap-3"
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = '/assets/Guide_Final_DuoClass.pdf';
-                  link.download = 'DuoClass-Guide-Complet.pdf';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-              >
-                <div className="p-2 rounded-full shrink-0">
-                  <Download className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-gray-800 truncate">{language === 'fr' ? 'Guide Complet PDF' : 'Complete PDF Guide'}</h3>
-                  <p className="text-gray-600 text-xs truncate">{language === 'fr' ? 'Télécharger le guide' : 'Download the guide'}</p>
-                </div>
-                <Button variant="outline" size="sm" className="hover:bg-gray-50 text-xs px-2 py-1 h-auto shrink-0">
-                  {language === 'fr' ? 'Télécharger' : 'Download'}
-                </Button>
-              </div>
               {legalResources.map((resource, index) => (
                 <div 
                   key={index} 
