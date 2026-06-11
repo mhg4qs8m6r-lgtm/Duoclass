@@ -595,7 +595,7 @@ export default function Aide() {
               <div className="p-2 bg-teal-100 rounded-lg"><PaintBucket className="w-4 h-4 text-teal-600" /></div>
               <div>
                 <p className="font-medium text-gray-800">🎨 Filtres artistiques</p>
-                <p className="text-xs text-gray-600">BD, Cinéma, Vintage, etc.</p>
+                <p className="text-xs text-gray-600">Vintage, Aquarelle</p>
               </div>
             </div>
           </div>
@@ -689,7 +689,7 @@ export default function Aide() {
               <div className="p-2 bg-teal-100 rounded-lg"><PaintBucket className="w-4 h-4 text-teal-600" /></div>
               <div>
                 <p className="font-medium text-gray-800">🎨 Artistic Filters</p>
-                <p className="text-xs text-gray-600">Comic, Cinema, Vintage, etc.</p>
+                <p className="text-xs text-gray-600">Vintage, Watercolor</p>
               </div>
             </div>
           </div>
@@ -767,8 +767,6 @@ export default function Aide() {
               </div>
               <p className="text-sm text-pink-700 mb-2">Transformez vos photos avec des filtres créatifs.</p>
               <ul className="text-xs text-pink-600 space-y-1">
-                <li>• <strong>💭 BD / Comics</strong> : Style bande dessinée</li>
-                <li>• <strong>🎬 Cinéma</strong> : Effet film cinématographique</li>
                 <li>• <strong>📼 Vintage</strong> : Look rétro années 70</li>
                 <li>• <strong>🎨 Aquarelle</strong> : Effet peinture à l'eau</li>
               </ul>
@@ -856,8 +854,6 @@ export default function Aide() {
               </div>
               <p className="text-sm text-pink-700 mb-2">Transform your photos with creative filters.</p>
               <ul className="text-xs text-pink-600 space-y-1">
-                <li>• <strong>💭 Comic Book</strong>: Comic book style</li>
-                <li>• <strong>🎬 Cinema</strong>: Cinematic film effect</li>
                 <li>• <strong>📼 Vintage</strong>: Retro 70s look</li>
                 <li>• <strong>🎨 Watercolor</strong>: Watercolor painting effect</li>
               </ul>
