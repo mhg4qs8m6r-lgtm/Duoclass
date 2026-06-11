@@ -8,7 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { PhotoClassProps, PhotoFrame } from '@/types/photo';
 import PhotoFrameNew from '@/components/PhotoFrameNew';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw, X } from 'lucide-react';
+import { Trash2, Pencil, Eye, Send, Printer, FileText, CheckCircle, ImageIcon, Camera, ChevronUp, ChevronDown, Play, FolderInput, Lock, FolderOpen, CheckSquare, Square, RotateCcw, X, Crop } from 'lucide-react';
 import { toast } from "sonner";
 import { db, addToCollecteur, getAllCreationsProjects, createCreationsProject, CreationsProject, MODELES_STICKERS_ALBUM_ID } from '../db';
 import { addToSyncQueue } from '@/lib/syncService';
@@ -45,23 +45,71 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
   const { language } = useLanguage();
   const isPdf = url.startsWith('data:application/pdf') || url.endsWith('.pdf');
   // Détecter si c'est une vidéo
-  const isVideo = url.startsWith('data:video/') || 
-                  url.includes('.mp4') || 
-                  url.includes('.mov') || 
-                  url.includes('.webm') || 
+  const isVideo = url.startsWith('data:video/') ||
+                  url.includes('.mp4') ||
+                  url.includes('.mov') ||
+                  url.includes('.webm') ||
                   url.includes('.avi') ||
                   url.includes('video/mp4') ||
                   url.includes('video/quicktime') ||
                   url.includes('video/webm');
-  
+
   // Normaliser la rotation à 0-360
   const normalizedRotation = ((rotation % 360) + 360) % 360;
-  
+
   // Déterminer si la rotation est 90° ou 270° (image tournée sur le côté)
   const isSideways = normalizedRotation === 90 || normalizedRotation === 270;
-  
+
   // Message explicatif pour les images de faible résolution
   const showResolutionWarning = !isPdf && !isVideo;
+
+  // --- Rognage ---
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropBox, setCropBox] = useState({ top: 15, left: 15, bottom: 85, right: 85 });
+  const draggingRef = useRef<{ handle: 'top' | 'bottom' | 'left' | 'right'; startCoord: number; startValue: number } | null>(null);
+  const imgWrapperRef = useRef<HTMLDivElement>(null);
+
+  const handleCropHandleMouseDown = (e: React.MouseEvent, handle: 'top' | 'bottom' | 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isVertical = handle === 'top' || handle === 'bottom';
+    draggingRef.current = {
+      handle,
+      startCoord: isVertical ? e.clientY : e.clientX,
+      startValue: cropBox[handle],
+    };
+  };
+
+  const handleCropMouseMove = (e: React.MouseEvent) => {
+    if (!draggingRef.current || !imgWrapperRef.current) return;
+    const { handle, startCoord, startValue } = draggingRef.current;
+    const isVertical = handle === 'top' || handle === 'bottom';
+    const rect = imgWrapperRef.current.getBoundingClientRect();
+    const size = isVertical ? rect.height : rect.width;
+    const current = isVertical ? e.clientY : e.clientX;
+    const raw = Math.max(0, Math.min(100, startValue + ((current - startCoord) / size) * 100));
+    setCropBox(prev => {
+      if (handle === 'top')    return { ...prev, top:    Math.min(raw, prev.bottom - 5) };
+      if (handle === 'bottom') return { ...prev, bottom: Math.max(raw, prev.top    + 5) };
+      if (handle === 'left')   return { ...prev, left:   Math.min(raw, prev.right  - 5) };
+                               return { ...prev, right:  Math.max(raw, prev.left   + 5) };
+    });
+  };
+
+  const handleCropMouseUp = () => { draggingRef.current = null; };
+
+  const resetCrop = () => {
+    setIsCropping(false);
+    setCropBox({ top: 15, left: 15, bottom: 85, right: 85 });
+    draggingRef.current = null;
+  };
+
+  const midH = (cropBox.top  + cropBox.bottom) / 2;
+  const midV = (cropBox.left + cropBox.right)  / 2;
+  const thirdH1 = cropBox.top  + (cropBox.bottom - cropBox.top)  / 3;
+  const thirdH2 = cropBox.top  + (cropBox.bottom - cropBox.top)  * 2 / 3;
+  const thirdV1 = cropBox.left + (cropBox.right  - cropBox.left) / 3;
+  const thirdV2 = cropBox.left + (cropBox.right  - cropBox.left) * 2 / 3;
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
@@ -72,41 +120,145 @@ const UniversalViewer = ({ url, title, rotation = 0, onClose }: { url: string; t
             {normalizedRotation !== 0 && (
               <span className="text-xs bg-white/20 px-2 py-1 rounded">{normalizedRotation}°</span>
             )}
+            {/* Bouton Rogner — images seulement */}
+            {!isPdf && !isVideo && !isCropping && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white hover:bg-white/20 gap-1.5"
+                onClick={() => setIsCropping(true)}
+              >
+                <Crop className="w-4 h-4" />
+                {language === 'fr' ? 'Rogner' : 'Crop'}
+              </Button>
+            )}
+            {isCropping && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/70 hover:bg-white/20"
+                  onClick={resetCrop}
+                >
+                  {language === 'fr' ? 'Annuler' : 'Cancel'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-400 hover:bg-white/20 font-semibold"
+                  onClick={() => { /* TODO: logique de sauvegarde (étape suivante) */ }}
+                >
+                  {language === 'fr' ? 'Valider' : 'Apply'}
+                </Button>
+              </>
+            )}
             <Button variant="ghost" className="text-white hover:bg-white/20" onClick={onClose}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </Button>
           </div>
         </DialogHeader>
+
         <div className="flex-1 overflow-auto flex items-center justify-center p-4 pt-16">
           {isPdf ? (
             <iframe src={url} className="w-full h-full bg-white rounded shadow-lg" title={title} />
           ) : isVideo ? (
-            <video 
-              src={url} 
-              controls 
+            <video
+              src={url}
+              controls
               autoPlay
-              className="max-w-full max-h-full shadow-2xl rounded-lg" 
+              className="max-w-full max-h-full shadow-2xl rounded-lg"
               style={{ transform: `rotate(${normalizedRotation}deg)` }}
               onClick={(e) => e.stopPropagation()}
             >
               Votre navigateur ne supporte pas la lecture vidéo.
             </video>
           ) : (
-            <img 
-              src={url} 
-              alt={title} 
-              className="object-contain shadow-2xl" 
-              style={{ 
-                transform: `rotate(${normalizedRotation}deg)`,
-                maxWidth: isSideways ? '80vh' : '90vw',
-                maxHeight: isSideways ? '90vw' : '70vh'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div
+              ref={imgWrapperRef}
+              className="relative select-none"
+              style={{ display: 'inline-block', lineHeight: 0 }}
+              onMouseMove={handleCropMouseMove}
+              onMouseUp={handleCropMouseUp}
+              onMouseLeave={handleCropMouseUp}
+            >
+              <img
+                src={url}
+                alt={title}
+                className="object-contain shadow-2xl block"
+                style={{
+                  transform: `rotate(${normalizedRotation}deg)`,
+                  maxWidth: isSideways ? '80vh' : '90vw',
+                  maxHeight: isSideways ? '90vw' : '70vh',
+                }}
+                onClick={(e) => e.stopPropagation()}
+                draggable={false}
+              />
+
+              {/* ── Overlay de rognage ── */}
+              {isCropping && (
+                <div className="absolute inset-0">
+
+                  {/* Zones assombries hors sélection */}
+                  <div className="absolute bg-black/60 pointer-events-none"
+                    style={{ top: 0, left: 0, right: 0, height: `${cropBox.top}%` }} />
+                  <div className="absolute bg-black/60 pointer-events-none"
+                    style={{ top: `${cropBox.bottom}%`, left: 0, right: 0, bottom: 0 }} />
+                  <div className="absolute bg-black/60 pointer-events-none"
+                    style={{ top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%`, left: 0, width: `${cropBox.left}%` }} />
+                  <div className="absolute bg-black/60 pointer-events-none"
+                    style={{ top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%`, left: `${cropBox.right}%`, right: 0 }} />
+
+                  {/* Cadre de la zone retenue */}
+                  <div className="absolute border-2 border-white pointer-events-none"
+                    style={{
+                      top:    `${cropBox.top}%`,
+                      left:   `${cropBox.left}%`,
+                      right:  `${100 - cropBox.right}%`,
+                      bottom: `${100 - cropBox.bottom}%`,
+                    }} />
+
+                  {/* Grille des tiers */}
+                  <div className="absolute border-t border-white/30 pointer-events-none"
+                    style={{ top: `${thirdH1}%`, left: `${cropBox.left}%`, right: `${100 - cropBox.right}%` }} />
+                  <div className="absolute border-t border-white/30 pointer-events-none"
+                    style={{ top: `${thirdH2}%`, left: `${cropBox.left}%`, right: `${100 - cropBox.right}%` }} />
+                  <div className="absolute border-l border-white/30 pointer-events-none"
+                    style={{ left: `${thirdV1}%`, top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%` }} />
+                  <div className="absolute border-l border-white/30 pointer-events-none"
+                    style={{ left: `${thirdV2}%`, top: `${cropBox.top}%`, bottom: `${100 - cropBox.bottom}%` }} />
+
+                  {/* Poignée — Haut */}
+                  <div
+                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
+                    style={{ top: `${cropBox.top}%`, left: `${midV}%`, transform: 'translate(-50%, -50%)' }}
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'top')}
+                  />
+                  {/* Poignée — Bas */}
+                  <div
+                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ns-resize"
+                    style={{ top: `${cropBox.bottom}%`, left: `${midV}%`, transform: 'translate(-50%, -50%)' }}
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'bottom')}
+                  />
+                  {/* Poignée — Gauche */}
+                  <div
+                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
+                    style={{ top: `${midH}%`, left: `${cropBox.left}%`, transform: 'translate(-50%, -50%)' }}
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'left')}
+                  />
+                  {/* Poignée — Droite */}
+                  <div
+                    className="absolute w-5 h-5 bg-white border-2 border-gray-600 rounded-full shadow-lg cursor-ew-resize"
+                    style={{ top: `${midH}%`, left: `${cropBox.right}%`, transform: 'translate(-50%, -50%)' }}
+                    onMouseDown={(e) => handleCropHandleMouseDown(e, 'right')}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
-        {/* Message de résolution fixe en bas */}
-        {showResolutionWarning && (
+
+        {/* Message de résolution (masqué en mode rognage) */}
+        {showResolutionWarning && !isCropping && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-amber-400 text-sm bg-black/80 px-4 py-2 rounded-lg flex items-center gap-2 z-20">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
             <span>{language === "fr" ? "La grandeur de l'image est limitée en raison de la faible résolution de l'image" : "Image size is limited due to low image resolution"}</span>
