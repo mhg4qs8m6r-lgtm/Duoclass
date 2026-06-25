@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, session, ipcMain, shell } from "electron";
+import { app, BrowserWindow, globalShortcut, session, ipcMain, shell, Menu } from "electron";
 import path from "path";
 import crypto from "crypto";
 import os from "os";
@@ -63,6 +63,26 @@ async function createWindow(port: number): Promise<void> {
   // Raccourci DevTools : Cmd+Shift+I (toujours disponible, packagé ou non)
   globalShortcut.register("CommandOrControl+Shift+I", () => {
     mainWindow?.webContents.toggleDevTools();
+  });
+
+  // Menu contextuel natif : Copier/Coller pour les champs de saisie,
+  // pas de menu par défaut ailleurs (supprime "Voir image", etc.)
+  mainWindow.webContents.on("context-menu", (event, params) => {
+    event.preventDefault();
+    if (params.isEditable || params.selectionText) {
+      const menuItems: Electron.MenuItemConstructorOptions[] = [];
+      if (params.selectionText) {
+        menuItems.push({ label: "Couper", role: "cut", enabled: params.isEditable });
+        menuItems.push({ label: "Copier", role: "copy" });
+      }
+      if (params.isEditable) {
+        menuItems.push({ label: "Coller", role: "paste" });
+        menuItems.push({ label: "Tout sélectionner", role: "selectAll" });
+      }
+      if (menuItems.length > 0) {
+        Menu.buildFromTemplate(menuItems).popup();
+      }
+    }
   });
 
   if (!app.isPackaged) {

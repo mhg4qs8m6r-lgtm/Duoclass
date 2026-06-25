@@ -2890,10 +2890,14 @@ export default function UniversalAlbumPage({
 
   // Gestionnaire de clic droit global sur la page
   const handleGlobalContextMenu = (e: React.MouseEvent) => {
-    // Vérifier si le clic n'est pas sur une vignette (qui a son propre gestionnaire)
+    // Laisser le menu natif Copier/Coller sur les champs de saisie
     const target = e.target as HTMLElement;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) {
+      return;
+    }
+    // Vérifier si le clic n'est pas sur une vignette (qui a son propre gestionnaire)
     const isOnFrame = target.closest('[data-frame-id]');
-    
+
     if (!isOnFrame) {
       e.preventDefault();
       // Ouvrir le menu contextuel sans frameId (options générales uniquement)

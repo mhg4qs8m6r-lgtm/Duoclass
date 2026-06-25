@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, CheckCircle, Minus, Info } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ClipboardPaste, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, CheckCircle, Minus, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -1385,12 +1385,10 @@ export default function CreationsAtelierV2({
     y: number;
     elementId: string;
   } | null>(null);
-  
-  // État pour le menu contextuel de la zone vide (clic droit sur canvas)
-  const [canvasContextMenu, setCanvasContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+
+  // Presse-papier interne pour Copier/Coller des éléments du canvas
+  const clipboardRef = useRef<CanvasElement | null>(null);
+
   
   // États pour la modale de sélection/création de projet
 
@@ -4599,6 +4597,10 @@ export default function CreationsAtelierV2({
   
   // Gérer le clic droit pour le menu contextuel
   const handleContextMenu = (e: React.MouseEvent, elementId: string) => {
+    // Laisser le menu natif Copier/Coller sur les champs de saisie
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     
@@ -5542,6 +5544,9 @@ export default function CreationsAtelierV2({
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onContextMenu={(e) => {
+        // Laisser le menu natif Copier/Coller sur les champs de saisie
+        const target = e.target as HTMLElement;
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return;
         // Bloquer la propagation pour empêcher le menu contextuel parent (UniversalAlbumPage)
         e.stopPropagation();
       }}
@@ -7667,14 +7672,10 @@ export default function CreationsAtelierV2({
                   ...(isEraserActive ? { cursor: 'none' } : {}),
                 }}
                 onContextMenu={(e) => {
-                  // Désactiver le menu contextuel par défaut du navigateur
+                  // Laisser le menu natif Copier/Coller sur les champs de saisie
+                  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) return;
+                  // Bloquer le menu par défaut du navigateur sur la zone de travail
                   e.preventDefault();
-                  e.stopPropagation();
-                  // Afficher le menu contextuel de la zone vide (pas sur un élément)
-                  setCanvasContextMenu({
-                    x: e.clientX,
-                    y: e.clientY
-                  });
                 }}
                 onMouseDown={(e) => {
                   // Mode découpe : enregistrer le point de départ
@@ -10438,6 +10439,40 @@ export default function CreationsAtelierV2({
                       <div className="border-t border-gray-100 my-1" />
                     </>
                   )}
+                  {/* Copier */}
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
+                    onClick={() => {
+                      clipboardRef.current = { ...element };
+                      toast.success(language === "fr" ? "Élément copié" : "Element copied");
+                      closeContextMenu();
+                    }}
+                  >
+                    <Copy className="w-4 h-4 text-blue-500" />
+                    <span>{language === "fr" ? "Copier" : "Copy"}</span>
+                  </button>
+                  {/* Coller */}
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={!clipboardRef.current}
+                    onClick={() => {
+                      if (!clipboardRef.current) return;
+                      const src = clipboardRef.current;
+                      const newId = `${src.type}-${Date.now()}`;
+                      const pasted: CanvasElement = { ...src, id: newId, x: src.x + 1, y: src.y + 1, locked: false };
+                      setCanvasElements(prev => [...prev, pasted]);
+                      setSelectedElementIds(new Set([newId]));
+                      setSelectedElementId(newId);
+                      toast.success(language === "fr" ? "Élément collé" : "Element pasted");
+                      closeContextMenu();
+                    }}
+                  >
+                    <ClipboardPaste className="w-4 h-4 text-green-500" />
+                    <span>{language === "fr" ? "Coller" : "Paste"}</span>
+                  </button>
+
+                  <div className="border-t border-gray-100 my-1" />
+
                   {/* Verrouiller / Déverrouiller */}
                   <button
                     className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
@@ -10747,94 +10782,6 @@ export default function CreationsAtelierV2({
         document.body
       )}
       
-      {/* Menu contextuel (clic droit sur zone vide du canvas) */}
-      {canvasContextMenu && createPortal(
-        <div 
-          className="fixed inset-0 z-[100]" 
-          onClick={() => setCanvasContextMenu(null)}
-          onContextMenu={(e) => { e.preventDefault(); setCanvasContextMenu(null); }}
-        >
-          <div 
-            className="absolute bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[200px]"
-            style={{ left: canvasContextMenu.x, top: canvasContextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Ajouter une photo directement sur le canvas */}
-            <button
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
-              onClick={() => {
-                // Ouvrir le sélecteur de fichier pour ajouter une photo DIRECTEMENT sur le canvas
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.multiple = true;
-                input.onchange = async (e) => {
-                  const files = (e.target as HTMLInputElement).files;
-                  if (files && files.length > 0) {
-                    for (const file of Array.from(files)) {
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        const src = event.target?.result as string;
-                        // Ajouter la photo DIRECTEMENT sur le canvas
-                        addToCanvas(src, file.name);
-                        toast.success(language === "fr" ? `Photo "${file.name}" ajoutée au canvas` : `Photo "${file.name}" added to canvas`);
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }
-                };
-                input.click();
-                setCanvasContextMenu(null);
-              }}
-            >
-              <Plus className="w-4 h-4 text-green-600" />
-              <span>{language === "fr" ? "Ajouter nouvelle photo" : "Add new photo"}</span>
-            </button>
-            
-            <div className="border-t border-gray-100 my-1" />
-            
-            
-            {/* Coller une image directement sur le canvas */}
-            <button
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
-              onClick={async () => {
-                try {
-                  // Essayer d'abord avec l'API Clipboard moderne
-                  const clipboardItems = await navigator.clipboard.read();
-                  let imageFound = false;
-                  for (const item of clipboardItems) {
-                    const imageType = item.types.find(t => t.startsWith('image/'));
-                    if (imageType) {
-                      const blob = await item.getType(imageType);
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        const src = event.target?.result as string;
-                        // Ajouter DIRECTEMENT sur le canvas
-                        addToCanvas(src, language === 'fr' ? 'Image collée' : 'Pasted image');
-                        toast.success(language === "fr" ? "Image collée sur le canvas" : "Image pasted to canvas");
-                      };
-                      reader.readAsDataURL(blob);
-                      imageFound = true;
-                      break;
-                    }
-                  }
-                  if (!imageFound) {
-                    toast.error(language === "fr" ? "Aucune image dans le presse-papiers" : "No image in clipboard");
-                  }
-                } catch (err) {
-                  // Fallback: essayer avec l'événement paste
-                  toast.error(language === "fr" ? "Impossible de coller l'image (utilisez Ctrl+V sur le canvas)" : "Cannot paste image (use Ctrl+V on canvas)");
-                }
-                setCanvasContextMenu(null);
-              }}
-            >
-              <Image className="w-4 h-4 text-purple-500" />
-              <span>{language === "fr" ? "Coller une image" : "Paste image"}</span>
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
       
 
 
