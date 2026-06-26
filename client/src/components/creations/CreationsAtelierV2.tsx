@@ -1388,6 +1388,7 @@ export default function CreationsAtelierV2({
 
   // Presse-papier interne pour Copier/Coller des éléments du canvas
   const clipboardRef = useRef<CanvasElement | null>(null);
+  const [hasClipboard, setHasClipboard] = useState(false);
 
   
   // États pour la modale de sélection/création de projet
@@ -10444,6 +10445,7 @@ export default function CreationsAtelierV2({
                     className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3"
                     onClick={() => {
                       clipboardRef.current = { ...element };
+                      setHasClipboard(true);
                       toast.success(language === "fr" ? "Élément copié" : "Element copied");
                       closeContextMenu();
                     }}
@@ -10454,7 +10456,7 @@ export default function CreationsAtelierV2({
                   {/* Coller */}
                   <button
                     className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
-                    disabled={!clipboardRef.current}
+                    disabled={!hasClipboard}
                     onClick={() => {
                       if (!clipboardRef.current) return;
                       const src = clipboardRef.current;
