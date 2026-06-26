@@ -897,6 +897,10 @@ export default function CreationsAtelierV2({
   // Ref pour tracker les dimensions précédentes du format (pour redimensionner les éléments)
   const prevFormatDimsRef = useRef<{ w: number; h: number } | null>(null);
   const [imageZoom, setImageZoom] = useState(100); // Zoom de l'image sélectionnée (100% = taille normale)
+  const [canvasZoom, setCanvasZoom] = useState(1); // Zoom global de la vue (0.25–3)
+  const [isPanning, setIsPanning] = useState(false); // pour le curseur CSS uniquement
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef<{x: number, y: number, scrollLeft: number, scrollTop: number} | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [showRulers, setShowRulers] = useState(true);
   const [showCrosshair, setShowCrosshair] = useState(true);
@@ -2028,16 +2032,35 @@ export default function CreationsAtelierV2({
           if (selectedElementIds.has(el.id) && el.groupId) groupIds.add(el.groupId);
         });
         if (groupIds.size > 0) {
-          setCanvasElements(prev => prev.map(el => 
+          setCanvasElements(prev => prev.map(el =>
             el.groupId && groupIds.has(el.groupId) ? { ...el, groupId: undefined } : el
           ));
           toast.success(language === 'fr' ? 'Groupe(s) dégroupé(s)' : 'Group(s) ungrouped');
         }
       }
+
+      // Espace : activer le mode pan
+      if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        isPanningRef.current = true;
+        setIsPanning(true);
+      }
     };
-    
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        isPanningRef.current = false;
+        setIsPanning(false);
+        panStartRef.current = null;
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [isOpen, canvasElements, selectedElementIds, language, handleUndo]);
   
   // Marquer la fin du chargement initial après un délai
@@ -3578,7 +3601,7 @@ export default function CreationsAtelierV2({
     const formatHeightCm = orientation === "portrait" ? paperFormat.height : paperFormat.width;
 
     // Calculer le scale pour que la page tienne dans l'espace disponible
-    // tout en conservant les proportions exactes
+    // tout en conservant les proportions exactes, puis appliquer le zoom global
     const scaleX = availableWidth / formatWidthCm;
     const scaleY = availableHeight / formatHeightCm;
     const pxPerCm = Math.max(1, Math.min(scaleX, scaleY)); // Pixels par cm, min 1 pour éviter division par 0
@@ -3647,47 +3670,25 @@ export default function CreationsAtelierV2({
   }, [canvasDimensions.pxPerCm]);
 
   // Gérer le zoom IMAGE avec la molette (uniquement si une image est sélectionnée et non verrouillée)
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (selectedElementId) {
-      // Vérifier si l'élément est verrouillé
-      const selectedElement = canvasElements.find(el => el.id === selectedElementId);
-      if (selectedElement?.locked) {
-        // Photo verrouillée : ne pas permettre le zoom
-        return;
-      }
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -10 : 10;
-      const newZoom = Math.min(500, Math.max(10, imageZoom + delta));
-      setImageZoom(newZoom);
-      
-      // Appliquer le zoom à l'élément sélectionné
-      setCanvasElements(prev => prev.map(el => {
-        if (el.id === selectedElementId) {
-          const scale = newZoom / 100;
-          // Calculer les nouvelles dimensions basées sur les dimensions originales
-          // On utilise les dimensions actuelles divisées par l'ancien zoom puis multipliées par le nouveau
-          const oldScale = imageZoom / 100;
-          const baseWidth = el.width / oldScale;
-          const baseHeight = el.height / oldScale;
-          const newWidth = baseWidth * scale;
-          const newHeight = baseHeight * scale;
-          
-          // Centrer le zoom sur l'élément
-          const deltaWidth = newWidth - el.width;
-          const deltaHeight = newHeight - el.height;
-          
-          return {
-            ...el,
-            width: newWidth,
-            height: newHeight,
-            x: el.x - deltaWidth / 2,
-            y: el.y - deltaHeight / 2
-          };
-        }
-        return el;
-      }));
-    }
-  }, [selectedElementId, imageZoom, canvasElements]);
+  // Zoom global de la vue — listener natif ajouté via useEffect (passive: false)
+  const handleWheelRef = useRef<(e: WheelEvent) => void>(() => {});
+  handleWheelRef.current = (e: WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setCanvasZoom(prev => {
+      const next = Math.min(3, Math.max(0.25, Math.round((prev + delta) * 100) / 100));
+      console.log('[CanvasZoom] prev=%s next=%s delta=%s', prev, next, delta);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => handleWheelRef.current(e);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [canvasContainerRef.current]);
   
   // Ajouter un élément au canvas avec dimensions en CENTIMÈTRES
   // Résolution standard : 96 DPI (pixels par pouce), 1 pouce = 2.54 cm
@@ -7596,7 +7597,6 @@ export default function CreationsAtelierV2({
           <div 
             className="flex-1 overflow-hidden flex flex-col"
             ref={canvasContainerRef}
-            onWheel={handleWheel}
           >
             {/* Règle horizontale en haut - alignée avec la page */}
             {showRulers && (
@@ -7676,13 +7676,14 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-hidden ${isLassoing && !isEraserActive ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-auto ${isLassoing && !isEraserActive ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
-                  // Zone de travail complète
-                  minWidth: canvasDimensions.workspaceWidth,
-                  minHeight: canvasDimensions.workspaceHeight,
+                  // Zone de travail complète — s'agrandit avec le zoom pour permettre le scroll
+                  minWidth: Math.max(canvasDimensions.workspaceWidth, canvasDimensions.pageWidth * canvasZoom + canvasDimensions.pageOffsetX * 2),
+                  minHeight: Math.max(canvasDimensions.workspaceHeight, canvasDimensions.pageHeight * canvasZoom + canvasDimensions.pageOffsetY * 2),
                   // cursor:none en style inline pour forcer sur tous les enfants (priorité sur Tailwind)
                   ...(isEraserActive ? { cursor: 'none' } : {}),
+                  ...(isPanning ? { cursor: panStartRef.current ? 'grabbing' : 'grab' } : {}),
                 }}
                 onContextMenu={(e) => {
                   // Laisser le menu natif Copier/Coller sur les champs de saisie
@@ -7691,6 +7692,15 @@ export default function CreationsAtelierV2({
                   e.preventDefault();
                 }}
                 onMouseDown={(e) => {
+                  // Mode pan (Espace + drag)
+                  if (isPanningRef.current) {
+                    e.preventDefault();
+                    const el = canvasRef.current;
+                    if (el) {
+                      panStartRef.current = { x: e.clientX, y: e.clientY, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop };
+                    }
+                    return;
+                  }
                   // Mode découpe : enregistrer le point de départ
                   if (isCutMode && selectedElementId) {
                     const canvas = canvasRef.current;
@@ -7720,6 +7730,15 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseMove={(e) => {
+                  // Mode pan (Espace + drag)
+                  if (isPanningRef.current && panStartRef.current) {
+                    const el = canvasRef.current;
+                    if (el) {
+                      el.scrollLeft = panStartRef.current.scrollLeft - (e.clientX - panStartRef.current.x);
+                      el.scrollTop = panStartRef.current.scrollTop - (e.clientY - panStartRef.current.y);
+                    }
+                    return;
+                  }
                   // Overlay curseur gomme : position fixed → coordonnées viewport directes, aucun décalage possible
                   if (isEraserActive && eraserOverlayRef.current) {
                     eraserOverlayRef.current.style.left = `${e.clientX - eraserSize}px`;
@@ -7786,6 +7805,11 @@ export default function CreationsAtelierV2({
                   }
                 }}
                 onMouseUp={(e) => {
+                  // Mode pan : fin du drag
+                  if (isPanningRef.current) {
+                    panStartRef.current = null;
+                    return;
+                  }
                   // Gomme : finaliser le trait et committer l'image
                   if (isEraserActive && isErasingOnCanvasRef.current) {
                     isErasingOnCanvasRef.current = false;
@@ -7948,6 +7972,8 @@ export default function CreationsAtelierV2({
                     border: '1px solid #cbd5e1',
                     overflow: 'visible',
                     cursor: isPolyDrawMode ? 'crosshair' : undefined,
+                    transform: `scale(${canvasZoom})`,
+                    transformOrigin: 'top left',
                   }}
                   onMouseDownCapture={(e) => {
                     if (!isPolyDrawMode) return;
@@ -9760,9 +9786,9 @@ export default function CreationsAtelierV2({
                         left: 0,
                         top: '50%',
                         width: '100%',
-                        height: '2px',
-                        backgroundColor: 'rgba(168, 85, 247, 0.8)',
-                        transform: 'translateY(-1px)',
+                        height: '1px',
+                        backgroundColor: 'rgba(168, 85, 247, 0.3)',
+                        transform: 'translateY(-0.5px)',
                         zIndex: 10,
                       }}
                     />
@@ -9772,10 +9798,10 @@ export default function CreationsAtelierV2({
                       style={{
                         top: 0,
                         left: '50%',
-                        width: '2px',
+                        width: '1px',
                         height: '100%',
-                        backgroundColor: 'rgba(168, 85, 247, 0.8)',
-                        transform: 'translateX(-1px)',
+                        backgroundColor: 'rgba(168, 85, 247, 0.3)',
+                        transform: 'translateX(-0.5px)',
                         zIndex: 10,
                       }}
                     />
@@ -9785,12 +9811,12 @@ export default function CreationsAtelierV2({
                       style={{
                         left: '50%',
                         top: '50%',
-                        width: '8px',
-                        height: '8px',
-                        backgroundColor: 'rgba(168, 85, 247, 1)',
+                        width: '6px',
+                        height: '6px',
+                        backgroundColor: 'rgba(168, 85, 247, 0.5)',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        boxShadow: '0 0 6px rgba(168, 85, 247, 0.8)',
+                        boxShadow: 'none',
                         zIndex: 10,
                       }}
                     />
