@@ -899,7 +899,7 @@ export default function CreationsAtelierV2({
   const [imageZoom, setImageZoom] = useState(100); // Zoom de l'image sélectionnée (100% = taille normale)
   const [showGrid, setShowGrid] = useState(true);
   const [showRulers, setShowRulers] = useState(true);
-  const [showCrosshair, setShowCrosshair] = useState(false);
+  const [showCrosshair, setShowCrosshair] = useState(true);
   /** Affiche les croix de repérage d'imprimerie (crop marks) aux 4 coins de la page */
   const [showCropMarks, setShowCropMarks] = useState(false);
   // Overlay sticker planner : contour offset (toggle b). NE contient PAS showCropMarks.
@@ -4964,15 +4964,27 @@ export default function CreationsAtelierV2({
         // Ne jamais déplacer une forme sans mettre à jour
         // customPath — sans accord de Papy.
         const origPath = draggingCustomPathRef.current;
-        setCanvasElements(prev => prev.map(el => el.id === currentElementId
-          ? {
-              ...el,
-              x: currentElementStartPos.x + deltaXCm,
-              y: currentElementStartPos.y + deltaYCm,
-              ...(origPath ? { customPath: shiftCustomPath(origPath, deltaXCm, deltaYCm) } : {}),
-            }
-          : el
-        ));
+        const formatWidthCm = orientation === "portrait" ? paperFormat.width : paperFormat.height;
+        const formatHeightCm = orientation === "portrait" ? paperFormat.height : paperFormat.width;
+        setCanvasElements(prev => prev.map(el => {
+          if (el.id !== currentElementId) return el;
+          let newX = currentElementStartPos.x + deltaXCm;
+          let newY = currentElementStartPos.y + deltaYCm;
+          // Snap magnétique au centre de la page (seuil 8px)
+          const snapThreshCm = 8 / pxPerCm;
+          const pageCX = formatWidthCm / 2;
+          const pageCY = formatHeightCm / 2;
+          const elCX = newX + (el.width ?? 0) / 2;
+          const elCY = newY + (el.height ?? 0) / 2;
+          if (Math.abs(elCX - pageCX) < snapThreshCm) newX = pageCX - (el.width ?? 0) / 2;
+          if (Math.abs(elCY - pageCY) < snapThreshCm) newY = pageCY - (el.height ?? 0) / 2;
+          return {
+            ...el,
+            x: newX,
+            y: newY,
+            ...(origPath ? { customPath: shiftCustomPath(origPath, newX - currentElementStartPos.x, newY - currentElementStartPos.y) } : {}),
+          };
+        }));
       }
     }
   }, [isDraggingCtrl, canvasDimensions.pxPerCm]);
@@ -8059,50 +8071,6 @@ export default function CreationsAtelierV2({
                     />
                   )}
                   
-                  {/* Crosshair (réticule) au centre de la page */}
-                  {showCrosshair && (
-                    <>
-                      {/* Ligne horizontale */}
-                      <div
-                        className="absolute pointer-events-none"
-                        style={{
-                          left: 0,
-                          right: 0,
-                          top: '50%',
-                          height: '1px',
-                          backgroundColor: 'rgba(168, 85, 247, 0.6)', // violet-500
-                          transform: 'translateY(-0.5px)',
-                        }}
-                      />
-                      {/* Ligne verticale */}
-                      <div
-                        className="absolute pointer-events-none"
-                        style={{
-                          top: 0,
-                          bottom: 0,
-                          left: '50%',
-                          width: '1px',
-                          backgroundColor: 'rgba(168, 85, 247, 0.6)', // violet-500
-                          transform: 'translateX(-0.5px)',
-                        }}
-                      />
-                      {/* Point central */}
-                      <div
-                        className="absolute pointer-events-none"
-                        style={{
-                          left: '50%',
-                          top: '50%',
-                          width: '8px',
-                          height: '8px',
-                          backgroundColor: 'rgba(168, 85, 247, 0.8)',
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          boxShadow: '0 0 4px rgba(168, 85, 247, 0.5)',
-                        }}
-                      />
-                    </>
-                  )}
-                  
                   {/* Conteneur clippé — empêche les éléments de déborder de la page */}
                   <div className="absolute inset-0" style={{ overflow: 'hidden' }}>
 
@@ -9781,6 +9749,53 @@ export default function CreationsAtelierV2({
                 )}
 
                 </div>
+
+                {/* Crosshair (réticule) au centre de la page — rendu après le conteneur clippé pour rester visible */}
+                {showCrosshair && (
+                  <>
+                    {/* Ligne horizontale */}
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: 0,
+                        top: '50%',
+                        width: '100%',
+                        height: '2px',
+                        backgroundColor: 'rgba(168, 85, 247, 0.8)',
+                        transform: 'translateY(-1px)',
+                        zIndex: 10,
+                      }}
+                    />
+                    {/* Ligne verticale */}
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        top: 0,
+                        left: '50%',
+                        width: '2px',
+                        height: '100%',
+                        backgroundColor: 'rgba(168, 85, 247, 0.8)',
+                        transform: 'translateX(-1px)',
+                        zIndex: 10,
+                      }}
+                    />
+                    {/* Point central */}
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: '50%',
+                        top: '50%',
+                        width: '8px',
+                        height: '8px',
+                        backgroundColor: 'rgba(168, 85, 247, 1)',
+                        borderRadius: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        boxShadow: '0 0 6px rgba(168, 85, 247, 0.8)',
+                        zIndex: 10,
+                      }}
+                    />
+                  </>
+                )}
 
                 {/* Filets : traits fins concentriques autour de chaque ouverture.
                     Chaque filet est un recté décalé vers l'intérieur de l'ouverture
