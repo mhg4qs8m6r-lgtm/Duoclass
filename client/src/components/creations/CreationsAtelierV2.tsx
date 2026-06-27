@@ -898,6 +898,8 @@ export default function CreationsAtelierV2({
   const prevFormatDimsRef = useRef<{ w: number; h: number } | null>(null);
   const [imageZoom, setImageZoom] = useState(100); // Zoom de l'image sélectionnée (100% = taille normale)
   const [canvasZoom, setCanvasZoom] = useState(1); // Zoom global de la vue (0.25–3)
+  const [pan, setPan] = useState({ x: 0, y: 0 }); // Pan global (clic molette)
+  const panStartRef2 = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false); // pour le curseur CSS uniquement
   const isPanningRef = useRef(false);
   const panStartRef = useRef<{x: number, y: number, scrollLeft: number, scrollTop: number} | null>(null);
@@ -3689,7 +3691,36 @@ export default function CreationsAtelierV2({
     el.addEventListener('wheel', handler, { passive: false });
     return () => el.removeEventListener('wheel', handler);
   }, [canvasContainerRef.current]);
-  
+
+  // Pan natif : clic molette (button=1) déplace la vue via translate sur pageRef
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      panStartRef2.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!panStartRef2.current) return;
+      setPan({
+        x: panStartRef2.current.px + (e.clientX - panStartRef2.current.mx),
+        y: panStartRef2.current.py + (e.clientY - panStartRef2.current.my),
+      });
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      panStartRef2.current = null;
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [pan.x, pan.y]);
+
+
   // Ajouter un élément au canvas avec dimensions en CENTIMÈTRES
   // Résolution standard : 96 DPI (pixels par pouce), 1 pouce = 2.54 cm
   const DPI_STANDARD = 96;
@@ -4992,6 +5023,8 @@ export default function CreationsAtelierV2({
   
   // === LASSO DE SÉLECTION ===
   const handleLassoStart = (e: React.MouseEvent) => {
+    // Ignorer le clic molette (réservé au pan)
+    if (e.button !== 0) return;
     // Ne pas démarrer si le détourage est actif
     if (isDetourageActive) return;
     
@@ -7676,7 +7709,7 @@ export default function CreationsAtelierV2({
               {/* Zone de travail - Fond gris avec la page blanche centrée */}
               <div
                 ref={canvasRef}
-                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-auto ${isLassoing && !isEraserActive ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 relative bg-slate-300 transition-all duration-200 overflow-auto select-none ${isLassoing && !isEraserActive ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{
                   // Zone de travail complète — s'agrandit avec le zoom pour permettre le scroll
                   minWidth: Math.max(canvasDimensions.workspaceWidth, canvasDimensions.pageWidth * canvasZoom + canvasDimensions.pageOffsetX * 2),
@@ -7684,6 +7717,8 @@ export default function CreationsAtelierV2({
                   // cursor:none en style inline pour forcer sur tous les enfants (priorité sur Tailwind)
                   ...(isEraserActive ? { cursor: 'none' } : {}),
                   ...(isPanning ? { cursor: panStartRef.current ? 'grabbing' : 'grab' } : {}),
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
                 }}
                 onContextMenu={(e) => {
                   // Laisser le menu natif Copier/Coller sur les champs de saisie
@@ -7692,6 +7727,8 @@ export default function CreationsAtelierV2({
                   e.preventDefault();
                 }}
                 onMouseDown={(e) => {
+                  // Ignorer tout sauf le clic gauche (le clic molette est géré en natif pour le pan)
+                  if (e.button !== 0) return;
                   // Mode pan (Espace + drag)
                   if (isPanningRef.current) {
                     e.preventDefault();
@@ -7724,8 +7761,8 @@ export default function CreationsAtelierV2({
                     e.stopPropagation();
                     return;
                   }
-                  // Démarrer le lasso UNIQUEMENT si le clic est sur la zone vide (pas sur un élément)
-                  if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-canvas-element]')) {
+                  // Démarrer le lasso UNIQUEMENT si clic gauche sur la zone vide (pas sur un élément)
+                  if (e.button === 0 && (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-canvas-element]'))) {
                     handleLassoStart(e);
                   }
                 }}
@@ -7972,8 +8009,10 @@ export default function CreationsAtelierV2({
                     border: '1px solid #cbd5e1',
                     overflow: 'visible',
                     cursor: isPolyDrawMode ? 'crosshair' : undefined,
-                    transform: `scale(${canvasZoom})`,
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${canvasZoom})`,
                     transformOrigin: 'top left',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
                   }}
                   onMouseDownCapture={(e) => {
                     if (!isPolyDrawMode) return;
