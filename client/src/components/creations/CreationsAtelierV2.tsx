@@ -951,7 +951,6 @@ export default function CreationsAtelierV2({
     lastSnapshotJsonRef.current = json;
     undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), snapshot];
     setUndoCount(undoStackRef.current.length);
-    console.log('[Undo] snapshot sauvegardé, éléments=', snapshot.length, 'stack size=', undoStackRef.current.length);
   }, []);
 
   // Début d'action continue (drag, resize) : sauvegarder et verrouiller
@@ -1025,19 +1024,14 @@ export default function CreationsAtelierV2({
   // Undo : restaurer le dernier snapshot
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
-    console.log('[Undo] stack avant=', stack.length, 'dernier snapshot éléments=', stack[stack.length - 1]?.length);
     if (stack.length === 0) return;
     const prev = stack[stack.length - 1];
     undoStackRef.current = stack.slice(0, -1);
-    console.log('[UNDO DIRECT] avant restauration, prev.length=', prev.length, 'premier élément=', prev[0]?.id);
     setCanvasElementsRaw([...prev]);
-    console.log('[UNDO DIRECT] après setCanvasElementsRaw');
     setSelectedElementId(null);
     setSelectedElementIds(new Set());
     undoBatchActiveRef.current = false;
     setUndoCount(undoStackRef.current.length);
-    console.log('[Undo] restauré, éléments=', prev.length, 'contenu=', JSON.stringify(prev.map(e => e.id)));
-    console.log('[Undo] remaining stack:', undoStackRef.current.length);
   }, []);
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
 
