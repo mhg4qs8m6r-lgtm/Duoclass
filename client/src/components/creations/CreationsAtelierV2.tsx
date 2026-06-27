@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Scissors, Wrench, Sparkles, LayoutGrid, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ClipboardPaste, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, CheckCircle, Minus, Info } from "lucide-react";
+import { X, Scissors, Wrench, Sparkles, LayoutGrid, Image, Printer, Mail, Download, Save, Edit2, Plus, ZoomIn, ZoomOut, Grid3X3, Ruler, Crosshair, RotateCcw, Lock, Unlock, Trash2, ChevronRight, ChevronDown, Copy, ClipboardPaste, ArrowUp, ArrowDown, MoreVertical, Layers, ImagePlus, FlipHorizontal, FlipVertical, CheckCircle, Minus, Info, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -945,12 +945,13 @@ export default function CreationsAtelierV2({
 
   // Sauvegarder un snapshot seulement si le contenu a changé
   const pushSnapshot = useCallback((snapshot: CanvasElement[]) => {
+    if (snapshot.length === 0 && undoStackRef.current.length === 0) return;
     const json = JSON.stringify(snapshot);
     if (json === lastSnapshotJsonRef.current) return; // identique → ignorer
     lastSnapshotJsonRef.current = json;
     undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), snapshot];
     setUndoCount(undoStackRef.current.length);
-    console.log("[Undo] snapshot saved, stack size:", undoStackRef.current.length);
+    console.log('[Undo] snapshot sauvegardé, éléments=', snapshot.length, 'stack size=', undoStackRef.current.length);
   }, []);
 
   // Début d'action continue (drag, resize) : sauvegarder et verrouiller
@@ -1024,16 +1025,19 @@ export default function CreationsAtelierV2({
   // Undo : restaurer le dernier snapshot
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
-    console.log("[Undo] Revenir pressed, stack size:", stack.length);
+    console.log('[Undo] stack avant=', stack.length, 'dernier snapshot éléments=', stack[stack.length - 1]?.length);
     if (stack.length === 0) return;
     const prev = stack[stack.length - 1];
     undoStackRef.current = stack.slice(0, -1);
-    setCanvasElementsRaw(prev);
+    console.log('[UNDO DIRECT] avant restauration, prev.length=', prev.length, 'premier élément=', prev[0]?.id);
+    setCanvasElementsRaw([...prev]);
+    console.log('[UNDO DIRECT] après setCanvasElementsRaw');
     setSelectedElementId(null);
     setSelectedElementIds(new Set());
     undoBatchActiveRef.current = false;
     setUndoCount(undoStackRef.current.length);
-    console.log("[Undo] restored to", prev.length, "elements, remaining stack:", undoStackRef.current.length);
+    console.log('[Undo] restauré, éléments=', prev.length, 'contenu=', JSON.stringify(prev.map(e => e.id)));
+    console.log('[Undo] remaining stack:', undoStackRef.current.length);
   }, []);
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
 
@@ -1850,7 +1854,7 @@ export default function CreationsAtelierV2({
                     )
                   : clamped;
                 console.log(`[Créations] ${filtered.length} éléments canvas restaurés (format: ${fmtW}×${fmtH} cm)`);
-                setCanvasElements(filtered);
+                setCanvasElementsRaw(filtered);
               }
 
               // Les éléments du collecteur sont gérés par la live query IndexedDB
@@ -5998,6 +6002,13 @@ export default function CreationsAtelierV2({
               </div>
             </div>
             
+            <Button variant="outline" size="sm" className="gap-1" onClick={handleUndo} disabled={undoCount === 0}
+              title={language === "fr" ? "Annuler (Ctrl+Z)" : "Undo (Ctrl+Z)"}
+            >
+              <Undo2 className="w-4 h-4" />
+              {language === "fr" ? "Annuler" : "Undo"}
+            </Button>
+
             <Button variant="outline" size="sm" className="gap-1" onClick={handleReset}>
               <RotateCcw className="w-4 h-4" />
               {language === "fr" ? "Réinitialiser" : "Reset"}
