@@ -908,6 +908,11 @@ export default function CreationsAtelierV2({
   const [showCrosshair, setShowCrosshair] = useState(true);
   /** Affiche les croix de repérage d'imprimerie (crop marks) aux 4 coins de la page */
   const [showCropMarks, setShowCropMarks] = useState(false);
+  // Couper en morceaux (export laser)
+  const [sliceMode, setSliceMode] = useState<null | 'H' | 'V'>(null);
+  const [sliceCount, setSliceCount] = useState<2 | 3>(2);
+  const [slicePositions, setSlicePositions] = useState<number[]>([50]); // pourcentages : [50] pour 2, [33, 66] pour 3
+  const [sliceElementId, setSliceElementId] = useState<string | null>(null); // ID de l'élément à couper (capturé à l'ouverture)
   // Overlay sticker planner : contour offset (toggle b). NE contient PAS showCropMarks.
   // Les croix de repérage sont gérées par stickerCropMarks (toggle c) séparément.
   const [stickerOverlay, setStickerOverlay] = useState<{ elementId: string; offsetMm: number; gaussPasses: number } | null>(null);
@@ -3574,6 +3579,77 @@ export default function CreationsAtelierV2({
     } finally {
       setIsExporting(false);
     }
+  };
+
+  // Export par morceaux (couper en 2 ou 3 parties)
+  const handleSliceExport = async () => {
+    if (!sliceMode) return;
+    const el = canvasElements.find(e => e.id === sliceElementId);
+    if (!el || el.type !== 'image' || !el.src) {
+      toast.error(language === 'fr' ? 'Sélectionnez une image avant de couper' : 'Select an image before slicing');
+      return;
+    }
+
+    // Créer un canvas avec uniquement l'image sélectionnée
+    const DPI = 150;
+    const PX_PER_CM = DPI / 2.54;
+    const outW = Math.round(el.width * PX_PER_CM);
+    const outH = Math.round(el.height * PX_PER_CM);
+
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = outW;
+    fullCanvas.height = outH;
+    const ctx = fullCanvas.getContext('2d')!;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, outW, outH);
+
+    // Charger et dessiner l'image
+    let blob: Blob;
+    if (el.src.startsWith('data:')) {
+      blob = dataUrlToBlob(el.src);
+    } else {
+      const resp = await fetch(el.src);
+      blob = await resp.blob();
+    }
+    const bitmap = await createImageBitmap(blob);
+    ctx.drawImage(bitmap, 0, 0, outW, outH);
+    bitmap.close();
+
+    // Calculer les positions de coupe en pixels
+    const positions = [0, ...slicePositions.map(p =>
+      sliceMode === 'H' ? Math.round(outH * p / 100) : Math.round(outW * p / 100)
+    ), sliceMode === 'H' ? outH : outW];
+
+    // Créer et exporter chaque morceau
+    for (let i = 0; i < positions.length - 1; i++) {
+      const start = positions[i];
+      const end = positions[i + 1];
+      const sliceCanvas = document.createElement('canvas');
+
+      if (sliceMode === 'H') {
+        sliceCanvas.width = outW;
+        sliceCanvas.height = end - start;
+        sliceCanvas.getContext('2d')!.drawImage(fullCanvas,
+          0, start, outW, end - start,
+          0, 0, outW, end - start);
+      } else {
+        sliceCanvas.width = end - start;
+        sliceCanvas.height = outH;
+        sliceCanvas.getContext('2d')!.drawImage(fullCanvas,
+          start, 0, end - start, outH,
+          0, 0, end - start, outH);
+      }
+
+      const blob = await new Promise<Blob>(r =>
+        sliceCanvas.toBlob(b => r(b!), 'image/png'));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentProjectName}_partie${i + 1}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    toast.success(`${positions.length - 1} morceaux exportés !`);
   };
 
   // Mapping type de projet → catégorie de modèle pour la sauvegarde
@@ -10267,6 +10343,17 @@ export default function CreationsAtelierV2({
               <Download className="w-3 h-3" />
               {isExporting ? "..." : (language === "fr" ? "Télécharger" : "Download")}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`flex-shrink-0 gap-1 text-[11px] h-6 px-2 ${sliceMode ? 'border-red-400 text-red-600 bg-red-50' : ''}`}
+              onClick={() => { if (!sliceMode) { setSliceElementId(selectedElementId); setSliceMode('H'); } else { setSliceMode(null); } }}
+              disabled={isExporting}
+              title={language === "fr" ? "Couper en morceaux" : "Slice export"}
+            >
+              <Scissors className="w-3 h-3" />
+              {language === "fr" ? "Couper" : "Slice"}
+            </Button>
             <Button variant="outline" size="sm" className="flex-shrink-0 gap-1 text-[11px] h-6 px-2" onClick={handlePrint} disabled={isExporting} title={language === "fr" ? "Imprimer" : "Print"}>
               <Printer className="w-3 h-3" />
               {language === "fr" ? "Imprimer" : "Print"}
@@ -10412,6 +10499,95 @@ export default function CreationsAtelierV2({
         </div>
       )}
 
+      {/* Modale Couper en morceaux */}
+      {sliceMode && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
+          <div className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-red-500" />
+                {language === 'fr' ? 'Couper en morceaux' : 'Slice export'}
+              </h3>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {/* Direction */}
+              <div>
+                <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Direction :' : 'Direction:'}</label>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={sliceMode === 'H' ? 'default' : 'outline'} className={sliceMode === 'H' ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => setSliceMode('H')}>
+                    {language === 'fr' ? '━ Horizontal' : '━ Horizontal'}
+                  </Button>
+                  <Button size="sm" variant={sliceMode === 'V' ? 'default' : 'outline'} className={sliceMode === 'V' ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => setSliceMode('V')}>
+                    {language === 'fr' ? '┃ Vertical' : '┃ Vertical'}
+                  </Button>
+                </div>
+              </div>
+              {/* Nombre de morceaux */}
+              <div>
+                <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Nombre de morceaux :' : 'Number of slices:'}</label>
+                <div className="flex gap-2">
+                  <Button size="sm" variant={sliceCount === 2 ? 'default' : 'outline'} className={sliceCount === 2 ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => { setSliceCount(2); setSlicePositions([50]); }}>
+                    2
+                  </Button>
+                  <Button size="sm" variant={sliceCount === 3 ? 'default' : 'outline'} className={sliceCount === 3 ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => { setSliceCount(3); setSlicePositions([33, 66]); }}>
+                    3
+                  </Button>
+                </div>
+              </div>
+              {/* Aperçu visuel */}
+              <div>
+                <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Aperçu :' : 'Preview:'}</label>
+                <div className="relative border border-gray-300 rounded bg-gray-50" style={{ width: 200, height: sliceMode === 'H' ? 280 : 140, margin: '0 auto' }}>
+                  {slicePositions.map((pos, idx) => (
+                    <div key={idx} style={{
+                      position: 'absolute',
+                      ...(sliceMode === 'H'
+                        ? { left: 0, right: 0, top: `${pos}%`, height: 2, cursor: 'ns-resize' }
+                        : { top: 0, bottom: 0, left: `${pos}%`, width: 2, cursor: 'ew-resize' }),
+                      background: 'red',
+                    }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                        const onMove = (ev: MouseEvent) => {
+                          const pct = sliceMode === 'H'
+                            ? Math.max(5, Math.min(95, ((ev.clientY - rect.top) / rect.height) * 100))
+                            : Math.max(5, Math.min(95, ((ev.clientX - rect.left) / rect.width) * 100));
+                          setSlicePositions(prev => {
+                            const next = [...prev];
+                            next[idx] = Math.round(pct);
+                            return next.sort((a, b) => a - b);
+                          });
+                        };
+                        const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                      }}
+                    >
+                      <span className="absolute text-[10px] text-red-600 font-bold" style={sliceMode === 'H' ? { right: 4, top: -14 } : { top: -16, left: -8 }}>
+                        {pos}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setSliceMode(null)}>
+                {language === 'fr' ? 'Annuler' : 'Cancel'}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-red-500 to-orange-500 text-white hover:from-red-600 hover:to-orange-600"
+                onClick={async () => { await handleSliceExport(); setSliceMode(null); }}
+              >
+                <Scissors className="w-3.5 h-3.5 mr-1" />
+                {language === 'fr' ? 'Exporter les morceaux' : 'Export slices'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
