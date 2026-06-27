@@ -1736,7 +1736,7 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const [showPeleMeleGuide, setShowPeleMeleGuide] = useState(false);
   const [showTexteGuide, setShowTexteGuide] = useState(false);
   const [cornerRound, setCornerRound] = useState(false);
-  const [cornerRadiusMm, setCornerRadiusMm] = useState(5);
+  const [cornerRadiusMm, setCornerRadiusMm] = useState(50);
   const [cornerType, setCornerType] = useState<'convex' | 'concave'>('convex');
   const [curveMm, setCurveMm] = useState(5);
   const [curveDir, setCurveDir] = useState<'concave' | 'convex' | null>(null);

@@ -3688,7 +3688,6 @@ export default function CreationsAtelierV2({
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     setCanvasZoom(prev => {
       const next = Math.min(3, Math.max(0.25, Math.round((prev + delta) * 100) / 100));
-      console.log('[CanvasZoom] prev=%s next=%s delta=%s', prev, next, delta);
       return next;
     });
   };
@@ -6659,12 +6658,13 @@ export default function CreationsAtelierV2({
                       setSelectedElementId(null);
                     }}
                     onUpdateCornerRadius={(id: string, radiusMm: number, concave: boolean) => {
-                      console.log(`[ARRONDI] onUpdateCornerRadius appelé — id=${id} radiusMm=${radiusMm} concave=${concave}`);
+                      undoBatchStart();
                       setCanvasElements(prev => prev.map(el => {
                         if (el.id !== id) return el;
                         const rCm = radiusMm / 10;
                         return { ...el, customPath: buildRoundedCornerPath(el.x, el.y, el.width, el.height, rCm, concave) };
                       }));
+                      undoBatchEnd();
                     }}
                     onApplyColorToOpenings={(color: string, targetIds: string[]) => {
                       setCanvasElements(prev => prev.map(el =>
