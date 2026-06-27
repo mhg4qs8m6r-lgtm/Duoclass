@@ -4773,6 +4773,45 @@ export default function CreationsAtelierV2({
     }
   };
   
+  // Sauver sous (dupliquer le projet avec un nouveau nom)
+  const handleSaveAs2 = async (newName: string) => {
+    try {
+      const newId = `project_${Date.now()}`;
+      const canvasData = JSON.stringify({
+        canvasElements,
+        collectorItems,
+        sourcePhotos,
+        paperFormat: paperFormat.id,
+        ...(paperFormat.id === 'custom' ? { customWidth, customHeight } : {}),
+        orientation,
+        imageZoom,
+      });
+      const newProject = await createCreationsProject(newName, newId);
+      newProject.canvasData = canvasData;
+      newProject.projectType = currentProjectType;
+      newProject.photos = [
+        ...sourcePhotos.map(photo => ({
+          id: photo.id, photoUrl: photo.src, thumbnail: photo.thumbnail,
+          photoTitle: photo.name, dateAdded: Date.now()
+        })),
+        ...canvasElements
+          .filter((el): el is CanvasElement & { src: string } => !!el.src && !sourcePhotos.some(sp => sp.src === el.src))
+          .map(el => ({
+            id: el.id, photoUrl: el.src, thumbnail: el.src,
+            photoTitle: el.name || 'Photo', dateAdded: Date.now()
+          }))
+      ];
+      await updateCreationsProject(newProject);
+      setCurrentProjectId(newId);
+      setCurrentProjectName(newName);
+      setShowSaveAsModal(false);
+      toast.success(language === 'fr' ? `Projet dupliqué : ${newName}` : `Project duplicated: ${newName}`);
+    } catch (error) {
+      console.error('[CreationsAtelier] Erreur Sauver sous:', error);
+      toast.error(language === 'fr' ? 'Erreur lors de la duplication' : 'Error duplicating project');
+    }
+  };
+
   // Réinitialiser le canvas
   const handleReset = () => {
     setCanvasElements([]);
@@ -10253,6 +10292,15 @@ export default function CreationsAtelierV2({
               <Save className="w-3 h-3" />
               {language === "fr" ? "Sauvegarder" : "Save"}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-shrink-0 gap-1 text-[11px] h-6 px-2"
+              onClick={() => { setSaveAsName(currentProjectName + (language === 'fr' ? ' (copie)' : ' (copy)')); setShowSaveAsModal(true); }}
+            >
+              <Copy className="w-3 h-3" />
+              {language === "fr" ? "Sauver sous" : "Save as"}
+            </Button>
             <Button variant="outline" size="sm" className="flex-shrink-0 text-[11px] h-6 px-2" onClick={handleRequestClose}>
               {language === "fr" ? "Fermer" : "Close"}
             </Button>
@@ -10320,6 +10368,44 @@ export default function CreationsAtelierV2({
                 }}
               >
                 OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale Sauver sous */}
+      {showSaveAsModal && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-[3050]">
+          <div className="bg-white rounded-xl shadow-2xl w-[380px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-purple-50 to-pink-50">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Copy className="w-5 h-5 text-purple-500" />
+                {language === 'fr' ? 'Sauver sous' : 'Save as'}
+              </h3>
+            </div>
+            <div className="px-6 py-5">
+              <label className="text-sm text-gray-600 mb-2 block">
+                {language === 'fr' ? 'Nom du nouveau projet :' : 'New project name:'}
+              </label>
+              <Input
+                value={saveAsName}
+                onChange={(e) => setSaveAsName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter' && saveAsName.trim()) handleSaveAs2(saveAsName.trim()); }}
+              />
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveAsModal(false)}>
+                {language === 'fr' ? 'Annuler' : 'Cancel'}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                disabled={!saveAsName.trim()}
+                onClick={() => handleSaveAs2(saveAsName.trim())}
+              >
+                {language === 'fr' ? 'Sauver' : 'Save'}
               </Button>
             </div>
           </div>
