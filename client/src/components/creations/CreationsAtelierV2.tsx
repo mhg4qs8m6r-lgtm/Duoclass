@@ -2041,6 +2041,17 @@ export default function CreationsAtelierV2({
         }
       }
 
+      // Touches fléchées : déplacer l'élément sélectionné de 1px
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (!selectedElementId) return;
+        e.preventDefault();
+        const step = 1 / canvasDimensions.pxPerCm; // 1px converti en cm
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        updateCanvasElement(selectedElementId, { x: (canvasElements.find(el => el.id === selectedElementId)?.x ?? 0) + dx, y: (canvasElements.find(el => el.id === selectedElementId)?.y ?? 0) + dy });
+      }
+
       // Espace : activer le mode pan
       if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault();
