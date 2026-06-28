@@ -3314,7 +3314,7 @@ export default function CreationsAtelierV2({
       // Afficher le diagnostic complet dans un toast persistant
       const diagText = diagLines.join('\n');
       console.log('[captureCanvas DIAG]\n' + diagText);
-      toast.info(`Capture: ${drawnCount} éléments`, { duration: 5000 });
+      toast.info(language === 'fr' ? `Capture: ${drawnCount} éléments` : `Capture: ${drawnCount} elements`, { duration: 5000 });
       
       if (drawnCount === 0) {
         toast.error(language === 'fr' ? 'Aucun élément n\'a pu être capturé' : 'No elements could be captured');
@@ -4599,11 +4599,10 @@ export default function CreationsAtelierV2({
       if (!d) return el;
       return { ...el, x: el.x + d.dx, y: el.y + d.dy };
     }));
-    const labels: Record<string, string> = {
-      left: 'Alignés à gauche', right: 'Alignés à droite', centerH: 'Centrés horizontalement',
-      top: 'Alignés en haut', bottom: 'Alignés en bas', centerV: 'Centrés verticalement'
-    };
-    toast.success(labels[direction] ?? 'Alignés');
+    const labels: Record<string, string> = language === 'fr'
+      ? { left: 'Alignés à gauche', right: 'Alignés à droite', centerH: 'Centrés horizontalement', top: 'Alignés en haut', bottom: 'Alignés en bas', centerV: 'Centrés verticalement' }
+      : { left: 'Aligned left', right: 'Aligned right', centerH: 'Centered horizontally', top: 'Aligned top', bottom: 'Aligned bottom', centerV: 'Centered vertically' };
+    toast.success(labels[direction] ?? (language === 'fr' ? 'Alignés' : 'Aligned'));
   };
 
   // Distribuer l'écartement égal entre les unités sélectionnées (groupe = 1 bloc)
