@@ -299,6 +299,7 @@ function PassePartoutPreview({
   openingRatio,
   borderFraction,
 }: PassePartoutPreviewProps) {
+  const { language } = useLanguage();
   // Dimensions du croquis en pixels SVG
   const SVG_W = 120;
   const SVG_H = formatRatio > 0 ? Math.round(SVG_W / formatRatio) : 80;
@@ -394,7 +395,9 @@ function PassePartoutPreview({
         <rect x={0.5} y={0.5} width={SVG_W - 1} height={safeH - 1} fill="none" stroke="#000000" strokeWidth="4" />
       </svg>
       <p className="text-xs text-gray-400 italic">
-        {target === "exterieur" ? "Extérieur coloré" : "Intérieur coloré"}
+        {target === "exterieur"
+          ? (language === "fr" ? "Extérieur coloré" : "Exterior colored")
+          : (language === "fr" ? "Intérieur coloré" : "Interior colored")}
       </p>
     </div>
   );
