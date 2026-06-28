@@ -8957,7 +8957,7 @@ export default function CreationsAtelierV2({
                             {selectedElementId === element.id && (
                               <div
                                 className="absolute w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
-                                style={{ top: '40%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                                style={{ top: -20, left: '50%', transform: 'translate(-50%, 0)' }}
                                 draggable={false}
                                 title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
                                 onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
@@ -9033,7 +9033,7 @@ export default function CreationsAtelierV2({
                         {selectedElementId === element.id && (
                           <div
                             className="absolute w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing z-[110] flex items-center justify-center"
-                            style={{ top: '40%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                            style={{ top: -20, left: '50%', transform: 'translate(-50%, 0)' }}
                             draggable={false}
                             title={language === 'fr' ? 'Faire pivoter' : 'Rotate'}
                             onMouseDown={(e) => { e.stopPropagation(); handleRotateStart(e, element.id); }}
