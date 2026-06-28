@@ -8619,7 +8619,7 @@ export default function CreationsAtelierV2({
                           />
                           <path
                             d={pathD}
-                            fill="none"
+                            fill={element.openingColor && element.openingColor !== 'transparent' ? element.openingColor : 'none'}
                             stroke={isSelected ? '#6366f1' : '#000000'}
                             strokeWidth={isSelected ? STROKE_SVG_SEL : STROKE_SVG}
                             strokeLinecap="round"

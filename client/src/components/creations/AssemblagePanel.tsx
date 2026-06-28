@@ -1740,6 +1740,8 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
   const [cornerType, setCornerType] = useState<'convex' | 'concave'>('convex');
   const [curveMm, setCurveMm] = useState(5);
   const [curveDir, setCurveDir] = useState<'concave' | 'convex' | null>(null);
+  const [peleOpeningColor, setPeleOpeningColor] = useState('#ffffff');
+
   const [peleBgColor, setPeleBgColor] = useState('#ffffff');
   const [pelePatternSrc, setPelePatternSrc] = useState<string | null>(null);
   const [pelePatternOpacity, setPelePatternOpacity] = useState(80);
@@ -1963,6 +1965,34 @@ export default function AssemblagePanel(props: AssemblagePanelProps) {
                         {language === "fr" ? "✂️ Appliquer" : "✂️ Apply"}
                       </button>
                     </div>
+                    {/* 3c. Couleur de l'ouverture */}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-gray-600 flex-1">
+                        {language === "fr" ? "Couleur de l'ouverture" : "Opening color"}
+                      </Label>
+                      <input
+                        type="color"
+                        value={peleOpeningColor}
+                        onChange={(e) => {
+                          setPeleOpeningColor(e.target.value);
+                          if (props.selectedCanvasElementId) props.onApplyColorToOpenings?.(e.target.value, [props.selectedCanvasElementId]);
+                        }}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                        title={language === "fr" ? "Choisir la couleur de l'ouverture" : "Choose opening color"}
+                      />
+                      <button
+                        type="button"
+                        className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-1 hover:bg-red-50 transition-colors"
+                        title={language === "fr" ? "Supprimer la couleur" : "Remove color"}
+                        onClick={() => {
+                          setPeleOpeningColor('#ffffff');
+                          if (props.selectedCanvasElementId) props.onApplyColorToOpenings?.('transparent', [props.selectedCanvasElementId]);
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+
                     {/* 4. Grille de formes */}
                     <div>
                       <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
