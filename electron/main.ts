@@ -120,6 +120,12 @@ app.whenReady().then(async () => {
   // soient toujours chargés (évite les fichiers JS/CSS périmés en mémoire).
   await session.defaultSession.clearCache();
 
+  // Rediriger tous les téléchargements vers le Bureau macOS
+  session.defaultSession.on('will-download', (_event, item) => {
+    const desktopPath = path.join(os.homedir(), 'Desktop', item.getFilename());
+    item.setSavePath(desktopPath);
+  });
+
   const port = await startServer();
   await createWindow(port);
 

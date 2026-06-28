@@ -908,6 +908,20 @@ export default function CreationsAtelierV2({
   const [showCrosshair, setShowCrosshair] = useState(true);
   /** Affiche les croix de repérage d'imprimerie (crop marks) aux 4 coins de la page */
   const [showCropMarks, setShowCropMarks] = useState(false);
+  // Couper en morceaux (export laser)
+  const [sliceMode, setSliceMode] = useState<null | 'H' | 'V'>(null);
+  const [sliceCount, setSliceCount] = useState<2 | 3>(2);
+  const [slicePositionsCm, setSlicePositionsCm] = useState<number[]>([15]);
+  const [sliceNames, setSliceNames] = useState<string[]>(['A', 'B']);
+  const [sliceResults, setSliceResults] = useState<{name: string, dataUrl: string}[]>([]);
+  const [sliceSourceId, setSliceSourceId] = useState<string | null>(null);
+  // Auto-génération des morceaux avec debounce
+  useEffect(() => {
+    if (!sliceMode || !sliceSourceId) return;
+    const timer = setTimeout(() => { handleSliceExport(); }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceMode, sliceSourceId, slicePositionsCm, sliceCount, sliceNames]);
   // Overlay sticker planner : contour offset (toggle b). NE contient PAS showCropMarks.
   // Les croix de repérage sont gérées par stickerCropMarks (toggle c) séparément.
   const [stickerOverlay, setStickerOverlay] = useState<{ elementId: string; offsetMm: number; gaussPasses: number } | null>(null);
@@ -3455,7 +3469,54 @@ export default function CreationsAtelierV2({
     }
   };
 
-
+  // === EXPORT : Couper en morceaux ===
+  const handleSliceExport = async () => {
+    if (!sliceMode) return;
+    const el = canvasElements.find(e => e.id === sliceSourceId);
+    if (!el || el.type !== 'image' || !el.src) {
+      toast.error(language === 'fr' ? 'Sélectionnez une image avant de couper' : 'Select an image before slicing');
+      return;
+    }
+    // Charger l'image source
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = el.src!;
+    });
+    const DPI = 150;
+    const PX_PER_CM = DPI / 2.54;
+    const outW = Math.round(el.width * PX_PER_CM);
+    const outH = Math.round(el.height * PX_PER_CM);
+    // Canvas complet
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = outW;
+    fullCanvas.height = outH;
+    fullCanvas.getContext('2d')!.drawImage(img, 0, 0, outW, outH);
+    // Positions de coupe en pixels
+    const positions = [0, ...slicePositionsCm.map(p =>
+      sliceMode === 'H' ? Math.round(p * PX_PER_CM) : Math.round(p * PX_PER_CM)
+    ), sliceMode === 'H' ? outH : outW];
+    // Générer chaque morceau
+    const results: {name: string, dataUrl: string}[] = [];
+    for (let i = 0; i < positions.length - 1; i++) {
+      const start = positions[i];
+      const end = positions[i + 1];
+      const sliceCanvas = document.createElement('canvas');
+      if (sliceMode === 'H') {
+        sliceCanvas.width = outW;
+        sliceCanvas.height = end - start;
+        sliceCanvas.getContext('2d')!.drawImage(fullCanvas, 0, start, outW, end - start, 0, 0, outW, end - start);
+      } else {
+        sliceCanvas.width = end - start;
+        sliceCanvas.height = outH;
+        sliceCanvas.getContext('2d')!.drawImage(fullCanvas, start, 0, end - start, outH, 0, 0, end - start, outH);
+      }
+      results.push({ name: sliceNames[i] || String.fromCharCode(65 + i), dataUrl: sliceCanvas.toDataURL('image/png') });
+    }
+    setSliceResults(results);
+  };
 
 
   // === MODALE SAUVEGARDE avec choix de catégorie ===
@@ -10275,6 +10336,26 @@ export default function CreationsAtelierV2({
               <Mail className="w-3 h-3" />
               @Mail
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-shrink-0 gap-1 text-[11px] h-6 px-2"
+              disabled={isExporting || !selectedElementId || !canvasElements.find(e => e.id === selectedElementId && e.type === 'image')}
+              onClick={() => {
+                const el = canvasElements.find(e => e.id === selectedElementId && e.type === 'image');
+                if (!el) return;
+                setSliceSourceId(selectedElementId);
+                setSliceMode('H');
+                setSliceResults([]);
+                setSlicePositionsCm([Math.round(el.height / 2 * 10) / 10]);
+                setSliceNames(['A', 'B']);
+                setSliceCount(2);
+              }}
+              title={language === "fr" ? "Couper en morceaux" : "Slice export"}
+            >
+              <Scissors className="w-3 h-3" />
+              {language === "fr" ? "Couper" : "Slice"}
+            </Button>
 
             <div className="w-px h-4 bg-gray-300 flex-shrink-0" />
 
@@ -11052,6 +11133,185 @@ export default function CreationsAtelierV2({
           </div>
         </div>
       )}
+
+      {/* Modale Couper en morceaux */}
+      {sliceMode && (() => {
+        const sliceEl = canvasElements.find(e => e.id === sliceSourceId);
+        const imgW = sliceEl?.width || 30;
+        const imgH = sliceEl?.height || 20;
+        const dim = sliceMode === 'H' ? imgH : imgW;
+        const previewW = 200;
+        const previewH = Math.round(previewW * imgH / imgW);
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" style={{ flexDirection: 'column', gap: 12 }}>
+            <div className="bg-white rounded-xl shadow-2xl w-[440px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <Scissors className="w-5 h-5 text-red-500" />
+                  {language === 'fr' ? 'Couper en morceaux' : 'Slice export'}
+                </h3>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                {/* Direction */}
+                <div>
+                  <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Direction :' : 'Direction:'}</label>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant={sliceMode === 'H' ? 'default' : 'outline'} className={sliceMode === 'H' ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => {
+                      setSliceMode('H');
+                      const h = sliceEl?.height || 20;
+                      setSlicePositionsCm(sliceCount === 2 ? [Math.round(h / 2 * 10) / 10] : [Math.round(h / 3 * 10) / 10, Math.round(h * 2 / 3 * 10) / 10]);
+                    }}>
+                      {language === 'fr' ? '━ Horizontal' : '━ Horizontal'}
+                    </Button>
+                    <Button size="sm" variant={sliceMode === 'V' ? 'default' : 'outline'} className={sliceMode === 'V' ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => {
+                      setSliceMode('V');
+                      const w = sliceEl?.width || 30;
+                      setSlicePositionsCm(sliceCount === 2 ? [Math.round(w / 2 * 10) / 10] : [Math.round(w / 3 * 10) / 10, Math.round(w * 2 / 3 * 10) / 10]);
+                    }}>
+                      {language === 'fr' ? '┃ Vertical' : '┃ Vertical'}
+                    </Button>
+                  </div>
+                </div>
+                {/* Nombre de morceaux */}
+                <div>
+                  <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Nombre de morceaux :' : 'Number of slices:'}</label>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant={sliceCount === 2 ? 'default' : 'outline'} className={sliceCount === 2 ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => {
+                      setSliceCount(2);
+                      setSlicePositionsCm([Math.round(dim / 2 * 10) / 10]);
+                      setSliceNames(['A', 'B']);
+                    }}>2</Button>
+                    <Button size="sm" variant={sliceCount === 3 ? 'default' : 'outline'} className={sliceCount === 3 ? 'bg-red-500 hover:bg-red-600' : ''} onClick={() => {
+                      setSliceCount(3);
+                      setSlicePositionsCm([Math.round(dim / 3 * 10) / 10, Math.round(dim * 2 / 3 * 10) / 10]);
+                      setSliceNames(['A', 'B', 'C']);
+                    }}>3</Button>
+                  </div>
+                </div>
+                {/* Aperçu avec lignes déplaçables */}
+                <div>
+                  <label className="text-sm text-gray-600 mb-2 block">{language === 'fr' ? 'Aperçu :' : 'Preview:'}</label>
+                  <div className={`flex justify-center ${sliceMode === 'V' ? 'flex-col items-center gap-1' : 'items-start gap-1'}`} style={{ margin: '0 auto' }}>
+                  {/* Rectangle aperçu */}
+                  <div className="relative border border-gray-300 rounded bg-gray-50 overflow-hidden flex-shrink-0" style={{ width: previewW, height: previewH }}>
+                    {sliceEl?.src && <img src={sliceEl.src} alt="aperçu" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill' }} />}
+                    {slicePositionsCm.map((posCm, idx) => {
+                      const pct = (posCm / dim) * 100;
+                      return (
+                        <div key={idx} style={{
+                          position: 'absolute',
+                          ...(sliceMode === 'H'
+                            ? { left: 0, right: 0, top: `${pct}%`, height: 2, cursor: 'ns-resize' }
+                            : { top: 0, bottom: 0, left: `${pct}%`, width: 2, cursor: 'ew-resize' }),
+                          background: 'red',
+                        }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                            const onMove = (ev: MouseEvent) => {
+                              const ratio = sliceMode === 'H'
+                                ? (ev.clientY - rect.top) / rect.height
+                                : (ev.clientX - rect.left) / rect.width;
+                              const cm = Math.max(1, Math.min(dim - 1, Math.round(ratio * dim * 10) / 10));
+                              setSlicePositionsCm(prev => {
+                                const next = [...prev];
+                                next[idx] = cm;
+                                return next.sort((a, b) => a - b);
+                              });
+                            };
+                            const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+                            document.addEventListener('mousemove', onMove);
+                            document.addEventListener('mouseup', onUp);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Valeurs cm + lettres : à droite (H) ou en dessous (V) */}
+                  {sliceMode === 'H' ? (
+                    <div className="flex gap-1">
+                      {/* Colonne cm — alignée sur les lignes de coupe */}
+                      <div className="relative flex-shrink-0" style={{ height: previewH, width: 42 }}>
+                        {slicePositionsCm.map((posCm, idx) => (
+                          <span key={`cm-${idx}`} className="absolute font-bold" style={{ fontSize: 11, color: '#991b1b', background: 'rgba(255,255,255,0.8)', padding: '0 3px', borderRadius: 2, whiteSpace: 'nowrap', top: `${(posCm / dim) * 100}%`, left: 0, transform: 'translateY(-50%)' }}>
+                            {posCm} cm
+                          </span>
+                        ))}
+                      </div>
+                      {/* Colonne lettres — centrées dans chaque zone */}
+                      <div className="relative flex-shrink-0" style={{ height: previewH, width: 16 }}>
+                        {(() => {
+                          const pcts = [0, ...slicePositionsCm.map(p => (p / dim) * 100), 100];
+                          return pcts.slice(0, -1).map((start, i) => (
+                            <span key={`label-${i}`} className="absolute text-sm font-bold text-gray-700" style={{ top: `${(start + pcts[i + 1]) / 2}%`, left: 0, transform: 'translateY(-50%)' }}>
+                              {sliceNames[i] || String.fromCharCode(65 + i)}
+                            </span>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {/* Ligne cm — alignée sous les lignes de coupe */}
+                      <div className="relative flex-shrink-0" style={{ width: previewW, height: 16 }}>
+                        {slicePositionsCm.map((posCm, idx) => (
+                          <span key={`cm-${idx}`} className="absolute font-bold" style={{ fontSize: 11, color: '#991b1b', background: 'rgba(255,255,255,0.8)', padding: '0 3px', borderRadius: 2, whiteSpace: 'nowrap', left: `${(posCm / dim) * 100}%`, top: 0, transform: 'translateX(-50%)' }}>
+                            {posCm} cm
+                          </span>
+                        ))}
+                      </div>
+                      {/* Ligne lettres — centrées dans chaque zone */}
+                      <div className="relative flex-shrink-0" style={{ width: previewW, height: 18 }}>
+                        {(() => {
+                          const pcts = [0, ...slicePositionsCm.map(p => (p / dim) * 100), 100];
+                          return pcts.slice(0, -1).map((start, i) => (
+                            <span key={`label-${i}`} className="absolute text-sm font-bold text-gray-700" style={{ left: `${(start + pcts[i + 1]) / 2}%`, top: 0, transform: 'translateX(-50%)' }}>
+                              {sliceNames[i] || String.fromCharCode(65 + i)}
+                            </span>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                  </div>
+                </div>
+              </div>
+              {/* Bouton Fermer */}
+              <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setSliceResults([]); setSliceMode(null); }}>
+                  {language === 'fr' ? 'Fermer' : 'Close'}
+                </Button>
+              </div>
+            </div>
+            {/* Résultats sous la modale */}
+            {sliceResults.length > 0 && (
+              <div className="bg-white rounded-xl shadow-2xl w-[440px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 space-y-2">
+                  {sliceResults.map((slice, i) => (
+                    <div key={i} className="flex items-center gap-3 py-2 border-b last:border-b-0">
+                      <input type="radio" name="sliceResult" defaultChecked={i === 0} className="accent-red-500" />
+                      <span className="text-sm font-medium text-gray-700 flex-1">{language === 'fr' ? 'Partie' : 'Part'} {slice.name}</span>
+                      <button
+                        className="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                        onClick={() => {
+                          const a = document.createElement('a');
+                          a.href = slice.dataUrl;
+                          a.download = `${slice.name}_${currentProjectName || 'creation'}_${Date.now()}.png`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }}
+                      >
+                        {language === 'fr' ? 'Télécharger' : 'Download'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Modale d'aide Atelier */}
       {showHelpModal && createPortal(
