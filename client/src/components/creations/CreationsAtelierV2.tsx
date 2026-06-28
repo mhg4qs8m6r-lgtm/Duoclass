@@ -11144,7 +11144,7 @@ export default function CreationsAtelierV2({
         const previewH = Math.round(previewW * imgH / imgW);
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" style={{ flexDirection: 'column', gap: 12 }}>
-            <div className="bg-white rounded-xl shadow-2xl w-[440px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-[440px] overflow-y-auto max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
               <div className="px-6 py-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                   <Scissors className="w-5 h-5 text-red-500" />
