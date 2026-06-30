@@ -428,16 +428,16 @@ export default function UniversalAlbumPage({
   const routePrefix = isPhoto ? "/photoclass/" : "/classpapiers/";
   const pageTitle = isPhoto ? "PhotoClass" : "Documents";
 
-  // --- MUTATIONS STOCKAGE PHOTO S3 ---
+  // --- MUTATIONS STOCKAGE PHOTO ---
   const uploadFrameMutation = trpc.sync.photos.uploadFrame.useMutation();
   const deleteFrameMutation = trpc.sync.photos.deleteFrame.useMutation();
 
-  /** Supprime silencieusement le fichier S3 associé à une frame (fire-and-forget). */
+  /** Supprime silencieusement le fichier local associé à une frame (fire-and-forget). */
   const deleteFrameStorage = (frame: PhotoFrame) => {
     if (!frame.storageKey) return;
     deleteFrameMutation.mutate(
       { storageKey: frame.storageKey },
-      { onError: (e) => console.error('[deleteFrame] S3 cleanup failed:', e) }
+      { onError: (e) => console.error('[deleteFrame] cleanup failed:', e) }
     );
   };
 
@@ -844,7 +844,7 @@ export default function UniversalAlbumPage({
           updatedAt: Date.now()
         });
         // Synchroniser les frames vers le serveur.
-        // photoUrl contient maintenant une URL S3 (pas un base64) → pas besoin de stripper.
+        // photoUrl contient maintenant une URL locale (pas un base64) → pas besoin de stripper.
         // On retire uniquement videoUrl (lourd) et thumbnailUrl (redondant avec photoUrl).
         const meta = await db.album_metas.get(currentAlbumId);
         const syncFrames = frames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
@@ -1033,7 +1033,7 @@ export default function UniversalAlbumPage({
         frames: targetFrames,
         updatedAt: Date.now()
       });
-      // Synchroniser l'album cible (URLs S3, on retire seulement videoUrl/thumbnailUrl)
+      // Synchroniser l'album cible (on retire seulement videoUrl/thumbnailUrl)
       const syncTargetFrames = targetFrames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
       addToSyncQueue({
         entityType: 'album',
@@ -1117,7 +1117,7 @@ export default function UniversalAlbumPage({
 
         const photoDataUrl = canvas.toDataURL('image/jpeg');
 
-        // Upload vers S3
+        // Upload vers le stockage local
         let photoUrl: string = photoDataUrl;
         let storageKey: string | undefined;
         const albumId = currentAlbumId;
@@ -1309,7 +1309,7 @@ export default function UniversalAlbumPage({
           format = "PDF";
         }
 
-        // Upload vers S3 et récupération de l'URL persistante
+        // Upload vers le stockage local et récupération de l'URL persistante
         let photoUrl: string = base64; // fallback local si upload échoue
         let storageKey: string | undefined;
         if (albumId && base64) {
@@ -1322,7 +1322,7 @@ export default function UniversalAlbumPage({
             photoUrl = uploadResult.url;
             storageKey = uploadResult.key;
           } catch (uploadErr) {
-            console.error('[upload] Échec upload S3, fallback base64 local:', uploadErr);
+            console.error('[upload] Échec upload, fallback base64 local:', uploadErr);
           }
         }
 
@@ -1618,7 +1618,7 @@ export default function UniversalAlbumPage({
           format = "PDF";
         }
 
-        // Upload vers S3
+        // Upload vers le stockage local
         let photoUrl: string = base64;
         let storageKey: string | undefined;
         if (albumId && base64) {
@@ -1802,7 +1802,7 @@ export default function UniversalAlbumPage({
         format = "PDF";
       }
 
-      // Upload vers S3
+      // Upload vers le stockage local
       let photoUrl: string = base64;
       let storageKey: string | undefined;
       if (albumId && base64) {
@@ -2782,12 +2782,12 @@ export default function UniversalAlbumPage({
         doc.setFontSize(10);
         doc.text(`${frame.date || ''} ${frame.location ? '- ' + frame.location : ''}`, 10, 22);
 
-        // Image : résoudre les URL S3 en base64 si nécessaire
+        // Image : résoudre les URL distantes en base64 si nécessaire
         let imageData = frame.photoUrl;
         console.log('[PDF] URL source:', imageData.substring(0, 80));
         if (!imageData.startsWith('data:image')) {
           try {
-            console.log('[PDF] Fetch S3 en cours...');
+            console.log('[PDF] Fetch image en cours...');
             const response = await fetch(imageData);
             console.log('[PDF] Fetch status:', response.status, response.ok);
             const blob = await response.blob();
@@ -4238,7 +4238,7 @@ export default function UniversalAlbumPage({
                 frames: frames,
                 updatedAt: Date.now()
               });
-              // Synchroniser (URLs S3, on retire seulement videoUrl/thumbnailUrl)
+              // Synchroniser (on retire seulement videoUrl/thumbnailUrl)
               const quitMeta = await db.album_metas.get(currentAlbumId);
               const quitSyncFrames = frames.map(({ videoUrl: _v, thumbnailUrl: _t, ...rest }: any) => rest);
               addToSyncQueue({

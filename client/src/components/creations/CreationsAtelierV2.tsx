@@ -2649,7 +2649,7 @@ export default function CreationsAtelierV2({
        *
        * Stratégie par ordre de priorité :
        * 1. Si l'image est une data URL (déjà en base64) : charger directement.
-       * 2. Si l'image est une URL HTTP (ex: S3) : passer par le proxy serveur
+       * 2. Si l'image est une URL HTTP : passer par le proxy serveur
        *    /api/proxy-image pour obtenir une data URL sans problème CORS.
        * 3. Fallback : charger directement avec crossOrigin='anonymous'.
        */

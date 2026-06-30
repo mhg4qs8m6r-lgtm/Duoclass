@@ -1,20 +1,19 @@
 /**
- * Service de gestion des miniatures sur S3
- * Les miniatures sont stockées sur le serveur pour permettre la prévisualisation
- * sans avoir besoin des photos originales (qui restent en local)
+ * Service de gestion des miniatures et photos d'album.
+ * Stockage local via local-storage.ts (filesystem Electron).
  */
 
 import { storagePut, storageGet, storageDelete } from './local-storage';
 
 /**
- * Génère le chemin S3 pour une miniature
+ * Génère le chemin de stockage pour une miniature.
  */
 export function getThumbnailPath(userId: number, photoLocalId: string): string {
   return `thumbnails/${userId}/${photoLocalId}.jpg`;
 }
 
 /**
- * Upload une miniature vers S3
+ * Upload une miniature vers le stockage local.
  * @param userId - ID de l'utilisateur
  * @param photoLocalId - ID local de la photo
  * @param thumbnailData - Données de la miniature (base64 ou Buffer)
@@ -49,7 +48,7 @@ export async function uploadThumbnail(
 }
 
 /**
- * Récupère l'URL d'une miniature depuis S3
+ * Récupère l'URL d'une miniature.
  * @param userId - ID de l'utilisateur
  * @param photoLocalId - ID local de la photo
  * @returns URL de la miniature ou null si non trouvée
@@ -71,7 +70,7 @@ export async function getThumbnailUrl(
 // ─── Photos d'album ──────────────────────────────────────────────────────────
 
 /**
- * Génère la clé S3/disque pour une photo d'album.
+ * Génère la clé de stockage pour une photo d'album.
  * Exemple : photos/42/album_photos/frame_1748447200000.jpg
  */
 export function getAlbumPhotoPath(

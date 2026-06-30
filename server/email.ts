@@ -38,7 +38,7 @@ export async function sendPhotosEmail({ to, subject, message, photos }: SendPhot
       const ext = path.extname(relKey).toLowerCase();
       contentType = ext === ".png" ? "image/png" : ext === ".pdf" ? "application/pdf" : "image/jpeg";
     } else {
-      // Cas 3 : URL absolue S3 — fetch côté serveur
+      // Cas 3 : URL absolue — fetch côté serveur
       const response = await fetch(photo.dataUrl);
       if (!response.ok) throw new Error(`Impossible de télécharger la photo: ${photo.filename}`);
       content = Buffer.from(await response.arrayBuffer());

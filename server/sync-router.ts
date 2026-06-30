@@ -394,7 +394,7 @@ export const syncRouter = router({
       }),
 
     /**
-     * Upload une photo d'album vers S3 (ou disque local en dev).
+     * Upload une photo d'album vers le stockage local.
      * Reçoit un data-URI base64, retourne une URL publique persistante.
      * Le client stocke cette URL dans frame.photoUrl — plus de base64 dans Dexie.
      */
